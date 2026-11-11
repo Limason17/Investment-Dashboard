@@ -6,7 +6,7 @@
  *   GET  /api/history   Kursverlauf je Titel
  *   GET  /api/live      Live-Kurse (siehe live-quotes.ts); ?force=1 fragt sofort neu an
  *   GET  /api/chart     Kursverläufe für die Charts (siehe market-charts.ts); ?range=1T|1W|1M|3M|1J|5J|MAX&tickers=A,B
- *   POST /api/batch    { ops: [{ op: 'set' | 'merge' | 'delete', coll, id, data }] }
+ *   POST /api/batch    { ops: [{ op: 'set' | 'merge' | 'delete' | 'clear', coll, id, data }] }  («clear» leert die Sammlung)
  *
  * Ändert jemand eine Datei von aussen (z. B. eine Kurs-Routine), lädt das Dashboard von selbst neu.
  */
@@ -21,7 +21,7 @@ import { marketCharts } from './market-charts.ts'
 const COLLECTIONS = ['positions', 'prices', 'watchlist', 'pots', 'events', 'log', 'transactions', 'dividends', 'snapshots', 'meta', 'market'] as const
 type Coll = (typeof COLLECTIONS)[number]
 type Doc = Record<string, unknown>
-type Op = { op: 'set' | 'merge' | 'delete'; coll: Coll; id: string; data?: Doc }
+type Op = { op: 'set' | 'merge' | 'delete' | 'clear'; coll: Coll; id: string; data?: Doc }
 
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/
 
@@ -102,6 +102,10 @@ export function depotApi(dataDir: string, opts: { env?: Record<string, string | 
         const touched = new Map<Coll, Record<string, Doc>>()
         for (const o of ops) {
           if (!COLLECTIONS.includes(o.coll) || typeof o.id !== 'string' || !o.id || o.id === '__proto__') return json(res, 400, { error: 'ungültige Operation' })
+          if (o.op === 'clear') {
+            touched.set(o.coll, {})
+            continue
+          }
           const data = touched.get(o.coll) ?? read(o.coll)
           if (o.op === 'delete') delete data[o.id]
           else if (o.op === 'set') data[o.id] = o.data ?? {}

@@ -17,7 +17,8 @@ interface Api { auth: Auth; db: Firestore; a: AuthModule; f: StoreModule }
 
 export const COLLECTIONS = ['positions', 'prices', 'watchlist', 'pots', 'events', 'log', 'transactions', 'dividends', 'snapshots', 'meta', 'market'] as const
 export type Coll = (typeof COLLECTIONS)[number]
-export type Op = { op: 'set' | 'merge' | 'delete'; coll: Coll; id: string; data?: object }
+/** «clear» leert eine ganze Sammlung (id beliebig, z. B. «*»); folgende Operationen derselben Sammlung bauen darauf auf. */
+export type Op = { op: 'set' | 'merge' | 'delete' | 'clear'; coll: Coll; id: string; data?: object }
 
 /* ------------------------------------------------------------------ Konto-Zustand */
 
@@ -153,10 +154,17 @@ export async function cloudBatch(db: DB, ops: Op[]): Promise<Partial<DB>> {
   const uid = uidNow()
   const touched = new Map<Coll, Record<string, unknown>>()
   const fields = new Map<Coll, Map<string, unknown>>()
+  const full = new Set<Coll>()
   for (const o of ops) {
     if (!(COLLECTIONS as readonly string[]).includes(o.coll) || typeof o.id !== 'string' || !o.id || o.id === '__proto__') throw new Error('ungültige Operation')
     const data = touched.get(o.coll) ?? { ...(db[o.coll] as Record<string, unknown>) }
     const f = fields.get(o.coll) ?? new Map<string, unknown>()
+    if (o.op === 'clear') {
+      touched.set(o.coll, {})
+      fields.set(o.coll, new Map())
+      full.add(o.coll)
+      continue
+    }
     if (o.op === 'delete') {
       delete data[o.id]
       f.set(o.id, x.f.deleteField())
@@ -170,7 +178,7 @@ export async function cloudBatch(db: DB, ops: Op[]): Promise<Partial<DB>> {
   const b = x.f.writeBatch(x.db)
   for (const [c, data] of touched) {
     const ref = x.f.doc(x.db, 'depots', uid, 'data', c)
-    if (!existing.has(c)) b.set(ref, data)
+    if (!existing.has(c) || full.has(c)) b.set(ref, data)
     else {
       const pairs = [...fields.get(c)!.entries()].flatMap(([id, v]) => [new x.f.FieldPath(id), v])
       if (pairs.length) b.update(ref, pairs[0] as InstanceType<StoreModule['FieldPath']>, pairs[1], ...pairs.slice(2))

@@ -4,25 +4,14 @@ import { Sheet } from '@/components/Sheet'
 import { Segmented } from '@/components/ui'
 import { authMessage, cloudReplace, COLLECTIONS, deleteAccount, PASSWORD_MIN, resetPassword, signIn, signOut, signUp, useAccount } from '@/lib/cloud'
 import { detectKind, LIMITS, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
+import { BACKUP_KIND, downloadBackup } from '@/lib/backup'
 import { CLOUD } from '@/lib/config'
 import { useNav } from '@/lib/context'
-import { today } from '@/lib/format'
 import { loadDb, useStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DB } from '@/lib/types'
 
 /* ------------------------------------------------------------------ Backup-Datei */
-
-const BACKUP_KIND = 'depot-backup'
-
-/** Alle Sammlungen als JSON-Datei herunterladen (Sicherungskopie, nicht zum Ausfüllen). */
-function downloadBackup(db: DB) {
-  const data = Object.fromEntries(COLLECTIONS.filter((c) => c !== 'market').map((c) => [c, db[c]]))
-  const blob = new Blob([JSON.stringify({ kind: BACKUP_KIND, version: 1, exportedAt: new Date().toISOString(), data }, null, 1)], { type: 'application/json' })
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `depot-sicherung-${today()}.json` })
-  a.click()
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-}
 
 const BACKUP_MAX_BYTES = 5_000_000
 const MAX_ENTRIES = 20_000
@@ -241,7 +230,6 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
           </div>
           <ol className="grid gap-3 text-[12.5px] leading-[1.55] text-ink-2">
             <Step n={1} title="Vorlage herunterladen">
-              <p>Mit Erklärung und zwei Beispielen. Öffnet sich in Excel, Numbers oder Google Sheets.</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button type="button" className="btn btn-sm" onClick={() => download(templateFile('trades'), TEMPLATE_NAME.trades)}><Download />Käufe/Verkäufe</button>
                 <button type="button" className="btn btn-sm" onClick={() => download(templateFile('dividenden'), TEMPLATE_NAME.dividenden)}><Download />Dividenden</button>

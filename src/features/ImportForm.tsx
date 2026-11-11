@@ -3,9 +3,13 @@ import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react
 import { Chip, Segmented } from '@/components/ui'
 import { COLUMNS, detectKind, EXAMPLES, LIMITS, parseImport, template, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
 import { planImport, type ItemState } from '@/lib/bulk-plan'
+import { downloadBackup } from '@/lib/backup'
+import type { Coll } from '@/lib/cloud'
 import { commit } from '@/lib/commit'
 import { useDepot } from '@/lib/context'
 import { dfmt, sUsd } from '@/lib/format'
+import type { Op } from '@/lib/store'
+import type { DB } from '@/lib/types'
 
 const KINDS: { value: ImportKind; label: string }[] = [
   { value: 'trades', label: 'Käufe/Verkäufe' },
@@ -17,6 +21,24 @@ const INTRO: Record<ImportKind, string> = {
   dividenden: 'So lädst du alle erhaltenen Dividenden auf einmal hoch. Passende erwartete Zahlungen werden dabei bestätigt.',
   bestand: 'Setzt nur Stück und Einstand je Titel. Ohne Kaufdatum zeigt das Dashboard keinen Verlauf; nutze besser «Käufe/Verkäufe».',
 }
+type Mode = 'add' | 'parts' | 'all'
+type Part = 'trades' | 'dividends' | 'rest'
+const size = (o: object) => Object.keys(o).length
+/** Bereiche, die vor dem Hochladen geleert werden können. «rest» nur bei «Alles ersetzen». */
+const AREAS: { id: Part; label: string; colls: Coll[]; count: (db: DB) => number }[] = [
+  { id: 'trades', label: 'Positionen und Käufe/Verkäufe', colls: ['positions', 'transactions', 'prices', 'snapshots'], count: (db) => size(db.positions) + size(db.transactions) },
+  { id: 'dividends', label: 'Dividenden', colls: ['dividends'], count: (db) => size(db.dividends) },
+  { id: 'rest', label: 'Watchlist, Töpfe, Termine, Journal und Einstellungen', colls: ['watchlist', 'pots', 'events', 'log', 'meta', 'market'], count: (db) => size(db.watchlist) + size(db.pots) + size(db.events) + size(db.log) },
+]
+const ALL = AREAS.flatMap((a) => a.colls)
+const MODES: { id: Mode; label: string; text: string }[] = [
+  { id: 'add', label: 'Ergänzen', text: 'Vorhandene Daten bleiben. Neue Einträge kommen dazu, doppelte werden übersprungen.' },
+  { id: 'parts', label: 'Bereiche ersetzen', text: 'Die gewählten Bereiche werden zuerst geleert, alles andere bleibt.' },
+  { id: 'all', label: 'Alles ersetzen', text: 'Alle Daten werden zuerst gelöscht, auch Watchlist, Termine und Journal.' },
+]
+/** Einstellungen nach «Alles ersetzen»: Cash zählt erst, wenn der Saldo eingetragen ist; Quellensteuer bleibt. */
+const freshSettings = (db: DB) => ({ cash: 0, cashExcluded: true, withholding: db.meta.settings?.withholding ?? 0.15 })
+
 const FILL: Record<ImportKind, string> = {
   trades: 'Eine Zeile je Kauf (oder Verkauf) mit Datum, Ticker, Stück und Preis je Stück in USD. Hast du einen Titel in mehreren Käufen gekauft, trägst du jeden Kauf einzeln ein.',
   dividenden: 'Eine Zeile je Zahlung mit Zahltag, Ticker und Bruttobetrag in USD.',
@@ -56,7 +78,24 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
   const file = useRef<HTMLInputElement>(null)
 
   const parsed = useMemo(() => parseImport(kind, text), [kind, text])
-  const plan = useMemo(() => planImport(db, parsed), [db, parsed])
+  // Was mit den vorhandenen Daten geschieht: ergänzen (Standard), einzelne Bereiche oder alles vorher leeren.
+  const [mode, setMode] = useState<Mode>('add')
+  const [parts, setParts] = useState<Part[]>(['trades'])
+  const [confirmed, setConfirmed] = useState(false)
+  const hasData = AREAS.some((a) => a.colls.some((c) => Object.keys(db[c]).length))
+  const cleared = useMemo<Coll[]>(() => (mode === 'add' ? [] : mode === 'all' ? [...ALL] : [...new Set(AREAS.filter((a) => parts.includes(a.id)).flatMap((a) => a.colls))]), [mode, parts])
+  const base = useMemo<DB>(() => {
+    if (!cleared.length) return db
+    const out = { ...db, ...Object.fromEntries(cleared.map((c) => [c, {}])) } as DB
+    if (mode === 'all') out.meta = { settings: freshSettings(db) }
+    return out
+  }, [db, cleared, mode])
+  const plan = useMemo(() => {
+    const p = planImport(base, parsed)
+    const pre: Op[] = [...cleared.map((c): Op => ({ op: 'clear', coll: c, id: '*' })), ...(mode === 'all' ? [{ op: 'set', coll: 'meta', id: 'settings', data: freshSettings(db) } as Op] : [])]
+    return { ...p, ops: [...pre, ...p.ops] }
+  }, [base, parsed, cleared, mode, db])
+  const lost = AREAS.filter((a) => a.colls.some((c) => cleared.includes(c))).map((a) => ({ ...a, n: a.count(db) })).filter((a) => a.n > 0)
   const errors = [...parsed.errors, ...plan.items.filter((i) => i.state === 'fehler').map((i) => ({ line: i.line, msg: `${i.kind} ${i.ticker}: ${i.msg}` }))].sort((a, b) => a.line - b.line)
   const counts = plan.items.reduce<Record<ItemState, number>>((a, i) => ({ ...a, [i.state]: a[i.state] + 1 }), { neu: 0, ändert: 0, doppelt: 0, fehler: 0 })
 
@@ -86,10 +125,12 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
     setErr('')
     if (errors.length) return setErr(`${errors.length} Zeile${errors.length > 1 ? 'n haben' : ' hat'} einen Fehler. Korrigiere oder lösche sie, dann übernehmen.`)
     if (!plan.count) return setErr(text.trim() ? 'Nichts Neues zum Übernehmen.' : 'Zuerst die ausgefüllte Vorlage hochladen.')
+    if (mode === 'parts' && !parts.length) return setErr('Wähle mindestens einen Bereich zum Ersetzen, oder «Ergänzen».')
+    if (lost.length && !confirmed) return setErr('Bestätige zuerst, dass die vorhandenen Daten gelöscht werden.')
     setBusy(true)
     try {
       await commit(plan.ops)
-      onSaved(`${plan.count} Einträge übernommen${counts.doppelt ? `, ${counts.doppelt} schon vorhanden` : ''}.`)
+      onSaved(`${plan.count} Einträge übernommen${lost.length ? ', vorhandene Daten ersetzt' : counts.doppelt ? `, ${counts.doppelt} schon vorhanden` : ''}.`)
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x))
     } finally {
@@ -188,8 +229,40 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
           )}
           {plan.cashDelta !== 0 && (
             <div className="text-[12.5px] text-ink-2">
-              Cash-Wirkung <b className="num text-ink">{sUsd(plan.cashDelta)} USD</b>{db.meta.settings?.cashExcluded ? ' (Cash ist derzeit nicht erfasst und bleibt unverändert).' : '.'}
+              Cash-Wirkung <b className="num text-ink">{sUsd(plan.cashDelta)} USD</b>{base.meta.settings?.cashExcluded ? ' (Cash ist derzeit nicht erfasst und bleibt unverändert).' : '.'}
             </div>
+          )}
+
+          {hasData && (
+            <fieldset className="grid gap-2 rounded-xl border border-line px-3.5 py-3 text-[12.5px] text-ink-2">
+              <legend className="px-1 text-[13px] font-semibold text-ink">Was passiert mit den vorhandenen Daten?</legend>
+              {MODES.map((m) => (
+                <label key={m.id} className="flex cursor-pointer items-start gap-2.5">
+                  <input type="radio" name="import-mode" className="mt-1 accent-[var(--color-accent)]" checked={mode === m.id} onChange={() => { setMode(m.id); setConfirmed(false) }} />
+                  <span><b className="font-medium text-ink">{m.label}</b><br /><span className="text-muted">{m.text}</span></span>
+                </label>
+              ))}
+              {mode === 'parts' && (
+                <div className="ml-6 grid gap-1.5">
+                  {AREAS.filter((a) => a.id !== 'rest').map((a) => (
+                    <label key={a.id} className="flex cursor-pointer items-center gap-2">
+                      <input type="checkbox" className="accent-[var(--color-accent)]" checked={parts.includes(a.id)} onChange={(e) => { setConfirmed(false); setParts((p) => (e.target.checked ? [...p, a.id] : p.filter((x) => x !== a.id))) }} />
+                      {a.label} <span className="text-muted">({a.count(db)})</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              {lost.length > 0 && (
+                <div className="mt-1 grid gap-2 rounded-lg border border-down/25 bg-down/[0.06] px-3 py-2.5">
+                  <p><b className="text-ink">Achtung:</b> Vor dem Übernehmen wird gelöscht: {lost.map((a) => `${a.label} (${a.n})`).join(', ')}. Das lässt sich nicht rückgängig machen.</p>
+                  <button type="button" className="btn btn-sm w-fit" onClick={() => downloadBackup(db)}><Download />Vorher Sicherungskopie herunterladen</button>
+                  <label className="flex cursor-pointer items-center gap-2 font-medium text-ink">
+                    <input type="checkbox" className="accent-[var(--color-down)]" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
+                    Ja, diese Daten löschen und ersetzen
+                  </label>
+                </div>
+              )}
+            </fieldset>
           )}
         </>
       )}
