@@ -3,7 +3,7 @@ import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { LimitTrack } from '@/components/charts/Small'
 import { TimeChart, type Marker, type RefLine, type VLine } from '@/components/charts/TimeChart'
 import { Sheet } from '@/components/Sheet'
-import { Chip, Delta, DemoTag, Empty, Segmented } from '@/components/ui'
+import { Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented } from '@/components/ui'
 import { bucketOf, HOLDING_BUCKETS } from '@/lib/buckets'
 import { quote, quoteLabel, withIds, wlState, wht } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE, refreshCharts, useChart } from '@/lib/charts'
@@ -251,7 +251,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
         <form id={formId} onSubmit={onSubmit} className="grid gap-3.5">
           <div className="grid grid-cols-2 gap-3">
             <div className="field"><label htmlFor={formId + 's'}>Stück</label><input id={formId + 's'} className="input num" inputMode="decimal" value={sh} onChange={(e) => setSh(e.target.value)} /></div>
-            <div className="field"><label htmlFor={formId + 'c'}>Einstand gesamt (USD)</label><input id={formId + 'c'} className="input num" inputMode="decimal" placeholder="aus Schwab" value={cost} onChange={(e) => setCost(e.target.value)} /></div>
+            <div className="field"><label htmlFor={formId + 'c'}>Einstand gesamt (USD)</label><input id={formId + 'c'} className="input num" inputMode="decimal" placeholder="laut Broker" value={cost} onChange={(e) => setCost(e.target.value)} /></div>
           </div>
           <div className="field">
             <label htmlFor={formId + 'b'}>Baustein</label>
@@ -303,12 +303,13 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
       footer={
         edit ? (
           <>
+            <span className="mr-auto"><ConfirmDelete label="Von der Watchlist entfernen" onConfirm={() => void mutate([{ op: 'delete', coll: 'watchlist', id: ticker! }]).then(() => { toast(`${ticker} von der Watchlist entfernt.`); onClose() })} /></span>
             <button type="button" className="btn btn-ghost" onClick={() => setEdit(false)}>Abbrechen</button>
             <button type="submit" form={formId} className="btn btn-primary" disabled={busy}>Speichern</button>
           </>
         ) : (
           <>
-            <button type="button" className="btn btn-ghost mr-auto" onClick={() => setEdit(true)}><Pencil /> Grenze bearbeiten</button>
+            <button type="button" className="btn btn-ghost mr-auto" onClick={() => setEdit(true)}><Pencil /> Bearbeiten</button>
             <button type="button" className="btn btn-primary" onClick={() => { onClose(); nav.openEntry('kauf', { ticker: ticker! }) }}><ShoppingCart /> Kauf erfassen</button>
           </>
         )

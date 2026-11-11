@@ -4,6 +4,7 @@ import { Delta, Segmented } from '@/components/ui'
 import { HOLDING_BUCKETS } from '@/lib/buckets'
 import { quote, wht } from '@/lib/calc'
 import { commit } from '@/lib/commit'
+import { getAccount } from '@/lib/cloud'
 import { CLOUD } from '@/lib/config'
 import { useDepot, type EntryType } from '@/lib/context'
 import { dfmt, parseNum, pctPlain, qty, r2, today, uid, usd } from '@/lib/format'
@@ -201,7 +202,7 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
       </div>
       <Field label="Notiz">{(id) => <input id={id} className="input" value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
       <CalcBox>
-        {g == null || tx == null ? 'Bruttobetrag aus der Schwab-Buchung eingeben.' : <>Netto <b className="num">{usd(g - tx)} USD</b>{cashOff(db) ? ' wird als erhalten gebucht.' : ' wird dem Cash gutgeschrieben.'}</>}
+        {g == null || tx == null ? 'Bruttobetrag aus der Buchung des Brokers eingeben.' : <>Netto <b className="num">{usd(g - tx)} USD</b>{cashOff(db) ? ' wird als erhalten gebucht.' : ' wird dem Cash gutgeschrieben.'}</>}
       </CalcBox>
       <ErrorLine err={err} />
     </form>
@@ -211,7 +212,7 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
 /* ------------------------------------------------------------------ Ein-/Auszahlung, Cash-Korrektur */
 function CashForm(fp: FormProps) {
   const { db } = useDepot()
-  const [dir, setDir] = useState<'einzahlung' | 'auszahlung' | 'korrektur'>('einzahlung')
+  const [dir, setDir] = useState<'einzahlung' | 'auszahlung' | 'korrektur'>(cashOff(db) ? 'korrektur' : 'einzahlung')
   const [amt, setAmt] = useState('')
   const [date, setDate] = useState(today())
   const [note, setNote] = useState('')
@@ -222,11 +223,11 @@ function CashForm(fp: FormProps) {
 
   const { err, onSubmit } = useSubmit(fp, async () => {
     if (a == null || after == null) throw new Error('Betrag eingeben.')
-    if (off && dir !== 'korrektur') throw new Error('Cash ist derzeit nicht erfasst. Trage zuerst mit «Cash-Stand korrigieren» den Saldo von Schwab ein.')
+    if (off && dir !== 'korrektur') throw new Error('Cash ist derzeit nicht erfasst. Trage zuerst mit «Cash-Stand korrigieren» den Saldo von deinem Broker ein.')
     await commit(
       [
         { op: 'set', coll: 'transactions', id: uid(), data: { type: dir, date, cashDelta: r2(after - cash), note, createdAt: new Date().toISOString(), by: 'Dashboard' } },
-        { op: 'merge', coll: 'meta', id: 'settings', data: { cash: r2(after), ...(dir === 'korrektur' ? { cashEstimate: false, cashExcluded: false, cashNote: 'Saldo laut Schwab ' + dfmt(date), cashDate: date } : {}) } },
+        { op: 'merge', coll: 'meta', id: 'settings', data: { cash: r2(after), ...(dir === 'korrektur' ? { cashEstimate: false, cashExcluded: false, cashNote: 'Saldo laut Broker ' + dfmt(date), cashDate: date } : {}) } },
       ],
       dir === 'korrektur' ? 0 : after - cash,
     )
@@ -239,7 +240,7 @@ function CashForm(fp: FormProps) {
         <select id={id} className="input" value={dir} onChange={(e) => setDir(e.target.value as typeof dir)}>
           <option value="einzahlung">Einzahlung aufs Konto</option>
           <option value="auszahlung">Auszahlung vom Konto</option>
-          <option value="korrektur">Cash-Stand korrigieren (Saldo von Schwab)</option>
+          <option value="korrektur">Cash-Stand eintragen (Saldo laut Broker)</option>
         </select>
       )}</Field>
       <div className="grid grid-cols-2 gap-3">
@@ -248,7 +249,7 @@ function CashForm(fp: FormProps) {
       </div>
       <Field label="Notiz">{(id) => <input id={id} className="input" value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
       <CalcBox>
-        {off && dir !== 'korrektur' ? <>Cash ist derzeit nicht erfasst. Mit «Cash-Stand korrigieren» trägst du den Saldo von Schwab ein, danach zählt Cash wieder mit.</> : after == null ? <>{off ? 'Cash ist derzeit nicht erfasst.' : <>Aktuelles Cash: <b className="num">{usd(cash)} USD</b>.</>}</> : <>Cash danach <b className="num">{usd(after)} USD</b>{dir === 'korrektur' ? ' (die Schätzung wird damit ersetzt)' : ''}.</>}
+        {off && dir !== 'korrektur' ? <>Cash ist derzeit nicht erfasst. Mit «Cash-Stand korrigieren» trägst du den Saldo laut Broker ein, danach zählt Cash mit.</> : after == null ? <>{off ? 'Cash ist derzeit nicht erfasst.' : <>Aktuelles Cash: <b className="num">{usd(cash)} USD</b>.</>}</> : <>Cash danach <b className="num">{usd(after)} USD</b>{dir === 'korrektur' ? ' (die Schätzung wird damit ersetzt)' : ''}.</>}
       </CalcBox>
       <ErrorLine err={err} />
     </form>
@@ -262,12 +263,12 @@ function NoteForm(fp: FormProps) {
   const [date, setDate] = useState(today())
   const { err, onSubmit } = useSubmit(fp, async () => {
     if (!title.trim()) throw new Error('Titel eingeben.')
-    await mutate([{ op: 'set', coll: 'log', id: uid(), data: { date, title: title.trim(), text: text.trim(), by: 'LiAd' } }])
+    await mutate([{ op: 'set', coll: 'log', id: uid(), data: { date, title: title.trim(), text: text.trim(), by: (CLOUD ? getAccount().user?.name : 'LiAd') || undefined } }])
     return 'Notiz gespeichert.'
   })
   return (
     <form id={fp.formId} onSubmit={onSubmit} className="grid gap-3.5">
-      <Field label="Titel">{(id) => <input id={id} className="input" placeholder="z. B. Uber 2. Tranche verschoben" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />}</Field>
+      <Field label="Titel">{(id) => <input id={id} className="input" placeholder="z. B. Nachkauf verschoben" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />}</Field>
       <Field label="Text">{(id) => <textarea id={id} className="input" value={text} onChange={(e) => setText(e.target.value)} />}</Field>
       <Field label="Datum">{(id) => <input id={id} className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />}</Field>
       <ErrorLine err={err} />

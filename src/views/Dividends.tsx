@@ -1,14 +1,21 @@
 import { Check, Upload } from 'lucide-react'
 import { useMemo } from 'react'
 import { DIV_EXPECTED, DIV_RECEIVED, DividendBars, type DivMonth } from '@/components/charts/DividendBars'
-import { Card, Chip, DemoTag, Empty, Stat } from '@/components/ui'
+import { Card, Chip, ConfirmDelete, DemoTag, Empty, Stat } from '@/components/ui'
 import { divAnnual, dividendsList, wht } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
 import { addMonths, dfmt, pctPlain, qty, usd } from '@/lib/format'
+import { reverseDividend } from '@/lib/reverse'
+import { mutate } from '@/lib/store'
+import { toast } from '@/lib/toast'
 
 export function Dividends() {
   const { db, c, now } = useDepot()
   const nav = useNav()
+  const del = (id: string) =>
+    mutate(reverseDividend(db, id, db.dividends[id]))
+      .then(() => toast('Dividende entfernt. Cash ist zurückgesetzt.'))
+      .catch((e) => toast('Nicht entfernt: ' + e.message))
   const a = useMemo(() => divAnnual(db), [db])
   const all = useMemo(() => dividendsList(db).sort((x, y) => ((y.payDate || y.exDate || '') > (x.payDate || x.exDate || '') ? 1 : -1)), [db])
   const year = now.slice(0, 4)
@@ -60,7 +67,7 @@ export function Dividends() {
         )}
       </Card>
 
-      <Card title="Alle Dividenden" sub="Erwartete Beträge bestätigst du, sobald Schwab sie bucht" flush action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'dividenden' })}><Upload /> Hochladen</button>}>
+      <Card title="Alle Dividenden" sub="Erwartete Beträge bestätigst du, sobald der Broker sie bucht" flush action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'dividenden' })}><Upload /> Hochladen</button>}>
         {all.length === 0 ? (
           <Empty>Noch keine Einträge.</Empty>
         ) : (
@@ -90,7 +97,7 @@ export function Dividends() {
           <div className="hidden overflow-x-auto md:block">
             <table className="tbl">
               <thead>
-                <tr><th>Titel</th>{cols.ex && <th>Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r">je Stück</th>}{cols.shares && <th className="r">Stück</th>}<th className="r">Brutto</th><th className="r">Steuer</th><th className="r">Netto</th><th>Status</th>{expected.length > 0 && <th />}</tr>
+                <tr><th>Titel</th>{cols.ex && <th>Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r">je Stück</th>}{cols.shares && <th className="r">Stück</th>}<th className="r">Brutto</th><th className="r">Steuer</th><th className="r">Netto</th><th>Status</th><th /></tr>
               </thead>
               <tbody>
                 {all.map((d) => {
@@ -111,11 +118,12 @@ export function Dividends() {
                           {d.demo && <DemoTag />}
                         </span>
                       </td>
-                      {expected.length > 0 && (
-                        <td className="r">
+                      <td className="r">
+                        <span className="inline-flex items-center gap-1">
                           {d.status === 'erwartet' && <button type="button" className="btn btn-sm" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Check /> Bestätigen</button>}
-                        </td>
-                      )}
+                          <ConfirmDelete label={d.status === 'erhalten' ? 'Dividende stornieren (Cash wird zurückgesetzt)' : 'Erwartete Dividende löschen'} onConfirm={() => void del(d.id)} />
+                        </span>
+                      </td>
                     </tr>
                   )
                 })}

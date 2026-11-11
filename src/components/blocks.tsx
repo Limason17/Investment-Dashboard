@@ -19,7 +19,7 @@ const relDay = (date: string, now: string) => {
   return null
 }
 
-export function EventItem({ e, now, onToggle, compact }: { e: WithId<DepotEvent>; now: string; onToggle?: (e: WithId<DepotEvent>) => void; compact?: boolean }) {
+export function EventItem({ e, now, onToggle, onEdit, compact }: { e: WithId<DepotEvent>; now: string; onToggle?: (e: WithId<DepotEvent>) => void; onEdit?: (e: WithId<DepotEvent>) => void; compact?: boolean }) {
   const [y, m, d] = e.date.split('-')
   const past = e.date < now
   const Icon = KIND_ICON[e.kind ?? 'termin']
@@ -33,7 +33,11 @@ export function EventItem({ e, now, onToggle, compact }: { e: WithId<DepotEvent>
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 text-[13.5px] font-medium leading-5">
           <Icon className="size-3.5 flex-none text-muted" strokeWidth={2} aria-label={KIND_LABEL[e.kind ?? 'termin']} />
-          <span className={clsx('truncate', e.done && 'line-through decoration-white/30')}>{e.title}</span>
+          {onEdit ? (
+            <button type="button" title="Termin bearbeiten" onClick={() => onEdit(e)} className={clsx('truncate text-left underline-offset-4 hover:underline', e.done && 'line-through decoration-white/30')}>{e.title}</button>
+          ) : (
+            <span className={clsx('truncate', e.done && 'line-through decoration-white/30')}>{e.title}</span>
+          )}
         </div>
         {e.detail && <div className={clsx('mt-0.5 text-[12.5px] leading-[1.45] text-muted', compact && 'line-clamp-2')}>{e.detail}</div>}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 empty:hidden">

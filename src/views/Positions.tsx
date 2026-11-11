@@ -4,7 +4,7 @@ import { DivergingBars } from '@/components/charts/DivergingBars'
 import { FluidSparkline, Meter, Sparkline } from '@/components/charts/Small'
 import { Card, Chip, Delta, DemoTag, Empty, Segmented, Ticker } from '@/components/ui'
 import { HOLDING_BUCKETS } from '@/lib/buckets'
-import { targetOf, type Row } from '@/lib/calc'
+import { isCap, targetOf, type Row } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
 import { exportCsv } from '@/lib/export'
@@ -92,7 +92,7 @@ export function Positions() {
             const s = ps?.buckets[b.id as HoldingBucket]
             const ret = s && s.twr.length ? s.twr[s.twr.length - 1] : null
             const n = c.rows.filter((r) => r.p.bucket === b.id).length
-            const over = b.cap && !cashOff && w > tgt
+            const over = isCap(c.settings, b.id) && !cashOff && w > tgt
             return (
               <button key={b.id} type="button" onClick={() => setBucket(bucket === b.id ? 'alle' : b.id)} aria-pressed={bucket === b.id} className="group min-w-0 rounded-xl text-left outline-offset-4">
                 <div className="flex items-center gap-2 text-[12.5px] text-ink-2">
@@ -103,8 +103,8 @@ export function Positions() {
                 <div className="num mt-1 text-[19px] font-semibold leading-6 tracking-[-0.02em]">{usd(c.valuationComplete ? v : null)}</div>
                 <div className="num mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-muted">
                   <span className="text-ink-2">{pctPlain(c.valuationComplete ? w : null)}</span>
-                  <span>/ {b.cap ? 'max ' : b.max ? 'bis ' : ''}{pctPlain(tgt, 0)}</span>
-                  {over && <Chip tone="down">über Deckel</Chip>}
+                  <span>/ {isCap(c.settings, b.id) ? 'max ' : ''}{pctPlain(tgt, 0)}</span>
+                  {over && <Chip tone="down">über Obergrenze</Chip>}
                 </div>
                 <Meter className="mt-2" value={w / 0.6} mark={tgt / 0.6} color={b.color} height={4} />
                 <div className={`mt-3 flex items-center gap-3 transition-opacity ${pending ? 'opacity-40' : ''}`}>

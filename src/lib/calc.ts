@@ -133,6 +133,10 @@ export function compute(db: DB): Calc {
 }
 
 export const targetOf = (s: Settings, id: BucketId) => (s.targets?.[id] ?? BUCKETS.find((b) => b.id === id)!.target) / 100
+/** Ist der Zielanteil eine harte Obergrenze? Einstellbar im Plan; ohne Angabe gilt sie für den ETF-Kern. */
+export const isCap = (s: Settings, id: BucketId) => (s.caps ? s.caps.includes(id) : !!BUCKETS.find((b) => b.id === id)?.cap)
+/** Broker für Hinweistexte */
+export const brokerOf = (s: Settings) => s.broker?.trim() || 'deinem Broker'
 
 /* ------------------------------------------------------------------ Dividenden */
 export function divAnnual(db: DB) {
@@ -204,12 +208,17 @@ export interface Attention {
   ticker?: string
 }
 
-/** ETF-Kern gegen den harten Deckel; ohne Cash-Stand nicht beurteilbar. */
-export function etfCap(c: Calc): { w: number; cap: number; state: 'ueber' | 'nahe' | 'ok' } | null {
-  if (!c.valuationComplete || c.settings.cashExcluded || !c.total) return null
-  const w = c.b.etf / c.total
-  const cap = targetOf(c.settings, 'etf')
-  return { w, cap, state: w > cap ? 'ueber' : w > cap - 0.02 ? 'nahe' : 'ok' }
+/** Bausteine mit Obergrenze gegen ihren Anteil; der kritischste zuerst. Ohne Cash-Stand nicht beurteilbar. */
+export function capChecks(c: Calc): { id: BucketId; name: string; w: number; cap: number; state: 'ueber' | 'nahe' | 'ok' }[] {
+  if (!c.valuationComplete || c.settings.cashExcluded || !c.total) return []
+  const rank = { ueber: 0, nahe: 1, ok: 2 }
+  return BUCKETS.filter((b) => b.id !== 'cash' && isCap(c.settings, b.id))
+    .map((b) => {
+      const w = c.b[b.id] / c.total
+      const cap = targetOf(c.settings, b.id)
+      return { id: b.id, name: b.name, w, cap, state: (w > cap ? 'ueber' : w > cap - 0.02 ? 'nahe' : 'ok') as 'ueber' | 'nahe' | 'ok' }
+    })
+    .sort((a, b) => rank[a.state] - rank[b.state])
 }
 
 /** Nur was heute eine Handlung braucht: veraltete Kurse, verletzter Deckel, Dividenden zum Bestätigen. */
@@ -220,12 +229,13 @@ export function alerts(db: DB, c: Calc, now: string): Attention[] {
   }
   const fails = db.market.latest?.failures ?? []
   if (fails.length) out.push({ tone: 'warn', kind: 'Prüfen', title: `${fails.length} Titel ohne Live-Kurs`, detail: fails.map((f) => f.split(' ')[0]).join(', ') + ': Es gilt der letzte gespeicherte Kurs.' })
-  const etf = etfCap(c)
-  if (etf?.state === 'ueber') out.push({ tone: 'down', kind: 'Achtung', goto: 'plan', title: 'ETF-Deckel überschritten', detail: `ETF-Kern bei ${pctPlain(etf.w)} (Deckel ${pctPlain(etf.cap, 0)}). Keine weiteren ETF-Käufe.` })
-  else if (etf?.state === 'nahe') out.push({ tone: 'warn', kind: 'Prüfen', goto: 'plan', title: 'ETF-Kern nahe am Deckel', detail: `${pctPlain(etf.w)} von maximal ${pctPlain(etf.cap, 0)}.` })
+  for (const k of capChecks(c)) {
+    if (k.state === 'ueber') out.push({ tone: 'down', kind: 'Achtung', goto: 'plan', title: `${k.name}: Obergrenze überschritten`, detail: `${pctPlain(k.w)} statt höchstens ${pctPlain(k.cap, 0)}. Keine weiteren Käufe in diesem Baustein.` })
+    else if (k.state === 'nahe') out.push({ tone: 'warn', kind: 'Prüfen', goto: 'plan', title: `${k.name} nahe an der Obergrenze`, detail: `${pctPlain(k.w)} von höchstens ${pctPlain(k.cap, 0)}.` })
+  }
   const pend = dividendsList(db).filter((d) => d.status === 'erwartet' && d.payDate && d.payDate <= now)
   if (pend.length) {
-    out.push({ tone: 'info', kind: 'Offen', goto: 'dividenden', title: `${pend.length} Dividende${pend.length > 1 ? 'n' : ''} zu bestätigen`, detail: pend.map((d) => d.ticker + ' ' + dshort(d.payDate)).join(', ') + ': Betrag aus Schwab eintragen.' })
+    out.push({ tone: 'info', kind: 'Offen', goto: 'dividenden', title: `${pend.length} Dividende${pend.length > 1 ? 'n' : ''} zu bestätigen`, detail: pend.map((d) => d.ticker + ' ' + dshort(d.payDate)).join(', ') + ': Betrag von ' + brokerOf(c.settings) + ' eintragen.' })
   }
   return out
 }

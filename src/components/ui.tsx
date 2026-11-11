@@ -1,7 +1,7 @@
 import clsx from 'clsx'
-import { ArrowDownRight, ArrowUpRight, Check, CircleDot, Clock, Minus, OctagonAlert, TriangleAlert } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Check, CircleDot, Clock, Minus, OctagonAlert, Trash2, TriangleAlert } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useId, type ComponentType, type ReactNode } from 'react'
+import { useId, useState, type ComponentType, type ReactNode } from 'react'
 import type { Tone } from '@/lib/calc'
 import { pct, sign, sUsd } from '@/lib/format'
 
@@ -120,5 +120,26 @@ export function DemoTag({ className }: { className?: string }) {
     <span className={clsx('inline-flex h-[17px] items-center rounded-[5px] border border-warn/25 bg-warn/10 px-1.5 text-[10px] font-medium uppercase tracking-[0.06em] text-warn', className)}>
       Test
     </span>
+  )
+}
+
+/* ------------------------------------------------------------------ Löschen mit zweitem Klick */
+export function ConfirmDelete({ onConfirm, label }: { onConfirm: () => void; label: string }) {
+  const [armed, setArmed] = useState(false)
+  return (
+    <button
+      type="button"
+      className={clsx('btn btn-ghost btn-sm', armed && '!text-down')}
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (armed) return onConfirm()
+        setArmed(true)
+        setTimeout(() => setArmed(false), 3000)
+      }}
+    >
+      {armed ? 'Sicher?' : <Trash2 />}
+    </button>
   )
 }

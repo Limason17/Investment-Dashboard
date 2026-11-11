@@ -6,7 +6,7 @@ import { AlertItem, EventItem, EventStrip, LimitRow } from '@/components/blocks'
 import { FluidSparkline } from '@/components/charts/Small'
 import { LineLegend, TimeChart, type RefLine, type TimeSeries, type VLine } from '@/components/charts/TimeChart'
 import { Card, Chip, Delta, DemoTag, Empty, Segmented } from '@/components/ui'
-import { alerts, divAnnual, eventsSorted, etfCap, watchRows, yearStats } from '@/lib/calc'
+import { alerts, capChecks, divAnnual, eventsSorted, watchRows, yearStats } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TITLE, refreshCharts } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
 import { dfmt, dlong, hhmm, int, pct, pctPlain, sign, sUsd, usd } from '@/lib/format'
@@ -329,7 +329,7 @@ function Limits() {
   const rows = useMemo(() => watchRows(db), [db])
   const hot = rows.filter((r) => r.s.d != null && r.s.d <= NEAR)
   const next = rows.find((r) => r.s.d != null && r.s.d > NEAR)
-  const etf = etfCap(c)
+  const etf = capChecks(c)[0]
   const priced = rows.some((r) => r.s.d != null)
   const under = hot.filter((r) => r.s.d! <= 0).length
   return (
@@ -342,8 +342,8 @@ function Limits() {
       {etf && etf.state !== 'ok' && (
         <button type="button" onClick={() => nav.goto('plan')} className="mb-1 flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-white/[0.035]">
           <span className="min-w-0">
-            <span className="flex items-center gap-2"><span className="text-[13px] font-medium">ETF-Deckel</span><Chip tone={etf.state === 'ueber' ? 'down' : 'warn'}>{etf.state === 'ueber' ? 'überschritten' : 'nahe'}</Chip></span>
-            <span className="mt-0.5 block text-[12px] text-muted">Keine weiteren ETF-Käufe über {pctPlain(etf.cap, 0)}</span>
+            <span className="flex items-center gap-2"><span className="text-[13px] font-medium">{etf.name}: Obergrenze</span><Chip tone={etf.state === 'ueber' ? 'down' : 'warn'}>{etf.state === 'ueber' ? 'überschritten' : 'nahe'}</Chip></span>
+            <span className="mt-0.5 block text-[12px] text-muted">Keine weiteren Käufe über {pctPlain(etf.cap, 0)}</span>
           </span>
           <span className="num text-[15px] font-semibold">{pctPlain(etf.w)}</span>
         </button>
@@ -389,12 +389,43 @@ function NextEvents() {
 }
 
 /* ------------------------------------------------------------------ Übersicht: nur das Wesentliche */
+/** Neues, leeres Depot: die vier Schritte zum ersten Bild. */
+function FirstSteps() {
+  const nav = useNav()
+  const { c } = useDepot()
+  const steps: { title: string; text: string; action: string; run: () => void; done?: boolean }[] = [
+    { title: 'Positionen hochladen', text: 'Alle bisherigen Käufe auf einmal, mit Vorlage für Excel. Oder einzeln über «Eintrag».', action: 'Hochladen', run: () => nav.openEntry('import', { kind: 'trades' }) },
+    { title: 'Cash-Stand eintragen', text: 'Den Saldo laut Broker. Dann zählen Gesamtwert, Anteile und Obergrenzen mit Cash.', action: 'Eintragen', run: () => nav.openEntry('einzahlung'), done: !c.settings.cashExcluded },
+    { title: 'Plan festlegen', text: 'Zielanteile je Baustein, Obergrenzen und eigene Regeln.', action: 'Zum Plan', run: () => nav.goto('plan') },
+    { title: 'Watchlist anlegen', text: 'Titel mit Kaufgrenze beobachten.', action: 'Zur Watchlist', run: () => nav.goto('limits') },
+  ]
+  return (
+    <Card className="col-span-12" title="Erste Schritte" sub="Dein Depot ist noch leer. So ist es in wenigen Minuten eingerichtet.">
+      <ol className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {steps.map((s, i) => (
+          <li key={s.title} className="flex flex-col gap-2 rounded-xl border border-line bg-white/[0.02] p-4">
+            <div className="flex items-center gap-2.5">
+              <span className="num grid size-6 flex-none place-items-center rounded-full border border-line-2 text-[12px] font-semibold">{i + 1}</span>
+              <span className="text-[14px] font-medium">{s.title}</span>
+              {s.done && <Chip tone="up">erledigt</Chip>}
+            </div>
+            <p className="flex-1 text-[12.5px] leading-[1.5] text-muted">{s.text}</p>
+            <button type="button" className={i === 0 ? 'btn btn-sm btn-primary w-fit' : 'btn btn-sm w-fit'} onClick={s.run}>{s.action}</button>
+          </li>
+        ))}
+      </ol>
+    </Card>
+  )
+}
+
 export function Overview() {
   const { db, c, now } = useDepot()
   const nav = useNav()
   const list = useMemo(() => alerts(db, c, now), [db, c, now])
+  const fresh = !Object.keys(db.positions).length && !Object.keys(db.transactions).length
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
+      {fresh && <FirstSteps />}
       {list.length > 0 && (
         <div className="col-span-12 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {list.map((a) => <AlertItem key={a.title} a={a} onClick={a.goto ? () => nav.goto(a.goto!) : undefined} />)}

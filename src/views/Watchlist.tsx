@@ -1,7 +1,9 @@
-import { useMemo } from 'react'
+import { Plus } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { LimitRow } from '@/components/blocks'
 import { FluidSparkline, LimitTrack, Sparkline } from '@/components/charts/Small'
 import { Card, Chip, Delta, Empty, Stat, Ticker } from '@/components/ui'
+import { WatchAddSheet } from '@/features/EditSheets'
 import { watchRows, type WatchRow } from '@/lib/calc'
 import { useChart } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
@@ -16,6 +18,7 @@ const GROUPS: { id: string; title: string; hint: string; test: (r: WatchRow) => 
 ]
 
 export function Watchlist() {
+  const [add, setAdd] = useState(false)
   const { db } = useDepot()
   const nav = useNav()
   const rows = useMemo(() => watchRows(db), [db])
@@ -67,9 +70,9 @@ export function Watchlist() {
         </Card>
       )}
 
-      <Card title="Kaufgrenzen nach Planregel" sub={<span className="max-md:hidden">Grenze erreicht heisst noch nicht kaufen: Die Bedingung muss erfüllt sein.</span>} flush>
+      <Card title="Kaufgrenzen nach Planregel" sub={<span className="max-md:hidden">Grenze erreicht heisst noch nicht kaufen: Die Bedingung muss erfüllt sein.</span>} flush action={<button type="button" className="btn btn-sm" onClick={() => setAdd(true)}><Plus /> Titel</button>}>
         {rows.length === 0 ? (
-          <Empty title="Keine Watchlist">Kandidaten mit Grenze und Bedingung erscheinen hier.</Empty>
+          <Empty title="Keine Watchlist">Mit «Titel» oben rechts beobachtest du Kandidaten mit Kaufgrenze.</Empty>
         ) : (
           <>
             {/* Ab Tablet: Tabelle */}
@@ -143,6 +146,7 @@ export function Watchlist() {
           <span className="inline-flex items-center gap-2"><i className="inline-block size-2 rounded-full bg-[#8a91a0]" />Kurs, Skala −15 % bis +35 %</span>
         </div>
       </Card>
+      <WatchAddSheet key={String(add)} open={add} onClose={() => setAdd(false)} />
     </div>
   )
 }

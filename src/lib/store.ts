@@ -31,7 +31,7 @@ export async function loadDb() {
       const db = { ...EMPTY, ...(await cloudLoad()) }
       set({ db, error: null })
       // Neues Konto: Cash erst zählen, wenn der Saldo eingetragen ist (Eintrag → Ein-/Auszahlung → Cash-Stand korrigieren).
-      if (!db.meta.settings) await mutate([{ op: 'set', coll: 'meta', id: 'settings', data: { cash: 0, cashExcluded: true, withholding: 0.15 } }])
+      if (!db.meta.settings) await mutate([{ op: 'set', coll: 'meta', id: 'settings', data: { cash: 0, cashExcluded: true, withholding: 0.15, caps: [] } }])
       return
     }
     const r = await fetch('/api/db', { cache: 'no-store' })

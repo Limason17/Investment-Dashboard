@@ -118,6 +118,10 @@ export interface Settings {
   cashNote?: string
   cashDate?: string
   targets?: Partial<Record<BucketId, number>>
+  /** Bausteine, deren Zielanteil eine harte Obergrenze ist (ohne Angabe: ETF-Kern) */
+  caps?: BucketId[]
+  /** Name des Brokers, nur zur Anzeige */
+  broker?: string
   withholding?: number
   baseCapital?: number
   priceSource?: string

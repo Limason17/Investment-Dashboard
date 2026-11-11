@@ -6,19 +6,21 @@ import { withIds, yearStats } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
 import { addMonths, dfmt, int, qty, usd, weekday } from '@/lib/format'
 import { TX_LABEL } from '@/lib/labels'
+import { reverseTx } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
 
 
 const RECENT = 12
 
-function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
+function DeleteButton({ onConfirm, label = 'Buchung stornieren' }: { onConfirm: () => void; label?: string }) {
   const [armed, setArmed] = useState(false)
   return (
     <button
       type="button"
       className={`btn btn-ghost btn-sm ${armed ? '!text-down' : ''}`}
-      aria-label="Buchung löschen"
+      aria-label={label}
+      title={label}
       onClick={(e) => {
         e.stopPropagation()
         if (armed) return onConfirm()
@@ -42,9 +44,14 @@ export function Journal() {
   const shown = all ? matching : matching.slice(0, RECENT)
   const log = useMemo(() => withIds(db.log).sort((a, b) => ((b.date || '') > (a.date || '') ? 1 : -1)), [db])
 
+  // Storno: Bestand, Einstand, Topf und Cash werden mit zurückgesetzt.
   const del = (id: string) =>
-    mutate([{ op: 'delete', coll: 'transactions', id }])
-      .then(() => toast('Buchung gelöscht. Bestand und Cash bleiben unverändert.'))
+    mutate(reverseTx(db, id, db.transactions[id]))
+      .then(() => toast('Buchung storniert. Bestand und Cash sind zurückgesetzt.'))
+      .catch((e) => toast('Nicht storniert: ' + e.message))
+  const delNote = (id: string) =>
+    mutate([{ op: 'delete', coll: 'log', id }])
+      .then(() => toast('Notiz gelöscht.'))
       .catch((e) => toast('Nicht gelöscht: ' + e.message))
 
   // Handel der letzten zwölf Monate und die Summen des laufenden Jahres
@@ -182,7 +189,10 @@ export function Journal() {
                   <span className="num">{weekday(e.date)}, {dfmt(e.date)}</span>
                   {e.by && <><span className="text-faint">·</span><span>{e.by}</span></>}
                 </div>
-                <div className="mt-0.5 text-[13.5px] font-medium leading-5">{e.title}</div>
+                <div className="mt-0.5 flex items-start justify-between gap-2">
+                  <span className="text-[13.5px] font-medium leading-5">{e.title}</span>
+                  <span className="-mr-2 -mt-1.5 flex-none"><DeleteButton label="Notiz löschen" onConfirm={() => void delNote(e.id)} /></span>
+                </div>
                 {e.text && <p className="mt-1 text-[12.5px] leading-[1.5] text-muted">{e.text}</p>}
               </li>
             ))}

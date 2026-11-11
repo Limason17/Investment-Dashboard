@@ -334,7 +334,7 @@ function Dashboard() {
               </AnimatePresence>
 
               <footer className="mx-auto mt-10 max-w-3xl px-2 text-center text-[12px] leading-[1.6] text-faint sm:mt-12">
-                Analyse-Werkzeug, keine Anlageberatung und keine Orderausführung. Massgebend sind die Kontoauszüge von Schwab.
+                Analyse-Werkzeug, keine Anlageberatung und keine Orderausführung. Massgebend sind die Kontoauszüge deines Brokers.
                 <br />Kurse und Verläufe: Yahoo Finance (inoffiziell), splitbereinigt, ohne Dividenden. Der Wertverlauf ist aus den Buchungen nachgerechnet.
               </footer>
             </main>
