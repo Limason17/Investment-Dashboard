@@ -22,7 +22,14 @@ export interface FirebaseConfig {
 export const CLOUD = import.meta.env.VITE_BACKEND === 'cloud'
 
 /** Wird nach dem Einrichten eingetragen (docs/einrichten.md). Eine Umgebungsvariable VITE_FIREBASE_CONFIG (JSON) hat Vorrang. */
-const PROJECT_CONFIG: FirebaseConfig | null = null
+const PROJECT_CONFIG: FirebaseConfig | null = {
+  apiKey: 'AIzaSyBecRVll5O_ihzU6DqUs3F2OD6_-cxJK1U',
+  authDomain: 'investment-dashboard-fa06a.firebaseapp.com',
+  projectId: 'investment-dashboard-fa06a',
+  storageBucket: 'investment-dashboard-fa06a.firebasestorage.app',
+  messagingSenderId: '826841855193',
+  appId: '1:826841855193:web:3d8d097e15883361f43ac8',
+}
 const QUOTES = ''
 
 function fromEnv(): FirebaseConfig | null {
