@@ -11,7 +11,7 @@ const ENTRIES: { type: EntryType; label: string }[] = [
   { type: 'dividende', label: 'Dividende erfassen' },
   { type: 'einzahlung', label: 'Ein- oder Auszahlung erfassen' },
   { type: 'notiz', label: 'Notiz schreiben' },
-  { type: 'import', label: 'Massen-Import: Bestand, Käufe, Dividenden, Schwab-CSV' },
+  { type: 'import', label: 'Positionen hochladen (Vorlage, Excel, Schwab-CSV)' },
 ]
 
 const Item = ({ value, onSelect, children }: { value: string; onSelect: () => void; children: ReactNode }) => (
@@ -58,7 +58,7 @@ export function CommandPalette({ open, onOpenChange, views, onExport, onRefresh,
                 ))}
                 <Item value="aktion aktualisieren kurse neu laden refresh" onSelect={run(onRefresh)}><RefreshCw />Kurse und Daten aktualisieren</Item>
                 <Item value="aktion export csv positionen" onSelect={run(onExport)}><Download />Positionen als CSV exportieren</Item>
-                <Item value="aktion konto backup abmelden sichern" onSelect={run(onAccount)}><CircleUser />Konto und Backup</Item>
+                <Item value="aktion konto backup sicherung vorlage hochladen abmelden" onSelect={run(onAccount)}><CircleUser />Konto, Positionen hochladen, Sicherungskopie</Item>
               </Command.Group>
               <Command.Group heading="Positionen">
                 {Object.values(db.positions).filter((p) => p.shares > 0).map((p) => (

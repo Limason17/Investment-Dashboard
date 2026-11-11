@@ -45,7 +45,7 @@ const WEEKDAY_LONG: Record<string, string> = { Mo: 'Montag', Di: 'Dienstag', Mi:
 /** Konto (online) oder Backup (lokal) in der Seitenleiste. */
 function AccountButton({ onClick }: { onClick: () => void }) {
   const { user } = useAccount()
-  const label = CLOUD ? user?.name || user?.email || 'Konto' : 'Backup'
+  const label = CLOUD ? user?.name || user?.email || 'Konto' : 'Daten hochladen und sichern'
   return (
     <button type="button" onClick={onClick} className="flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-[13px] text-ink-2 transition-colors hover:bg-white/[0.04] hover:text-ink">
       <CircleUser className="size-4 flex-none text-muted" />
@@ -187,7 +187,7 @@ function Dashboard() {
   const db = useMemo(() => (stored ? withLive(stored, live) : null), [stored, live])
   const [view, setView] = useState<ViewId>(viewFromHash)
   const [palette, setPalette] = useState(false)
-  const [entry, setEntry] = useState<{ open: boolean; n: number; type: EntryType; fromId?: string; ticker?: string; kind?: ImportKind }>({ open: false, n: 0, type: 'kauf' })
+  const [entry, setEntry] = useState<{ open: boolean; n: number; type: EntryType; fromId?: string; ticker?: string; kind?: ImportKind; text?: string }>({ open: false, n: 0, type: 'kauf' })
   const [posT, setPosT] = useState<string | null>(null)
   const [watchT, setWatchT] = useState<string | null>(null)
   const [accountOpen, setAccountOpen] = useState(false)
@@ -225,7 +225,7 @@ function Dashboard() {
       goto,
       openPosition: (t) => { setWatchT(null); setPosT(t) },
       openWatch: (t) => { setPosT(null); setWatchT(t) },
-      openEntry: (type = 'kauf', opt) => setEntry((e) => ({ open: true, n: e.n + 1, type, fromId: opt?.fromId, ticker: opt?.ticker, kind: opt?.kind })),
+      openEntry: (type = 'kauf', opt) => setEntry((e) => ({ open: true, n: e.n + 1, type, fromId: opt?.fromId, ticker: opt?.ticker, kind: opt?.kind, text: opt?.text })),
     }),
     [view, goto],
   )
@@ -304,7 +304,7 @@ function Dashboard() {
                   <span className="truncate">{statusText(c, now, live)}</span>
                 </span>
                 <button type="button" className="btn btn-ghost btn-icon" onClick={() => setPalette(true)} aria-label="Suchen"><Search /></button>
-                <button type="button" className="btn btn-ghost btn-icon" onClick={() => setAccountOpen(true)} aria-label={CLOUD ? 'Konto' : 'Backup'}><CircleUser /></button>
+                <button type="button" className="btn btn-ghost btn-icon" onClick={() => setAccountOpen(true)} aria-label={CLOUD ? 'Konto und Daten' : 'Daten'}><CircleUser /></button>
                 <button type="button" className="btn btn-ghost btn-icon" onClick={() => void refresh()} disabled={refreshing} aria-label="Kurse und Daten aktualisieren"><RefreshCw className={clsx(refreshing && 'animate-spin')} /></button>
               </div>
             </div>
@@ -346,7 +346,7 @@ function Dashboard() {
           </button>
           <TabBar view={view} goto={goto} />
 
-          <EntrySheet key={entry.n} open={entry.open} type={entry.type} fromId={entry.fromId} ticker={entry.ticker} kind={entry.kind} onClose={() => setEntry((e) => ({ ...e, open: false }))} />
+          <EntrySheet key={entry.n} open={entry.open} type={entry.type} fromId={entry.fromId} ticker={entry.ticker} kind={entry.kind} text={entry.text} onClose={() => setEntry((e) => ({ ...e, open: false }))} />
           <PositionSheet key={'p' + (posT ?? '')} ticker={posT} onClose={() => setPosT(null)} />
           <WatchSheet key={'w' + (watchT ?? '')} ticker={watchT} onClose={() => setWatchT(null)} />
           <CommandPalette open={palette} onOpenChange={setPalette} views={VIEWS} onExport={() => exportCsv(c)} onRefresh={() => void refresh()} onAccount={() => setAccountOpen(true)} />

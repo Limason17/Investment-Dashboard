@@ -60,8 +60,10 @@ Der Worker speichert nichts und kennt keine Konten. Er nimmt nur Anfragen von
 
 ## 6. Deine Daten übernehmen
 
-1. Lokal (`npm run dev`): unten links **Backup → Backup herunterladen**.
-2. Online: registrieren, dann **Konto → Backup einspielen**, die Datei wählen, **Ersetzen**.
+1. Lokal (`npm run dev`): unten links **Daten hochladen und sichern → Sicherungskopie herunterladen**.
+2. Online: registrieren, dann **Konto → Sicherungskopie → Wiederherstellen**, die Datei wählen, **Alle Daten ersetzen**.
+
+Ohne lokale Version: **Konto → Bestehende Positionen hochladen**. Vorlage herunterladen, in Excel ausfüllen (eine Zeile je Kauf mit Datum), hochladen, Vorschau prüfen, übernehmen.
 
 ## Als App installieren
 

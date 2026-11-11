@@ -19,7 +19,7 @@ export interface Col {
 /** Spalten je Art, in der Reihenfolge der Vorlage. Ohne Kopfzeile gilt diese Reihenfolge. */
 export const COLUMNS: Record<ImportKind, Col[]> = {
   bestand: [
-    { key: 'ticker', label: 'Ticker', required: true, example: 'VTI', hint: 'Kürzel wie bei Schwab', aliases: ['ticker', 'symbol', 'titel', 'kuerzel'] },
+    { key: 'ticker', label: 'Ticker', required: true, example: 'VTI', hint: 'Kürzel wie beim Broker, z. B. VTI', aliases: ['ticker', 'symbol', 'titel', 'kuerzel'] },
     { key: 'shares', label: 'Stück', required: true, example: '3', hint: 'Bruchteile erlaubt', aliases: ['stueck', 'anzahl', 'menge', 'shares', 'quantity', 'qty', 'qtyquantity'] },
     { key: 'cost', label: 'Einstand', example: '1077.00', hint: 'Einstand gesamt in USD, nicht je Stück; leer = unbekannt', aliases: ['einstand', 'kosten', 'cost', 'costbasis', 'einstandgesamt'] },
     { key: 'name', label: 'Name', example: 'Vanguard Total Stock Market ETF', hint: 'leer = Ticker', aliases: ['name', 'bezeichnung', 'description', 'beschreibung'] },
@@ -29,7 +29,7 @@ export const COLUMNS: Record<ImportKind, Col[]> = {
   trades: [
     { key: 'date', label: 'Datum', required: true, example: '2026-06-23', hint: '2026-06-23, 23.06.2026 oder 06/23/2026', aliases: ['datum', 'date', 'handelstag'] },
     { key: 'type', label: 'Art', required: true, example: 'Kauf', hint: 'Kauf oder Verkauf (auch Buy, Sell)', aliases: ['art', 'typ', 'type', 'action', 'aktion'] },
-    { key: 'ticker', label: 'Ticker', required: true, example: 'VTI', hint: 'Kürzel wie bei Schwab', aliases: ['ticker', 'symbol', 'titel', 'kuerzel'] },
+    { key: 'ticker', label: 'Ticker', required: true, example: 'VTI', hint: 'Kürzel wie beim Broker, z. B. VTI', aliases: ['ticker', 'symbol', 'titel', 'kuerzel'] },
     { key: 'shares', label: 'Stück', required: true, example: '1', hint: 'Bruchteile erlaubt', aliases: ['stueck', 'anzahl', 'menge', 'shares', 'quantity', 'qty'] },
     { key: 'price', label: 'Preis', required: true, example: '359.00', hint: 'Preis je Stück in USD', aliases: ['preis', 'kurs', 'price', 'preisjestueck'] },
     { key: 'fees', label: 'Gebühren', example: '0', hint: 'in USD; leer = 0', aliases: ['gebuehren', 'gebuehr', 'fees', 'feescomm', 'kommission'] },
@@ -38,7 +38,7 @@ export const COLUMNS: Record<ImportKind, Col[]> = {
   ],
   dividenden: [
     { key: 'payDate', label: 'Zahltag', required: true, example: '2026-06-23', hint: 'Tag der Gutschrift', aliases: ['zahltag', 'datum', 'date', 'paydate', 'zahlung'] },
-    { key: 'ticker', label: 'Ticker', required: true, example: 'VXUS', hint: 'Kürzel wie bei Schwab', aliases: ['ticker', 'symbol', 'titel', 'kuerzel'] },
+    { key: 'ticker', label: 'Ticker', required: true, example: 'VXUS', hint: 'Kürzel wie beim Broker, z. B. VTI', aliases: ['ticker', 'symbol', 'titel', 'kuerzel'] },
     { key: 'gross', label: 'Brutto', required: true, example: '1.93', hint: 'Betrag gesamt vor Steuer, USD', aliases: ['brutto', 'gross', 'betrag', 'amount'] },
     { key: 'tax', label: 'Quellensteuer', example: '0.29', hint: 'USD; leer = Standardsatz', aliases: ['quellensteuer', 'steuer', 'tax', 'withholding'] },
     { key: 'exDate', label: 'Ex-Tag', example: '', hint: 'optional', aliases: ['extag', 'exdate', 'ex'] },
@@ -60,17 +60,73 @@ export interface ParseResult {
   skipped: Issue[]
 }
 
-/** Vorlage zum Kopieren: Kopfzeile und eine Beispielzeile, mit Tabulator getrennt (fügt sich in Excel in Spalten). */
-export const template = (kind: ImportKind) => {
-  const cols = COLUMNS[kind]
-  return cols.map((c) => c.label).join('\t') + '\n' + cols.map((c) => c.example).join('\t') + '\n'
+/** Zwei Beispiele je Art, in der Reihenfolge der Spalten. In Vorlagen stehen sie als Kommentar (#) und werden nie importiert. */
+export const EXAMPLES: Record<ImportKind, string[][]> = {
+  trades: [
+    ['2025-03-14', 'Kauf', 'VTI', '3', '285.40', '0', 'etf', 'Erster Kauf'],
+    ['2025-09-02', 'Kauf', 'MSFT', '2', '410.10', '1.00', 'aktien', ''],
+  ],
+  dividenden: [
+    ['2025-06-26', 'VTI', '2.85', '0.43', '2025-06-23', ''],
+    ['2025-09-11', 'MSFT', '1.66', '0.25', '', 'Quartalsdividende'],
+  ],
+  bestand: [
+    ['VTI', '3', '856.20', 'Vanguard Total Stock Market ETF', 'etf', ''],
+    ['MSFT', '2', '821.20', 'Microsoft', 'aktien', ''],
+  ],
 }
+
+const TITLE: Record<ImportKind, string> = {
+  trades: 'Käufe und Verkäufe: eine Zeile je Kauf oder Verkauf. Für bestehende Positionen trägst du jeden Kauf mit Datum und Preis ein.',
+  dividenden: 'Dividenden: eine Zeile je erhaltene Zahlung.',
+  bestand: 'Nur Bestand: eine Zeile je Titel, ohne Kaufdatum. Ohne Datum zeigt das Dashboard keinen Verlauf; besser die Vorlage Käufe nutzen.',
+}
+
+/** Kommentarzeilen: Erklärung, Spalten und zwei Beispiele. */
+function commentLines(kind: ImportKind, sep: string) {
+  const cols = COLUMNS[kind]
+  return [
+    `# ${TITLE[kind]}`,
+    '# Zeilen mit # am Anfang werden nicht importiert. Die zwei Beispiele unten zeigen das Format.',
+    ...(kind !== 'bestand' ? ['# Das Datum braucht es für Wertverlauf, Rendite und Charts.'] : []),
+    `# Pflicht: ${cols.filter((c) => c.required).map((c) => c.label).join(', ')}. Freiwillig: ${cols.filter((c) => !c.required).map((c) => c.label).join(', ')}.`,
+    ...cols.map((c) => `# ${c.label}: ${c.hint}`),
+    ...EXAMPLES[kind].map((r) => '# Beispiel: ' + r.join(sep)),
+  ]
+}
+
+/** Vorlage zum Kopieren: Erklärung, Kopfzeile, Beispiele als Kommentar; mit Tabulator getrennt (fügt sich in Excel in Spalten). */
+export const template = (kind: ImportKind) => [...commentLines(kind, '\t'), COLUMNS[kind].map((c) => c.label).join('\t')].join('\n') + '\n'
+
+/** Vorlage als Datei: Semikolon (öffnet sich in Excel direkt in Spalten), UTF-8 mit BOM für Umlaute. */
+export const templateFile = (kind: ImportKind) => '﻿' + [...commentLines(kind, ';'), COLUMNS[kind].map((c) => c.label).join(';')].join('\r\n') + '\r\n'
+
+export const TEMPLATE_NAME: Record<ImportKind, string> = { trades: 'vorlage-kaeufe-verkaeufe.csv', dividenden: 'vorlage-dividenden.csv', bestand: 'vorlage-bestand.csv' }
+
+/** Art einer ausgefüllten Vorlage an der Kopfzeile erkennen. */
+export function detectKind(text: string): ImportKind | null {
+  const rows = splitTable(text.replace(/^﻿/, '')).filter((r) => !isComment(r)).slice(0, 8)
+  for (const r of rows) {
+    const n = new Set(r.map(norm))
+    if (n.has('action') && n.has('symbol')) return 'trades' // Schwab-Export
+    if (n.has('brutto') || n.has('zahltag') || n.has('gross')) return 'dividenden'
+    if ((n.has('art') || n.has('type')) && (n.has('preis') || n.has('price'))) return 'trades'
+    if ((n.has('stueck') || n.has('shares') || n.has('quantity')) && !n.has('datum') && !n.has('date')) return 'bestand'
+  }
+  return null
+}
+
+const isComment = (r: string[]) => (r.find((c) => c !== '') ?? '').startsWith('#')
+
+/** Grenzen gegen Tippfehler und übergrosse Dateien. */
+export const LIMITS = { bytes: 2_000_000, rows: 5000, note: 300 }
 
 /* ------------------------------------------------------------------ Tabelle lesen */
 
 /** Trennzeichen aus der ersten Zeile: Tabulator (Excel), sonst Semikolon, sonst Komma. */
 function delimiter(text: string): string {
-  const first = text.split(/\r?\n/).find((l) => l.trim()) ?? ''
+  // Kommentarzeilen der Vorlage (#) zählen nicht.
+  const first = text.replace(/^﻿/, '').split(/\r?\n/).find((l) => l.trim() && !l.trimStart().startsWith('#')) ?? ''
   if (first.includes('\t')) return '\t'
   const semi = first.split(';').length, comma = first.split(',').length
   return semi >= comma && semi > 1 ? ';' : ','
@@ -162,9 +218,9 @@ function tradeType(raw: string | undefined): 'kauf' | 'verkauf' | null {
 
 /** Ordnet die Spalten zu: per Kopfzeile (Reihenfolge frei) oder, ohne Kopfzeile, nach der Vorlage. */
 function mapColumns(rows: string[][], cols: Col[]): { start: number; idx: Record<string, number> } {
-  // Kopfzeile in den ersten 5 Zeilen suchen (Exporte haben oft eine Titelzeile davor).
+  // Kopfzeile in den ersten Zeilen suchen (Vorlagen haben Kommentare, Exporte oft eine Titelzeile davor).
   let best = { row: -1, hits: 0, idx: {} as Record<string, number> }
-  rows.slice(0, 5).forEach((r, ri) => {
+  rows.slice(0, 25).forEach((r, ri) => {
     const idx: Record<string, number> = {}
     r.forEach((cell, ci) => {
       const n = norm(cell)
@@ -192,6 +248,7 @@ function parseSchwab(rows: string[][], headerRow: number): ParseResult {
   const divs = new Map<string, DivRow>()
   const taxes: { key: string; t: string; d: string; amt: number; line: number }[] = []
   rows.slice(headerRow + 1).forEach((r, i) => {
+    if (!r.length) return
     const line = headerRow + i + 2
     const action = r[c.action] ?? ''
     const d = date(r[c.date])
@@ -234,8 +291,17 @@ function parseSchwab(rows: string[][], headerRow: number): ParseResult {
 export function parseImport(kind: ImportKind, text: string): ParseResult {
   const res: ParseResult = { format: 'vorlage', positions: [], trades: [], dividends: [], errors: [], skipped: [] }
   if (!text.trim()) return res
-  const rows = splitTable(text)
-  const schwabHeader = rows.slice(0, 5).findIndex((r) => {
+  if (text.length > LIMITS.bytes) {
+    res.errors.push({ line: 0, msg: 'Die Datei ist zu gross (höchstens 2 MB).' })
+    return res
+  }
+  // Kommentarzeilen (#) bleiben als leere Zeilen stehen, damit die Zeilennummern stimmen.
+  const rows = splitTable(text.replace(/^﻿/, '')).map((r) => (isComment(r) ? [] : r))
+  if (rows.filter((r) => r.length).length > LIMITS.rows + 1) {
+    res.errors.push({ line: 0, msg: `Zu viele Zeilen (höchstens ${LIMITS.rows}). Teile die Datei auf.` })
+    return res
+  }
+  const schwabHeader = rows.slice(0, 25).findIndex((r) => {
     const n = r.map(norm)
     return n.includes('date') && n.includes('action') && n.includes('symbol') && n.includes('amount')
   })
@@ -248,9 +314,10 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
     res.errors.push({ line: start, msg: `Spalte fehlt: ${missing.map((c) => c.label).join(', ')}` })
     return res
   }
-  const get = (r: string[], k: string) => (k in idx ? (r[idx[k]] ?? '').trim() : '')
+  const get = (r: string[], k: string) => (k in idx ? (r[idx[k]] ?? '').trim().slice(0, k === 'note' || k === 'name' ? LIMITS.note : 64) : '')
 
   rows.slice(start).forEach((r, i) => {
+    if (!r.length) return
     const line = start + i + 1
     const t = ticker(get(r, 'ticker'))
     const err = (msg: string) => res.errors.push({ line, msg })
@@ -273,7 +340,7 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       const b = bucket(get(r, 'bucket'))
       if (!d) return void err(`Datum «${get(r, 'date')}» ungültig`)
       if (!type) return void err(`Art «${get(r, 'type')}» unbekannt (Kauf oder Verkauf)`)
-      if (!t) return void err(`Ticker «${get(r, 'ticker')}» ungültig`)
+      if (!t) return void err(get(r, 'ticker') ? `Ticker «${get(r, 'ticker')}» ungültig` : 'Ticker fehlt')
       if (!shares || shares <= 0) return void err('Stück fehlt oder ungültig')
       if (!price || price <= 0) return void err('Preis fehlt oder ungültig')
       if (b === null) return void err(`Baustein «${get(r, 'bucket')}» unbekannt`)
@@ -286,7 +353,7 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       const exRaw = get(r, 'exDate')
       const ex = date(exRaw)
       if (!d) return void err(`Zahltag «${get(r, 'payDate')}» ungültig`)
-      if (!t) return void err(`Ticker «${get(r, 'ticker')}» ungültig`)
+      if (!t) return void err(get(r, 'ticker') ? `Ticker «${get(r, 'ticker')}» ungültig` : 'Ticker fehlt')
       if (!gross || gross <= 0) return void err('Bruttobetrag fehlt oder ungültig')
       if (taxRaw && tax == null) return void err(`Quellensteuer «${taxRaw}» ungültig`)
       if (exRaw && !ex) return void err(`Ex-Tag «${exRaw}» ungültig`)

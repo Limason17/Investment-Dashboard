@@ -10,7 +10,7 @@ export interface Nav {
   goto: (v: ViewId) => void
   openPosition: (t: string) => void
   openWatch: (t: string) => void
-  openEntry: (type?: EntryType, opt?: { fromId?: string; ticker?: string; kind?: ImportKind }) => void
+  openEntry: (type?: EntryType, opt?: { fromId?: string; ticker?: string; kind?: ImportKind; text?: string }) => void
 }
 export const NavContext = createContext<Nav>(null!)
 export const useNav = () => useContext(NavContext)

@@ -147,7 +147,7 @@ export function Positions() {
         title="Alle Positionen"
         sub={`${c.rows.length} Titel · ${c.valuationComplete ? usd(c.sec) + ' USD' : 'Marktwert offen'}`}
         flush
-        action={<div className="flex gap-1"><button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'trades' })}><Upload /> Import</button><button type="button" className="btn btn-ghost btn-sm" onClick={() => exportCsv(c)}><Download /> CSV</button></div>}
+        action={<div className="flex gap-1"><button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'trades' })}><Upload /> Hochladen</button><button type="button" className="btn btn-ghost btn-sm" onClick={() => exportCsv(c)}><Download /> CSV</button></div>}
       >
         <div className="flex flex-wrap items-center gap-2 px-2 pb-2 sm:px-3">
           <label className="relative min-w-[150px] flex-1 sm:max-w-[240px]">

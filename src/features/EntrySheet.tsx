@@ -276,7 +276,7 @@ function NoteForm(fp: FormProps) {
 }
 
 /* ------------------------------------------------------------------ Blatt */
-export function EntrySheet({ open, type: initial, fromId, ticker, kind, onClose }: { open: boolean; type: EntryType; fromId?: string; ticker?: string; kind?: ImportKind; onClose: () => void }) {
+export function EntrySheet({ open, type: initial, fromId, ticker, kind, text, onClose }: { open: boolean; type: EntryType; fromId?: string; ticker?: string; kind?: ImportKind; text?: string; onClose: () => void }) {
   // Das Blatt wird bei jedem Öffnen neu aufgebaut (key in App), darum genügt der Startwert.
   const [type, setType] = useState<EntryType>(initial)
   const [busy, setBusy] = useState(false)
@@ -294,7 +294,7 @@ export function EntrySheet({ open, type: initial, fromId, ticker, kind, onClose 
     <Sheet
       open={open}
       onClose={onClose}
-      title={type === 'import' ? 'Massen-Import' : confirming ? 'Dividende bestätigen' : 'Neuer Eintrag'}
+      title={type === 'import' ? 'Positionen hochladen' : confirming ? 'Dividende bestätigen' : 'Neuer Eintrag'}
       sub={CLOUD ? 'Wird in deinem Konto gespeichert. Es werden nie Orders platziert.' : 'Wird nur lokal auf diesem Rechner gespeichert. Es werden nie Orders platziert.'}
       footer={
         <>
@@ -309,10 +309,10 @@ export function EntrySheet({ open, type: initial, fromId, ticker, kind, onClose 
       {type === 'dividende' && <DividendForm key={fromId ?? 'neu'} fromId={fromId} {...fp} />}
       {type === 'einzahlung' && <CashForm {...fp} />}
       {type === 'notiz' && <NoteForm {...fp} />}
-      {type === 'import' && <ImportForm formId={formId} initial={kind ?? 'trades'} setBusy={setBusy} onSaved={fp.onSaved} />}
+      {type === 'import' && <ImportForm formId={formId} initial={kind ?? 'trades'} initialText={text} setBusy={setBusy} onSaved={fp.onSaved} />}
       {!confirming && (
         <button type="button" className="mt-5 text-[12.5px] text-muted underline decoration-line-2 underline-offset-4 hover:text-ink" onClick={() => setType(type === 'import' ? 'kauf' : 'import')}>
-          {type === 'import' ? 'Zurück zum einzelnen Eintrag' : 'Viele Einträge auf einmal? Massen-Import öffnen'}
+          {type === 'import' ? 'Zurück zum einzelnen Eintrag' : 'Viele Einträge auf einmal? Positionen hochladen'}
         </button>
       )}
     </Sheet>

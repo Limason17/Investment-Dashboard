@@ -1,9 +1,11 @@
-import { Download, LogOut, Trash2, Upload } from 'lucide-react'
+import { Download, LogOut, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
 import { Segmented } from '@/components/ui'
 import { authMessage, cloudReplace, COLLECTIONS, deleteAccount, PASSWORD_MIN, resetPassword, signIn, signOut, signUp, useAccount } from '@/lib/cloud'
+import { detectKind, LIMITS, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
 import { CLOUD } from '@/lib/config'
+import { useNav } from '@/lib/context'
 import { today } from '@/lib/format'
 import { loadDb, useStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -13,33 +15,73 @@ import type { DB } from '@/lib/types'
 
 const BACKUP_KIND = 'depot-backup'
 
-/** Alle Sammlungen als JSON-Datei herunterladen. */
+/** Alle Sammlungen als JSON-Datei herunterladen (Sicherungskopie, nicht zum Ausfüllen). */
 function downloadBackup(db: DB) {
   const data = Object.fromEntries(COLLECTIONS.filter((c) => c !== 'market').map((c) => [c, db[c]]))
   const blob = new Blob([JSON.stringify({ kind: BACKUP_KIND, version: 1, exportedAt: new Date().toISOString(), data }, null, 1)], { type: 'application/json' })
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `depot-backup-${today()}.json` })
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `depot-sicherung-${today()}.json` })
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
 }
 
-/** Backup-Datei prüfen. Nimmt auch die Dateien aus data/ einzeln nicht an: nur das Backup als Ganzes. */
+const BACKUP_MAX_BYTES = 5_000_000
+const MAX_ENTRIES = 20_000
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+
+/**
+ * Sicherungskopie prüfen, bevor sie etwas ersetzt: nur bekannte Sammlungen, jeder Eintrag ein Objekt,
+ * gültige Schlüssel, Positionen mit Ticker und Stückzahl. Unbekanntes wird verworfen, nie übernommen.
+ */
 function readBackup(text: string): Partial<DB> {
-  let j: { kind?: string; data?: Record<string, unknown> }
+  if (text.length > BACKUP_MAX_BYTES) throw new Error('Die Datei ist zu gross (höchstens 5 MB).')
+  let j: unknown
   try {
     j = JSON.parse(text)
   } catch {
-    throw new Error('Die Datei ist kein gültiges Backup (kein JSON).')
+    throw new Error('Die Datei ist keine Sicherungskopie. Eine ausgefüllte Vorlage lädst du oben unter «Positionen hochladen» hoch.')
   }
-  if (j.kind !== BACKUP_KIND || !j.data || typeof j.data !== 'object') throw new Error('Die Datei ist kein Depot-Backup.')
-  const out: Record<string, unknown> = {}
+  if (!isObj(j) || j.kind !== BACKUP_KIND || !isObj(j.data)) throw new Error('Die Datei ist keine Sicherungskopie dieses Dashboards.')
+  const out: Record<string, Record<string, unknown>> = {}
   for (const c of COLLECTIONS) {
     const v = j.data[c]
     if (v == null) continue
-    if (typeof v !== 'object' || Array.isArray(v)) throw new Error(`Sammlung «${c}» ist beschädigt.`)
-    out[c] = v
+    if (!isObj(v)) throw new Error(`Sammlung «${c}» ist beschädigt.`)
+    const entries = Object.entries(v)
+    if (entries.length > MAX_ENTRIES) throw new Error(`Sammlung «${c}» hat zu viele Einträge.`)
+    const clean: Record<string, unknown> = {}
+    for (const [id, e] of entries) {
+      if (!id || id.length > 200 || id === '__proto__' || id === 'constructor' || !isObj(e)) throw new Error(`Sammlung «${c}» enthält einen ungültigen Eintrag.`)
+      if (c === 'positions' && (typeof e.ticker !== 'string' || typeof e.shares !== 'number' || !Number.isFinite(e.shares))) throw new Error(`Position «${id}» ist unvollständig.`)
+      clean[id] = e
+    }
+    out[c] = clean
   }
-  if (!Object.keys(out).length) throw new Error('Das Backup ist leer.')
   return out as Partial<DB>
+}
+
+/** Ausgefüllte Vorlage lesen und das Upload-Blatt mit Vorschau öffnen. */
+async function readTemplate(f: File): Promise<{ kind: ImportKind; text: string }> {
+  if (f.size > LIMITS.bytes) throw new Error('Die Datei ist zu gross (höchstens 2 MB).')
+  if (/\.json$/i.test(f.name)) throw new Error('Das ist eine Sicherungskopie (JSON). Sie stellst du unten unter «Sicherungskopie» wieder her.')
+  const text = await f.text()
+  const kind = detectKind(text)
+  if (!kind) throw new Error('Die Datei passt zu keiner Vorlage. Lade zuerst eine Vorlage herunter und fülle sie aus.')
+  return { kind, text }
+}
+
+function download(text: string, name: string) {
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' })), download: name })
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+}
+
+function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
+  return (
+    <li className="grid grid-cols-[22px_1fr] gap-x-2.5">
+      <span className="num mt-px grid size-[22px] place-items-center rounded-full border border-line-2 text-[11.5px] font-semibold text-ink">{n}</span>
+      <div><div className="font-semibold text-ink">{title}</div>{children}</div>
+    </li>
+  )
 }
 
 /* ------------------------------------------------------------------ Anmelden und Registrieren */
@@ -149,7 +191,7 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
       await cloudReplace(pending)
       await loadDb()
       setPending(null)
-      toast('Backup eingespielt.')
+      toast('Sicherungskopie wiederhergestellt.')
       onClose()
     } catch (x) {
       setErr(x instanceof Error ? x.message : String(x))
@@ -168,33 +210,73 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
       setBusy(false)
     }
   }
+  const nav = useNav()
+  const tpl = useRef<HTMLInputElement>(null)
+  const empty = !!db && !Object.keys(db.positions).length && !Object.keys(db.transactions).length && !Object.keys(db.dividends).length
+  const upload = async (f: File | undefined) => {
+    setErr('')
+    if (tpl.current) tpl.current.value = ''
+    if (!f) return
+    try {
+      const { kind, text } = await readTemplate(f)
+      onClose()
+      nav.openEntry('import', { kind, text })
+    } catch (x) {
+      setErr(x instanceof Error ? x.message : String(x))
+    }
+  }
   const n = (d: Partial<DB>) => Object.keys(d.positions ?? {}).length + ' Positionen, ' + Object.keys(d.transactions ?? {}).length + ' Buchungen, ' + Object.keys(d.dividends ?? {}).length + ' Dividenden'
 
   return (
-    <Sheet open={open} onClose={onClose} title={CLOUD ? 'Konto' : 'Backup'} sub={CLOUD ? user?.email : 'Daten dieses Rechners als Datei sichern'}>
+    <Sheet open={open} onClose={onClose} title={CLOUD ? 'Konto und Daten' : 'Daten'} sub={CLOUD ? user?.email : 'Positionen hochladen und Daten sichern'}>
       <div className="grid gap-5">
         {CLOUD && user && !user.verified && (
           <p className="rounded-xl border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[12.5px] text-ink-2">Bestätige deine E-Mail-Adresse über den Link in der Willkommens-Mail.</p>
         )}
 
-        <section className="grid gap-2">
-          <h3 className="text-[13px] font-semibold">Backup</h3>
+        <section className="grid gap-3">
+          <div>
+            <h3 className="text-[14px] font-semibold">Bestehende Positionen hochladen</h3>
+            <p className="mt-1 text-[12.5px] leading-[1.55] text-muted">Alle Käufe oder Dividenden auf einmal statt jeden einzeln erfassen. Mit Datum, damit Wertverlauf und Charts stimmen.</p>
+          </div>
+          <ol className="grid gap-3 text-[12.5px] leading-[1.55] text-ink-2">
+            <Step n={1} title="Vorlage herunterladen">
+              <p>Mit Erklärung und zwei Beispielen. Öffnet sich in Excel, Numbers oder Google Sheets.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" className="btn btn-sm" onClick={() => download(templateFile('trades'), TEMPLATE_NAME.trades)}><Download />Käufe/Verkäufe</button>
+                <button type="button" className="btn btn-sm" onClick={() => download(templateFile('dividenden'), TEMPLATE_NAME.dividenden)}><Download />Dividenden</button>
+              </div>
+            </Step>
+            <Step n={2} title="Ausfüllen und als CSV speichern">
+              <p>Eine Zeile je Kauf: Datum, Ticker, Stück, Preis je Stück. Mehrere Käufe desselben Titels einzeln eintragen.</p>
+            </Step>
+            <Step n={3} title="Ausgefüllte Vorlage hochladen">
+              <p>Du siehst zuerst eine Vorschau mit allen Zeilen und Fehlern. Erst «Übernehmen» speichert.</p>
+              <button type="button" className="btn btn-sm btn-primary mt-2" onClick={() => tpl.current?.click()}><Upload />Ausgefüllte Vorlage hochladen</button>
+              <input ref={tpl} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden onChange={(e) => void upload(e.target.files?.[0])} />
+            </Step>
+          </ol>
+        </section>
+
+        <section className="grid gap-2 border-t border-line pt-5">
+          <h3 className="text-[13px] font-semibold">Sicherungskopie</h3>
           <p className="text-[12.5px] leading-[1.55] text-muted">
             {CLOUD
-              ? 'Eine Datei mit allen Daten deines Depots. Mit «Backup einspielen» übernimmst du auch die Daten aus der lokalen Version.'
-              : 'Eine Datei mit allen Daten aus data/. In der Online-Version spielst du sie unter «Konto» ein.'}
+              ? 'Eine Kopie aller Daten deines Kontos zum Aufbewahren. Nicht zum Ausfüllen gedacht. «Wiederherstellen» ersetzt alle Daten im Konto durch die Kopie, z. B. um die Daten der lokalen Version zu übernehmen.'
+              : 'Eine Kopie aller Daten dieses Rechners zum Aufbewahren. In der Online-Version stellst du sie unter «Konto» wieder her.'}
           </p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-sm" disabled={!db} onClick={() => db && downloadBackup(db)}><Download />Backup herunterladen</button>
-            {CLOUD && <button type="button" className="btn btn-sm" onClick={() => file.current?.click()}><Upload />Backup einspielen</button>}
+            <button type="button" className="btn btn-sm" disabled={!db || empty} title={empty ? 'Dein Depot ist noch leer.' : undefined} onClick={() => db && downloadBackup(db)}><Download />Sicherungskopie herunterladen</button>
+            {CLOUD && <button type="button" className="btn btn-sm btn-ghost" onClick={() => file.current?.click()}><RotateCcw />Wiederherstellen</button>}
             <input ref={file} type="file" accept=".json,application/json" hidden onChange={(e) => void pick(e.target.files?.[0])} />
           </div>
+          {empty && <p className="text-[12px] text-muted">Dein Depot ist noch leer. Lade zuerst deine Positionen hoch.</p>}
           {pending && (
             <div className="grid gap-2 rounded-xl border border-warn/25 bg-warn/[0.07] px-3.5 py-3 text-[12.5px] text-ink-2">
-              <p><b className="text-ink">Achtung:</b> Das Backup ersetzt alle Daten in diesem Konto. Lade vorher ein Backup herunter, falls du die jetzigen Daten brauchst.</p>
-              <p className="text-muted">Im Backup: {n(pending)}.</p>
+              <p><b className="text-ink">Achtung:</b> Die Kopie ersetzt alle Daten in diesem Konto. Das lässt sich nicht rückgängig machen. Lade vorher eine Sicherungskopie herunter, falls du die jetzigen Daten brauchst.</p>
+              <p className="text-muted">In der Kopie: {n(pending)}.</p>
               <div className="flex gap-2">
-                <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={() => void restore()}>{busy ? 'Spielt ein …' : 'Ersetzen'}</button>
+                <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={() => void restore()}>{busy ? 'Stellt wieder her …' : 'Alle Daten ersetzen'}</button>
                 <button type="button" className="btn btn-sm btn-ghost" onClick={() => setPending(null)}>Abbrechen</button>
               </div>
             </div>

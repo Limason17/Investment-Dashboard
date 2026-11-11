@@ -60,7 +60,7 @@ export function Dividends() {
         )}
       </Card>
 
-      <Card title="Alle Dividenden" sub="Erwartete Beträge bestätigst du, sobald Schwab sie bucht" flush action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'dividenden' })}><Upload /> Import</button>}>
+      <Card title="Alle Dividenden" sub="Erwartete Beträge bestätigst du, sobald Schwab sie bucht" flush action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'dividenden' })}><Upload /> Hochladen</button>}>
         {all.length === 0 ? (
           <Empty>Noch keine Einträge.</Empty>
         ) : (
