@@ -1,9 +1,12 @@
 import clsx from 'clsx'
-import { Briefcase, CalendarRange, Coins, LayoutDashboard, NotebookPen, Plus, RefreshCw, Search, Target, type LucideIcon } from 'lucide-react'
+import { Briefcase, CalendarRange, CircleUser, Coins, LayoutDashboard, NotebookPen, Plus, RefreshCw, Search, Target, type LucideIcon } from 'lucide-react'
 import { AnimatePresence, motion, MotionConfig } from 'motion/react'
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { Toaster } from '@/components/Sheet'
+import { AccountSheet, AuthScreen } from '@/features/Account'
 import { CommandPalette } from '@/features/CommandPalette'
+import { useAccount } from '@/lib/cloud'
+import { CLOUD } from '@/lib/config'
 import { PositionSheet, WatchSheet } from '@/features/DetailSheets'
 import { EntrySheet } from '@/features/EntrySheet'
 import { compute, withLive, type Calc } from '@/lib/calc'
@@ -12,7 +15,7 @@ import { DepotContext, NavContext, type EntryType, type Nav } from '@/lib/contex
 import type { ImportKind } from '@/lib/bulk'
 import { exportCsv } from '@/lib/export'
 import { daysBetween, dfmt, today, weekday } from '@/lib/format'
-import { loadDb, refreshAll, useStore } from '@/lib/store'
+import { initStore, loadDb, refreshAll, useStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DB, LiveResult, ViewId } from '@/lib/types'
 import { Dividends } from '@/views/Dividends'
@@ -39,6 +42,18 @@ const LONG_MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli
 const WEEKDAY_LONG: Record<string, string> = { Mo: 'Montag', Di: 'Dienstag', Mi: 'Mittwoch', Do: 'Donnerstag', Fr: 'Freitag', Sa: 'Samstag', So: 'Sonntag' }
 
 /* ------------------------------------------------------------------ Marke und Datenstand */
+/** Konto (online) oder Backup (lokal) in der Seitenleiste. */
+function AccountButton({ onClick }: { onClick: () => void }) {
+  const { user } = useAccount()
+  const label = CLOUD ? user?.name || user?.email || 'Konto' : 'Backup'
+  return (
+    <button type="button" onClick={onClick} className="flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-[13px] text-ink-2 transition-colors hover:bg-white/[0.04] hover:text-ink">
+      <CircleUser className="size-4 flex-none text-muted" />
+      <span className="truncate">{label}</span>
+    </button>
+  )
+}
+
 function Brand({ compact }: { compact?: boolean }) {
   // Eigene Id je Logo: Die Seitenleiste ist auf dem Handy ausgeblendet, ein geteilter Verlauf würde dort fehlen.
   const grad = useId()
@@ -52,8 +67,8 @@ function Brand({ compact }: { compact?: boolean }) {
         </svg>
       </div>
       <div className="leading-tight">
-        <div className="text-[14.5px] font-semibold tracking-[-0.015em]">Depot Liam</div>
-        <div className="text-[11.5px] text-muted">Schwab · USD</div>
+        <div className="text-[14.5px] font-semibold tracking-[-0.015em]">{CLOUD ? 'Depot' : 'Depot Liam'}</div>
+        <div className="text-[11.5px] text-muted">{CLOUD ? 'Portfolio · USD' : 'Schwab · USD'}</div>
       </div>
     </div>
   )
@@ -155,7 +170,19 @@ function TabBar({ view, goto }: { view: ViewId; goto: (v: ViewId) => void }) {
 }
 
 /* ------------------------------------------------------------------ App */
+/** Online: erst anmelden, dann das Dashboard. Lokal: direkt das Dashboard. */
 export default function App() {
+  const acc = useAccount()
+  useEffect(() => {
+    if (CLOUD && acc.status === 'in') void initStore()
+  }, [acc.status])
+  if (!CLOUD) return <Dashboard />
+  if (acc.status === 'loading') return <div className="grid min-h-dvh place-items-center"><Brand /></div>
+  if (acc.status === 'out') return <AuthScreen brand={<Brand />} />
+  return <Dashboard />
+}
+
+function Dashboard() {
   const { db: stored, error, live } = useStore()
   const db = useMemo(() => (stored ? withLive(stored, live) : null), [stored, live])
   const [view, setView] = useState<ViewId>(viewFromHash)
@@ -163,6 +190,7 @@ export default function App() {
   const [entry, setEntry] = useState<{ open: boolean; n: number; type: EntryType; fromId?: string; ticker?: string; kind?: ImportKind }>({ open: false, n: 0, type: 'kauf' })
   const [posT, setPosT] = useState<string | null>(null)
   const [watchT, setWatchT] = useState<string | null>(null)
+  const [accountOpen, setAccountOpen] = useState(false)
   const now = today()
   const [refreshing, setRefreshing] = useState(false)
   const refresh = useCallback(async () => {
@@ -260,7 +288,8 @@ export default function App() {
             <nav className="mt-5 grid gap-0.5" aria-label="Ansichten">
               <SideNav view={view} goto={goto} counts={counts} />
             </nav>
-            <div className="mt-auto">
+            <div className="mt-auto grid gap-2">
+              <AccountButton onClick={() => setAccountOpen(true)} />
               <DataStatus db={db} c={c} now={now} live={live} />
             </div>
           </aside>
@@ -275,6 +304,7 @@ export default function App() {
                   <span className="truncate">{statusText(c, now, live)}</span>
                 </span>
                 <button type="button" className="btn btn-ghost btn-icon" onClick={() => setPalette(true)} aria-label="Suchen"><Search /></button>
+                <button type="button" className="btn btn-ghost btn-icon" onClick={() => setAccountOpen(true)} aria-label={CLOUD ? 'Konto' : 'Backup'}><CircleUser /></button>
                 <button type="button" className="btn btn-ghost btn-icon" onClick={() => void refresh()} disabled={refreshing} aria-label="Kurse und Daten aktualisieren"><RefreshCw className={clsx(refreshing && 'animate-spin')} /></button>
               </div>
             </div>
@@ -319,7 +349,8 @@ export default function App() {
           <EntrySheet key={entry.n} open={entry.open} type={entry.type} fromId={entry.fromId} ticker={entry.ticker} kind={entry.kind} onClose={() => setEntry((e) => ({ ...e, open: false }))} />
           <PositionSheet key={'p' + (posT ?? '')} ticker={posT} onClose={() => setPosT(null)} />
           <WatchSheet key={'w' + (watchT ?? '')} ticker={watchT} onClose={() => setWatchT(null)} />
-          <CommandPalette open={palette} onOpenChange={setPalette} views={VIEWS} onExport={() => exportCsv(c)} onRefresh={() => void refresh()} />
+          <CommandPalette open={palette} onOpenChange={setPalette} views={VIEWS} onExport={() => exportCsv(c)} onRefresh={() => void refresh()} onAccount={() => setAccountOpen(true)} />
+          <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} />
           <Toaster />
         </NavContext.Provider>
       </DepotContext.Provider>

@@ -1,0 +1,201 @@
+/**
+ * Konten und Daten der Online-Version: Firebase Authentication und Firestore (Gratis-Tarif «Spark»).
+ * Firebase wird erst geladen, wenn die Online-Version startet; die lokale Version lädt es nie.
+ *
+ * Aufbau in Firestore: depots/{uid}/data/{Sammlung}, ein Dokument je Sammlung ({id: Eintrag}),
+ * also derselbe Aufbau wie data/*.json lokal. Nur das eigene Konto darf lesen und schreiben (firestore.rules).
+ */
+import type { Auth, User } from 'firebase/auth'
+import type { Firestore } from 'firebase/firestore/lite'
+import { useSyncExternalStore } from 'react'
+import { EMULATOR, FIREBASE_CONFIG } from './config'
+import type { DB } from './types'
+
+type AuthModule = typeof import('firebase/auth')
+type StoreModule = typeof import('firebase/firestore/lite')
+interface Api { auth: Auth; db: Firestore; a: AuthModule; f: StoreModule }
+
+export const COLLECTIONS = ['positions', 'prices', 'watchlist', 'pots', 'events', 'log', 'transactions', 'dividends', 'snapshots', 'meta', 'market'] as const
+export type Coll = (typeof COLLECTIONS)[number]
+export type Op = { op: 'set' | 'merge' | 'delete'; coll: Coll; id: string; data?: object }
+
+/* ------------------------------------------------------------------ Konto-Zustand */
+
+export interface Account { uid: string; email: string; name: string; verified: boolean }
+type AccountState = { status: 'loading' | 'out' | 'in'; user: Account | null }
+let account: AccountState = { status: 'loading', user: null }
+const listeners = new Set<() => void>()
+const setAccount = (s: AccountState) => {
+  account = s
+  listeners.forEach((l) => l())
+}
+export const getAccount = () => account
+export const subscribeAccount = (l: () => void) => {
+  listeners.add(l)
+  return () => listeners.delete(l)
+}
+export const useAccount = () => useSyncExternalStore(subscribeAccount, getAccount)
+
+const toAccount = (u: User): Account => ({ uid: u.uid, email: u.email ?? '', name: u.displayName ?? '', verified: u.emailVerified })
+
+let api: Promise<Api> | null = null
+function load(): Promise<Api> {
+  if (!FIREBASE_CONFIG) return Promise.reject(new Error('Die Online-Version ist noch nicht eingerichtet (Firebase fehlt).'))
+  api ??= (async () => {
+    const [{ initializeApp }, a, f] = await Promise.all([import('firebase/app'), import('firebase/auth'), import('firebase/firestore/lite')])
+    const app = initializeApp(FIREBASE_CONFIG)
+    const auth = a.initializeAuth(app, { persistence: [a.indexedDBLocalPersistence, a.browserLocalPersistence] })
+    auth.languageCode = 'de'
+    const db = f.getFirestore(app)
+    if (EMULATOR) {
+      a.connectAuthEmulator(auth, `http://${EMULATOR}:9099`, { disableWarnings: true })
+      f.connectFirestoreEmulator(db, EMULATOR, 8080)
+    }
+    a.onAuthStateChanged(auth, (u) => setAccount(u ? { status: 'in', user: toAccount(u) } : { status: 'out', user: null }))
+    return { auth, db, a, f }
+  })()
+  return api
+}
+
+/** Startet Firebase und meldet, ob jemand angemeldet ist. */
+export function initCloud() {
+  load().catch(() => setAccount({ status: 'out', user: null }))
+}
+
+/* ------------------------------------------------------------------ Anmelden */
+
+/** Fehlercodes von Firebase in verständliche Sätze. */
+export function authMessage(e: unknown): string {
+  const code = (e as { code?: string })?.code ?? ''
+  const map: Record<string, string> = {
+    'auth/invalid-email': 'Die E-Mail-Adresse ist ungültig.',
+    'auth/missing-password': 'Bitte ein Passwort eingeben.',
+    'auth/weak-password': 'Das Passwort braucht mindestens 8 Zeichen.',
+    'auth/email-already-in-use': 'Für diese E-Mail-Adresse gibt es schon ein Konto. Melde dich an.',
+    'auth/invalid-credential': 'E-Mail oder Passwort stimmt nicht.',
+    'auth/wrong-password': 'E-Mail oder Passwort stimmt nicht.',
+    'auth/user-not-found': 'E-Mail oder Passwort stimmt nicht.',
+    'auth/too-many-requests': 'Zu viele Versuche. Warte einige Minuten.',
+    'auth/network-request-failed': 'Keine Verbindung. Prüfe das Internet.',
+    'auth/requires-recent-login': 'Melde dich zuerst neu an.',
+  }
+  return map[code] ?? (e instanceof Error ? e.message : 'Unbekannter Fehler.')
+}
+
+export const PASSWORD_MIN = 8
+
+export async function signUp(email: string, password: string, name: string) {
+  if (password.length < PASSWORD_MIN) throw Object.assign(new Error(), { code: 'auth/weak-password' })
+  const x = await load()
+  const cred = await x.a.createUserWithEmailAndPassword(x.auth, email.trim(), password)
+  if (name.trim()) await x.a.updateProfile(cred.user, { displayName: name.trim().slice(0, 40) })
+  await x.a.sendEmailVerification(cred.user).catch(() => {})
+  setAccount({ status: 'in', user: toAccount(cred.user) })
+}
+export async function signIn(email: string, password: string) {
+  const x = await load()
+  await x.a.signInWithEmailAndPassword(x.auth, email.trim(), password)
+}
+export async function resetPassword(email: string) {
+  const x = await load()
+  await x.a.sendPasswordResetEmail(x.auth, email.trim())
+}
+export async function signOut() {
+  const x = await load()
+  await x.a.signOut(x.auth)
+}
+
+/** Löscht alle Daten und das Konto. Verlangt das Passwort, damit niemand an einem offenen Gerät das Konto löscht. */
+export async function deleteAccount(password: string) {
+  const x = await load()
+  const u = x.auth.currentUser
+  if (!u?.email) throw new Error('Nicht angemeldet.')
+  await x.a.reauthenticateWithCredential(u, x.a.EmailAuthProvider.credential(u.email, password))
+  const b = x.f.writeBatch(x.db)
+  for (const c of COLLECTIONS) b.delete(x.f.doc(x.db, 'depots', u.uid, 'data', c))
+  await b.commit()
+  await x.a.deleteUser(u)
+}
+
+/* ------------------------------------------------------------------ Daten */
+
+const existing = new Set<Coll>()
+const uidNow = () => {
+  const u = account.user
+  if (!u) throw new Error('Nicht angemeldet.')
+  return u.uid
+}
+
+/** Alle Sammlungen des Kontos lesen. */
+export async function cloudLoad(): Promise<Partial<DB>> {
+  const x = await load()
+  const uid = uidNow()
+  const snap = await x.f.getDocs(x.f.collection(x.db, 'depots', uid, 'data'))
+  const out: Record<string, unknown> = {}
+  existing.clear()
+  snap.forEach((d) => {
+    if (!(COLLECTIONS as readonly string[]).includes(d.id)) return
+    existing.add(d.id as Coll)
+    out[d.id] = d.data()
+  })
+  return out as Partial<DB>
+}
+
+/** Firestore nimmt kein «undefined» an. */
+const clean = <T,>(v: T): T => JSON.parse(JSON.stringify(v ?? null))
+
+/**
+ * Änderungen wie /api/batch anwenden und in einem Zug schreiben.
+ * Einzelne Einträge werden per Feldpfad geändert; so überschreiben sich zwei Geräte nicht ganze Sammlungen.
+ */
+export async function cloudBatch(db: DB, ops: Op[]): Promise<Partial<DB>> {
+  const x = await load()
+  const uid = uidNow()
+  const touched = new Map<Coll, Record<string, unknown>>()
+  const fields = new Map<Coll, Map<string, unknown>>()
+  for (const o of ops) {
+    if (!(COLLECTIONS as readonly string[]).includes(o.coll) || typeof o.id !== 'string' || !o.id || o.id === '__proto__') throw new Error('ungültige Operation')
+    const data = touched.get(o.coll) ?? { ...(db[o.coll] as Record<string, unknown>) }
+    const f = fields.get(o.coll) ?? new Map<string, unknown>()
+    if (o.op === 'delete') {
+      delete data[o.id]
+      f.set(o.id, x.f.deleteField())
+    } else {
+      data[o.id] = clean(o.op === 'merge' ? { ...(data[o.id] as object), ...o.data } : (o.data ?? {}))
+      f.set(o.id, data[o.id])
+    }
+    touched.set(o.coll, data)
+    fields.set(o.coll, f)
+  }
+  const b = x.f.writeBatch(x.db)
+  for (const [c, data] of touched) {
+    const ref = x.f.doc(x.db, 'depots', uid, 'data', c)
+    if (!existing.has(c)) b.set(ref, data)
+    else {
+      const pairs = [...fields.get(c)!.entries()].flatMap(([id, v]) => [new x.f.FieldPath(id), v])
+      if (pairs.length) b.update(ref, pairs[0] as InstanceType<StoreModule['FieldPath']>, pairs[1], ...pairs.slice(2))
+    }
+  }
+  await b.commit()
+  for (const c of touched.keys()) existing.add(c)
+  return Object.fromEntries(touched) as Partial<DB>
+}
+
+/** Ersetzt alle Daten des Kontos (Backup einspielen). */
+export async function cloudReplace(all: Partial<DB>) {
+  const x = await load()
+  const uid = uidNow()
+  const b = x.f.writeBatch(x.db)
+  for (const c of COLLECTIONS) {
+    const ref = x.f.doc(x.db, 'depots', uid, 'data', c)
+    const v = all[c]
+    if (v && typeof v === 'object' && Object.keys(v).length) {
+      b.set(ref, clean(v))
+      existing.add(c)
+    } else {
+      b.delete(ref)
+      existing.delete(c)
+    }
+  }
+  await b.commit()
+}

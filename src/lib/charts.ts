@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { ChartData, RangeId } from './types'
+import { apiUrl } from './store'
 
 /** Beschriftung der Zeiträume: kurz für den Umschalter, ausgeschrieben für Sätze. */
 export const RANGE_LABEL: Record<RangeId, string> = { '1T': '1T', '1W': '1W', '1M': '1M', '3M': '3M', '1J': '1J', '5J': '5J', MAX: 'Max' }
@@ -30,7 +31,8 @@ export function refreshCharts() {
   subs.forEach((l) => l())
 }
 
-function load(key: string, url: string) {
+function load(key: string, url: string | null) {
+  if (!url) return Promise.reject(new Error('Kurs-Dienst nicht eingerichtet'))
   let p = inflight.get(key)
   if (!p) {
     p = fetch(url, { cache: 'no-store' })
@@ -60,7 +62,7 @@ export function useChart(range: RangeId, tickers: string[], from?: string | null
   useEffect(() => {
     if (!key) return
     let alive = true
-    const url = `/api/chart?range=${range}&tickers=${encodeURIComponent(list)}${range === 'MAX' && from ? '&from=' + from : ''}`
+    const url = apiUrl('chart', { range, tickers: list, ...(range === 'MAX' && from ? { from } : {}) })
     const run = () =>
       load(key, url)
         .then((data) => {

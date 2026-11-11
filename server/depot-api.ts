@@ -14,6 +14,7 @@ import fs from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import type { Plugin } from 'vite'
+import { closeUpdates } from '../src/lib/closes.ts'
 import { liveQuotes } from './live-quotes.ts'
 import { marketCharts } from './market-charts.ts'
 
@@ -25,9 +26,7 @@ type Op = { op: 'set' | 'merge' | 'delete'; coll: Coll; id: string; data?: Doc }
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/
 
 export function depotApi(dataDir: string, opts: { env?: Record<string, string | undefined>; persistCloses?: boolean } = {}): Plugin {
-  const live = liveQuotes(dataDir, opts.env ?? {}, opts.persistCloses ?? true)
-  const charts = marketCharts(live)
-  const file =(name: string) => path.join(dataDir, name + '.json')
+  const file = (name: string) => path.join(dataDir, name + '.json')
   const read = (name: string): Record<string, Doc> => {
     try {
       return JSON.parse(fs.readFileSync(file(name), 'utf8'))
@@ -41,6 +40,22 @@ export function depotApi(dataDir: string, opts: { env?: Record<string, string | 
     fs.writeFileSync(tmp, JSON.stringify(data, null, 1) + '\n', 'utf8')
     fs.renameSync(tmp, file(name))
   }
+  const held = () => Object.entries(read('positions')).filter(([, p]) => Number(p.shares) > 0).map(([t]) => t)
+  const live = liveQuotes(
+    {
+      tickers: () => ({ held: held(), watch: Object.keys(read('watchlist')) }),
+      // Nach Börsenschluss Schlusskurse und Tageswert einmal in data/ festhalten (nicht in der Testdaten-Vorschau).
+      onResult: (res) => {
+        if (opts.persistCloses === false) return
+        const u = closeUpdates(read('positions'), read('prices'), read('snapshots'), read('meta').settings, res.quotes)
+        if (!u) return
+        write('prices', { ...read('prices'), ...u.prices })
+        if (u.snapshot) write('snapshots', { ...read('snapshots'), [u.snapshot.date]: u.snapshot })
+      },
+    },
+    opts.env ?? {},
+  )
+  const charts = marketCharts(live)
   const json = (res: ServerResponse, status: number, body: unknown) => {
     res.statusCode = status
     res.setHeader('Content-Type', 'application/json; charset=utf-8')

@@ -1,0 +1,7 @@
+# Kurs-Dienst der Online-Version. Einrichten: siehe docs/einrichten.md, Schritt «Kurs-Dienst».
+name = "depot-kurse"
+main = "index.ts"
+compatibility_date = "2026-10-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://limason17.github.io,http://localhost:5173,http://localhost:5175,http://localhost:5177,http://localhost:4173"

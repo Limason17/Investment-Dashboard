@@ -1,7 +1,15 @@
-# Depot Liam
+# Depot
 
-Lokales Depot-Dashboard (Schwab, USD). Läuft nur auf diesem Rechner, speichert nur in diesem Ordner
-und platziert nie Orders.
+Depot-Dashboard (USD) für Positionen, Dividenden, Limits und Plan. Es platziert nie Orders.
+
+Zwei Varianten aus demselben Code:
+
+| Variante | Daten | Kurse | Start |
+|---|---|---|---|
+| Lokal | `data/*.json` in diesem Ordner | lokaler Server | `npm run dev` |
+| Online (PWA) | Firebase, ein Konto je Person | Cloudflare Worker (`worker/`) | <https://limason17.github.io/Investment-Dashboard/> |
+
+Online einrichten: [docs/einrichten.md](docs/einrichten.md). Jeder Push auf `main` veröffentlicht die Online-Version.
 
 ## Starten
 
@@ -56,6 +64,17 @@ Allokation und Watchlist-Abstände rechnen mit dem neuesten Kurs.
 - Yahoo ist eine inoffizielle Schnittstelle: Sie kann sich ohne Ankündigung ändern. Fällt sie aus,
   gelten die gespeicherten Schlusskurse.
 
+## Massen-Import
+
+`Eintrag` → «Massen-Import öffnen», oder der Knopf «Import» bei Positionen und Dividenden.
+
+- Arten: Bestand (Stück und Einstand je Titel), Käufe/Verkäufe, Dividenden.
+- «Vorlage kopieren» gibt die Kopfzeile; in Excel ausfüllen, Zellen mit Kopfzeile kopieren und einfügen.
+- Die Vorschau zeigt neue Einträge, Änderungen, schon vorhandene Einträge und Fehler je Zeile.
+  Mit Fehlern übernimmt der Import nichts.
+- Den Schwab-Export «Transaction History» (CSV) erkennt der Import selbst.
+- Code: `src/lib/bulk.ts` (lesen), `src/lib/bulk-plan.ts` (Änderungen planen), `src/features/ImportForm.tsx`.
+
 ## Bedienung
 
 - `Ctrl K` öffnet die Schnellsuche (Ansichten, Titel, Aktionen), `1` bis `6` wechseln die Ansicht,
@@ -69,6 +88,8 @@ Allokation und Watchlist-Abstände rechnen mit dem neuesten Kurs.
 - `src/components/charts/` die Charts (eigene SVG-Charts auf d3-scale und d3-shape)
 - `src/lib/calc.ts` alle Kennzahlen: Bewertung, Allokation, Watchlist-Status, zeitgewichtete Rendite
 - `server/depot-api.ts` die lokale Datenschnittstelle (`/api/db`, `/api/history`, `/api/batch`)
+- `src/lib/cloud.ts` Konten und Daten der Online-Version (Firebase), `src/lib/config.ts` ihre Einstellungen
+- `worker/` der Kurs-Dienst der Online-Version, `firestore.rules` die Zugriffsregeln
 - `scripts/seed-demo.mjs` erzeugt die Testdaten
 
-Prüfen: `npx tsc -b` und `npm run lint`. Stack: Vite, React, TypeScript, Tailwind, Motion, Radix, cmdk.
+Prüfen: `npx tsc -b` und `npm run lint`. Stack: Vite, React, TypeScript, Tailwind, Motion, Radix, cmdk, Firebase, vite-plugin-pwa.

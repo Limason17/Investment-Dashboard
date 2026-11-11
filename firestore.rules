@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// Depot: jedes Konto hat seine Daten unter depots/{uid}/data/{Sammlung}, ein Dokument je Sammlung.
+// Nur das angemeldete Konto selbst darf seine Daten lesen und ändern. Alles andere ist gesperrt.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /depots/{uid}/data/{coll} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+      function validColl() {
+        return coll in ['positions', 'prices', 'watchlist', 'pots', 'events', 'log', 'transactions', 'dividends', 'snapshots', 'meta', 'market'];
+      }
+
+      allow read, delete: if isOwner();
+      allow create, update: if isOwner() && validColl() && request.resource.data.size() <= 20000;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

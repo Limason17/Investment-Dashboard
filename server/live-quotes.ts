@@ -10,11 +10,9 @@
  *
  * «ref» ist der Vergleichskurs der Tagesänderung: der letzte Schlusskurs vor dem laufenden Handelstag.
  * Die Overnight-Sitzung zählt (wie bei Schwab) schon zum nächsten Handelstag.
- * Nach Börsenschluss schreibt der Server den Schlusskurs einmal am Tag in data/prices.json und den
- * Depotwert in data/snapshots.json, damit Verlauf und Rendite sich aufbauen.
+ * Nach Börsenschluss hält der Aufrufer (onResult) Schlusskurs und Depotwert fest, siehe src/lib/closes.ts.
+ * Ohne Node-Abhängigkeiten: läuft im lokalen Server (server/depot-api.ts) und im Cloudflare Worker (worker/).
  */
-import fs from 'node:fs'
-import path from 'node:path'
 
 export type Session = 'pre' | 'regular' | 'post' | 'overnight' | 'closed'
 
@@ -202,52 +200,18 @@ async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>) {
   return out
 }
 
-export function liveQuotes(dataDir: string, env: Record<string, string | undefined>, persist = true) {
-  const read = (name: string): Record<string, Record<string, unknown>> => {
-    try {
-      return JSON.parse(fs.readFileSync(path.join(dataDir, name + '.json'), 'utf8'))
-    } catch {
-      return {}
-    }
-  }
-  const write = (name: string, data: unknown) => {
-    const f = path.join(dataDir, name + '.json')
-    fs.writeFileSync(f + '.tmp', JSON.stringify(data, null, 1) + '\n', 'utf8')
-    fs.renameSync(f + '.tmp', f)
-  }
+/** Welche Titel abgefragt werden und was mit dem Ergebnis geschieht. */
+export interface QuoteSource {
+  tickers: () => { held: string[]; watch: string[] }
+  onResult?: (res: LiveResult) => void
+}
+
+export function liveQuotes(src: QuoteSource, env: Record<string, string | undefined>) {
   const key = env.ALPACA_KEY_ID?.trim(), secret = env.ALPACA_SECRET_KEY?.trim()
   let cache: { at: number; res: LiveResult } | null = null
   let running: Promise<LiveResult> | null = null
   /** Minutenkurse je Titel aus der letzten Abfrage (für den Tages-Chart, siehe market-charts.ts) */
   const intraday: Record<string, IntradayDay> = {}
-
-  /** Schlusskurse und Depotwert eines abgeschlossenen Handelstages einmal festhalten. */
-  function persistClose(res: LiveResult) {
-    const pos = read('positions') as Record<string, { shares?: number; cost?: number | null }>
-    const prices = read('prices')
-    const changed: string[] = []
-    for (const [t, q] of Object.entries(res.quotes)) {
-      if (q.regularPrev == null) continue // reguläre Sitzung noch nicht vorbei
-      const old = prices[t] as { date?: string; close?: number } | undefined
-      if (old?.date && old.date >= q.regularDate) continue
-      prices[t] = { ...old, close: q.regular, prev: q.regularPrev, date: q.regularDate, source: 'Yahoo Finance (Schlusskurs)' }
-      changed.push(t)
-    }
-    if (!changed.length) return
-    write('prices', prices)
-    // Tageswert nur, wenn alle gehaltenen Titel einen Schlusskurs desselben Tages haben.
-    const held = Object.entries(pos).filter(([, p]) => (p.shares ?? 0) > 0)
-    const day = res.quotes[held[0]?.[0]]?.regularDate
-    if (!day || !held.every(([t]) => (prices[t] as { date?: string } | undefined)?.date === day)) return
-    const snaps = read('snapshots')
-    if (snaps[day]) return
-    const meta = (read('meta').settings ?? {}) as { cash?: number; cashExcluded?: boolean }
-    const securities = held.reduce((s, [t, p]) => s + (p.shares ?? 0) * Number((prices[t] as { close: number }).close), 0)
-    const invested = held.reduce((s, [, p]) => s + (p.cost ?? 0), 0)
-    const cash = meta.cashExcluded ? 0 : Number(meta.cash) || 0
-    snaps[day] = { date: day, total: round2(securities + cash), securities: round2(securities), cash, invested: round2(invested), note: 'Automatisch aus Schlusskursen (Yahoo Finance)' }
-    write('snapshots', snaps)
-  }
 
   /**
    * Dividendenraten der gehaltenen Titel: Summe der Ausschüttungen der letzten 12 Monate je Stück (Yahoo).
@@ -287,10 +251,9 @@ export function liveQuotes(dataDir: string, env: Record<string, string | undefin
   }
 
   async function refresh(): Promise<LiveResult> {
-    const pos = read('positions') as Record<string, { shares?: number }>
-    const wl = read('watchlist')
-    void refreshDividends(Object.keys(pos).filter((t) => (pos[t]?.shares ?? 0) > 0).sort())
-    const tickers = [...new Set([...Object.keys(pos).filter((t) => (pos[t]?.shares ?? 0) > 0), ...Object.keys(wl)])].sort()
+    const { held, watch } = src.tickers()
+    void refreshDividends([...held].sort())
+    const tickers = [...new Set([...held, ...watch])].sort()
     const quotes: Record<string, LiveQuote> = {}
     const failures: string[] = []
     const take = (t: string, v: YahooQuote) => {
@@ -330,12 +293,10 @@ export function liveQuotes(dataDir: string, env: Record<string, string | undefin
       }
     }
     const res: LiveResult = { at: new Date().toISOString(), session, overnight, quotes, failures }
-    if (persist) {
-      try {
-        persistClose(res)
-      } catch {
-        /* Festhalten ist optional */
-      }
+    try {
+      src.onResult?.(res)
+    } catch {
+      /* Festhalten ist optional */
     }
     return res
   }
@@ -352,4 +313,3 @@ export function liveQuotes(dataDir: string, env: Record<string, string | undefin
   return Object.assign(get, { intraday: () => intraday })
 }
 
-const round2 = (x: number) => Math.round(x * 100) / 100

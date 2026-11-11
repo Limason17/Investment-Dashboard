@@ -4,6 +4,7 @@ import { Delta, Segmented } from '@/components/ui'
 import { HOLDING_BUCKETS } from '@/lib/buckets'
 import { quote, wht } from '@/lib/calc'
 import { commit } from '@/lib/commit'
+import { CLOUD } from '@/lib/config'
 import { useDepot, type EntryType } from '@/lib/context'
 import { dfmt, parseNum, pctPlain, qty, r2, today, uid, usd } from '@/lib/format'
 import type { ImportKind } from '@/lib/bulk'
@@ -294,7 +295,7 @@ export function EntrySheet({ open, type: initial, fromId, ticker, kind, onClose 
       open={open}
       onClose={onClose}
       title={type === 'import' ? 'Massen-Import' : confirming ? 'Dividende bestätigen' : 'Neuer Eintrag'}
-      sub="Wird nur lokal auf diesem Rechner gespeichert. Es werden nie Orders platziert."
+      sub={CLOUD ? 'Wird in deinem Konto gespeichert. Es werden nie Orders platziert.' : 'Wird nur lokal auf diesem Rechner gespeichert. Es werden nie Orders platziert.'}
       footer={
         <>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Abbrechen</button>
