@@ -6,7 +6,7 @@ import { AlertItem, EventItem, EventStrip, LimitRow } from '@/components/blocks'
 import { FluidSparkline } from '@/components/charts/Small'
 import { LineLegend, TimeChart, type RefLine, type TimeSeries, type VLine } from '@/components/charts/TimeChart'
 import { Card, Chip, Delta, DemoTag, Empty, Segmented } from '@/components/ui'
-import { alerts, capChecks, divAnnual, eventsSorted, watchRows, yearStats } from '@/lib/calc'
+import { alerts, capChecks, divAnnual, eventsSorted, fxOf, watchRows, yearStats } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TITLE, refreshCharts } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
 import { dfmt, dlong, hhmm, int, pct, pctPlain, sign, sUsd, usd } from '@/lib/format'
@@ -44,6 +44,7 @@ function Hero() {
   const cashOff = !!c.settings.cashExcluded
   const total = cashOff ? c.sec : c.total
   const shown = useCountUp(total)
+  const fx = fxOf(db)
   const n = ps?.t.length ?? 0
   const hi = hover != null && hover < n ? hover : null
   const withInvested = mode === 'wert' && (range === '3M' || range === '1J' || range === 'MAX')
@@ -75,7 +76,7 @@ function Hero() {
 
   // Kacheln unter dem Chart: Tag, Woche, Monat und das Jahr; ist das Depot jünger, der ganze Zeitraum.
   const periods = useMemo(() => [...(['1T', '1W', '1M'] as RangeId[]).filter((r) => ranges.includes(r)), ranges.includes('1J') ? '1J' : 'MAX'] as RangeId[], [ranges])
-  const fx = db.market.latest?.usdchf ?? c.settings.usdchf
+  const chf = db.market.latest?.usdchf ?? c.settings.usdchf
   // «Wert» zeigt, was das eingesetzte Geld gemacht hat (passt zum Ertrag in USD), «Rendite» die zeitgewichtete Sicht.
   const ret = ps ? (mode === 'rendite' ? ps.twr : ps.mwr)[hi ?? n - 1] : null
   const chartH = wide ? (tall ? 300 : 232) : 220
@@ -116,6 +117,7 @@ function Hero() {
             {c.valuationComplete ? usd(hi != null && ps ? ps.value[hi] : shown) : '–'}
           </span>
           <span className="text-[14px] font-medium text-muted sm:text-[15px]">USD</span>
+          {fx && c.valuationComplete && <span className="num text-[13px] text-muted sm:text-[14px]" title={`Kurs 1 USD = ${fx.rate.toFixed(4)} ${fx.code}`}>≈ {usd((hi != null && ps ? ps.value[hi] : shown) * fx.rate)} {fx.code}</span>}
         </div>
         <div className="mt-2.5 flex min-h-6 flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]">
           {!c.valuationComplete ? (
@@ -131,9 +133,9 @@ function Hero() {
                 </span>
               )}
               {ps && hi != null && <span className="text-muted">bis hier, {range === '1T' ? 'seit Vortagesschluss' : PHRASE[range].replace(/^in /, 'über ')}</span>}
-              {fx && hi == null ? (
+              {chf && !fx && hi == null ? (
                 <span className="inline-flex items-center gap-1.5 text-muted">
-                  <span className="text-faint max-sm:hidden">·</span> ≈ {int(total * fx)} CHF {c.settings.usdchfDemo && !db.market.latest?.usdchf && <DemoTag />}
+                  <span className="text-faint max-sm:hidden">·</span> ≈ {int(total * chf)} CHF {c.settings.usdchfDemo && !db.market.latest?.usdchf && <DemoTag />}
                 </span>
               ) : null}
             </>

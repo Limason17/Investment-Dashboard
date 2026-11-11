@@ -5,7 +5,7 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
-import { BUCKETS } from '@/lib/buckets'
+import { BUCKETS, defaultBucketName } from '@/lib/buckets'
 import { isCap, targetOf } from '@/lib/calc'
 import { useDepot } from '@/lib/context'
 import { parseNum, r2, today, uid } from '@/lib/format'
@@ -89,8 +89,10 @@ export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => voi
   const s = c.settings
   const [targets, setTargets] = useState<Record<BucketId, string>>(() => Object.fromEntries(BUCKETS.map((b) => [b.id, String(Math.round(targetOf(s, b.id) * 1000) / 10)])) as Record<BucketId, string>)
   const [caps, setCaps] = useState<BucketId[]>(() => BUCKETS.filter((b) => isCap(s, b.id)).map((b) => b.id))
+  const [names, setNames] = useState<Record<BucketId, string>>(() => Object.fromEntries(BUCKETS.map((b) => [b.id, s.bucketNames?.[b.id] ?? ''])) as Record<BucketId, string>)
   const [wht, setWht] = useState(String(Math.round((s.withholding ?? 0.15) * 1000) / 10))
   const [broker, setBroker] = useState(s.broker ?? '')
+  const [fx, setFx] = useState<'' | 'CHF' | 'EUR'>(s.fx ?? '')
   const [rules, setRules] = useState(() => (s.rules ?? []).map((r) => ({ ...r })))
   const sum = BUCKETS.reduce((t, b) => t + (parseNum(targets[b.id]) ?? 0), 0)
 
@@ -105,24 +107,28 @@ export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => voi
     const w = parseNum(wht)
     if (w == null || w < 0 || w > 60) throw new Error('Quellensteuer muss zwischen 0 und 60 % liegen.')
     const clean = rules.map((r) => ({ tag: r.tag?.trim() || undefined, title: r.title.trim().slice(0, 120), detail: r.detail?.trim().slice(0, 400) || undefined })).filter((r) => r.title)
-    await mutate([{ op: 'merge', coll: 'meta', id: 'settings', data: { targets: tg, caps, withholding: w / 100, broker: broker.trim().slice(0, 40) || undefined, rules: clean } }])
+    const bn = Object.fromEntries(BUCKETS.filter((b) => b.id !== 'cash' && names[b.id].trim()).map((b) => [b.id, names[b.id].trim().slice(0, 30)]))
+    await mutate([{ op: 'merge', coll: 'meta', id: 'settings', data: { targets: tg, caps, bucketNames: Object.keys(bn).length ? bn : undefined, withholding: w / 100, broker: broker.trim().slice(0, 40) || undefined, fx: fx || undefined, rules: clean } }])
     return 'Plan gespeichert.'
   }
 
   return (
-    <EditSheet open={open} onClose={onClose} title="Plan bearbeiten" sub="Zielanteile, Obergrenzen und Regeln deines Depots" save={save}>
+    <EditSheet open={open} onClose={onClose} title="Plan und Einstellungen" sub="Bausteine, Zielanteile, Obergrenzen, Währung und Regeln" save={save}>
       <div className="grid gap-2">
-        <div className="text-[13px] font-semibold">Zielanteile je Baustein</div>
+        <div className="text-[13px] font-semibold">Bausteine: Name, Zielanteil, Obergrenze</div>
         {BUCKETS.map((b) => (
-          <div key={b.id} className="grid grid-cols-[minmax(0,1fr)_88px_auto] items-center gap-3">
-            <span className="flex min-w-0 items-center gap-2 text-[13px]"><i className="swatch" style={{ background: b.color }} /><span className="truncate">{b.name}</span></span>
+          <div key={b.id} className="grid grid-cols-[minmax(0,1fr)_76px_auto] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_88px_auto] sm:gap-3">
+            <span className="flex min-w-0 items-center gap-2 text-[13px]">
+              <i className="swatch flex-none" style={{ background: b.color }} />
+              {b.id === 'cash' ? <span className="truncate">{b.name}</span> : <input aria-label={`Name für ${defaultBucketName(b.id)}`} className="input input-sm min-w-0" maxLength={30} placeholder={defaultBucketName(b.id)} value={names[b.id]} onChange={(e) => setNames((n) => ({ ...n, [b.id]: e.target.value }))} />}
+            </span>
             <span className="relative">
               <input aria-label={`Zielanteil ${b.name} in Prozent`} className="input input-sm num !pr-7 text-right" inputMode="decimal" value={targets[b.id]} onChange={(e) => setTargets((t) => ({ ...t, [b.id]: e.target.value }))} />
               <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[12px] text-muted">%</span>
             </span>
             <label className={`flex items-center gap-1.5 text-[12px] ${b.id === 'cash' ? 'invisible' : 'text-ink-2'}`} title="Zielanteil als harte Obergrenze: Warnung, sobald er überschritten ist">
               <input type="checkbox" className="accent-[var(--color-down)]" checked={caps.includes(b.id)} onChange={(e) => setCaps((x) => (e.target.checked ? [...x, b.id] : x.filter((y) => y !== b.id)))} />
-              Obergrenze
+              <span className="max-sm:hidden">Obergrenze</span><span className="sm:hidden">max</span>
             </label>
           </div>
         ))}
@@ -132,6 +138,13 @@ export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => voi
       <div className="grid grid-cols-2 gap-3 border-t border-line pt-4">
         <Field label="Quellensteuer (%)" hint="Für Dividenden ohne angegebene Steuer">{(id) => <input id={id} className="input num" inputMode="decimal" value={wht} onChange={(e) => setWht(e.target.value)} />}</Field>
         <Field label="Broker" hint="Nur für Hinweise, z. B. Schwab">{(id) => <input id={id} className="input" maxLength={40} value={broker} onChange={(e) => setBroker(e.target.value)} />}</Field>
+        <Field label="Zweite Währung" hint="Gesamtwert zusätzlich umgerechnet">{(id) => (
+          <select id={id} className="input" value={fx} onChange={(e) => setFx(e.target.value as typeof fx)}>
+            <option value="">keine</option>
+            <option value="CHF">CHF</option>
+            <option value="EUR">EUR</option>
+          </select>
+        )}</Field>
       </div>
 
       <div className="grid gap-2 border-t border-line pt-4">

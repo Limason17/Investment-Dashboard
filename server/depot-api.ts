@@ -43,7 +43,10 @@ export function depotApi(dataDir: string, opts: { env?: Record<string, string | 
   const held = () => Object.entries(read('positions')).filter(([, p]) => Number(p.shares) > 0).map(([t]) => t)
   const live = liveQuotes(
     {
-      tickers: () => ({ held: held(), watch: Object.keys(read('watchlist')) }),
+      tickers: () => {
+        const fx = (read('meta').settings as { fx?: string } | undefined)?.fx
+        return { held: held(), watch: [...Object.keys(read('watchlist')), ...(fx ? [fx + '=X'] : [])] }
+      },
       // Nach Börsenschluss Schlusskurse und Tageswert einmal in data/ festhalten (nicht in der Testdaten-Vorschau).
       onResult: (res) => {
         if (opts.persistCloses === false) return

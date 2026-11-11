@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
 import { Delta, Segmented } from '@/components/ui'
 import { HOLDING_BUCKETS } from '@/lib/buckets'
@@ -10,6 +10,7 @@ import { useDepot, type EntryType } from '@/lib/context'
 import { dfmt, parseNum, pctPlain, qty, r2, today, uid, usd } from '@/lib/format'
 import type { ImportKind } from '@/lib/bulk'
 import { ImportForm } from './ImportForm'
+import { applyOps, reverseTx } from '@/lib/reverse'
 import { mutate, type Op } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DB } from '@/lib/types'
@@ -65,16 +66,20 @@ function useSubmit({ onSaved, setBusy }: FormProps, save: () => Promise<string>)
 const ErrorLine = ({ err }: { err: string }) => (err ? <div role="alert" className="text-[12.5px] text-down">{err}</div> : null)
 
 /* ------------------------------------------------------------------ Kauf / Verkauf */
-function TradeForm({ type, ticker: preset, ...fp }: FormProps & { type: 'kauf' | 'verkauf'; ticker?: string }) {
-  const { db } = useDepot()
-  const [tk, setTk] = useState(preset ?? '')
-  const [sh, setSh] = useState('')
-  const [px, setPx] = useState('')
-  const [fee, setFee] = useState('0')
-  const [date, setDate] = useState(today())
+function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 'kauf' | 'verkauf'; ticker?: string; fromId?: string }) {
+  const { db: current } = useDepot()
+  // Bearbeiten = Storno der alten Buchung und neue Buchung in einem Zug; gerechnet wird auf dem Stand ohne die alte.
+  const old = fromId ? current.transactions[fromId] : undefined
+  const undo = useMemo(() => (old && fromId ? reverseTx(current, fromId, old) : []), [current, old, fromId])
+  const db = useMemo(() => (undo.length ? applyOps(current, undo) : current), [current, undo])
+  const [tk, setTk] = useState(old?.ticker ?? preset ?? '')
+  const [sh, setSh] = useState(old?.shares != null ? String(old.shares) : '')
+  const [px, setPx] = useState(old?.price != null ? String(old.price) : '')
+  const [fee, setFee] = useState(old?.fees != null ? String(old.fees) : '0')
+  const [date, setDate] = useState(old?.date ?? today())
   const [bucket, setBucket] = useState('aktien')
-  const [pot, setPot] = useState('')
-  const [note, setNote] = useState('')
+  const [pot, setPot] = useState(old?.pot ?? '')
+  const [note, setNote] = useState(old?.note ?? '')
   const listId = useId()
   const tickers = [...new Set([...Object.keys(db.positions), ...Object.keys(db.watchlist)])].sort()
   const pots = Object.entries(db.pots).map(([id, p]) => ({ id, ...p })).sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
@@ -94,7 +99,8 @@ function TradeForm({ type, ticker: preset, ...fp }: FormProps & { type: 'kauf' |
       const cashDelta = -(a + nFee)
       const usedPot = pot && db.pots[pot] ? pot : null
       await commit([
-        { op: 'set', coll: 'transactions', id: uid(), data: { type, date, ticker: t, shares: nSh, price: nPx, fees: nFee, cashDelta: r2(cashDelta), pot: usedPot, note, createdAt, by: 'Dashboard' } },
+        ...undo,
+        { op: 'set', coll: 'transactions', id: fromId ?? uid(), data: { type, date, ticker: t, shares: nSh, price: nPx, fees: nFee, cashDelta: r2(cashDelta), pot: usedPot, note, createdAt: old?.createdAt ?? createdAt, by: 'Dashboard' } },
         p
           ? { op: 'merge', coll: 'positions', id: t, data: { shares: +(p.shares + nSh).toFixed(6), cost: p.cost != null ? r2(p.cost + a + nFee) : null } }
           : { op: 'set', coll: 'positions', id: t, data: { ticker: t, name: db.watchlist[t]?.name || t, shares: nSh, bucket, cost: r2(a + nFee), status: 'Neu gekauft ' + dfmt(date), note: '' } },
@@ -108,7 +114,8 @@ function TradeForm({ type, ticker: preset, ...fp }: FormProps & { type: 'kauf' |
     const cashDelta = a - nFee
     const left = +(p.shares - nSh).toFixed(6)
     await commit([
-      { op: 'set', coll: 'transactions', id: uid(), data: { type, date, ticker: t, shares: nSh, price: nPx, fees: nFee, cashDelta: r2(cashDelta), realized: avg != null ? r2(cashDelta - avg * nSh) : null, note, createdAt, by: 'Dashboard' } },
+      ...undo,
+      { op: 'set', coll: 'transactions', id: fromId ?? uid(), data: { type, date, ticker: t, shares: nSh, price: nPx, fees: nFee, cashDelta: r2(cashDelta), realized: avg != null ? r2(cashDelta - avg * nSh) : null, note, createdAt: old?.createdAt ?? createdAt, by: 'Dashboard' } },
       { op: 'merge', coll: 'positions', id: t, data: { shares: left, cost: avg != null ? r2(avg * left) : null } },
       cashOp(db, cashDelta),
     ])
@@ -173,7 +180,7 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
   const [tax, setTax] = useState(from?.tax != null ? from.tax.toFixed(2) : '')
   const [pay, setPay] = useState(from?.payDate ?? today())
   const [ex, setEx] = useState(from?.exDate ?? '')
-  const [note, setNote] = useState('')
+  const [note, setNote] = useState(from?.note ?? '')
   const w = wht(db)
   const g = parseNum(gross)
   const tx = parseNum(tax) ?? (g != null ? r2(g * w) : null)
@@ -186,7 +193,8 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
         op: 'set', coll: 'dividends', id: fromId || uid(),
         data: { ticker: t, exDate: ex || null, payDate: pay || today(), gross: r2(g), tax: r2(tx), net: r2(g - tx), status: 'erhalten', source: 'Eintrag im Dashboard', note, perShare: from?.perShare ?? null, shares: from?.shares ?? db.positions[t]?.shares ?? null },
       },
-      cashOp(db, g - tx),
+      // Schon erhaltene Dividende ändern: nur die Differenz geht ins Cash.
+      cashOp(db, g - tx - (from?.status === 'erhalten' ? from.net || 0 : 0)),
     ])
     return `Dividende ${t} ${usd(g - tx)} USD gespeichert.`
   })
@@ -290,12 +298,14 @@ export function EntrySheet({ open, type: initial, fromId, ticker, kind, text, on
       toast(msg)
     },
   }
-  const confirming = type === 'dividende' && !!fromId
+  const { db: current } = useDepot()
+  const confirming = type === 'dividende' && !!fromId && current.dividends[fromId]?.status === 'erwartet'
+  const editing = !!fromId && !confirming
   return (
     <Sheet
       open={open}
       onClose={onClose}
-      title={type === 'import' ? 'Positionen hochladen' : confirming ? 'Dividende bestätigen' : 'Neuer Eintrag'}
+      title={type === 'import' ? 'Positionen hochladen' : confirming ? 'Dividende bestätigen' : editing ? 'Eintrag bearbeiten' : 'Neuer Eintrag'}
       sub={CLOUD ? 'Wird in deinem Konto gespeichert. Es werden nie Orders platziert.' : 'Wird nur lokal auf diesem Rechner gespeichert. Es werden nie Orders platziert.'}
       footer={
         <>
@@ -304,14 +314,14 @@ export function EntrySheet({ open, type: initial, fromId, ticker, kind, text, on
         </>
       }
     >
-      {!confirming && type !== 'import' && <Segmented className="mb-5 flex w-full [&>button]:flex-1 [&>button]:px-1" label="Art des Eintrags" value={type} onChange={setType} options={TYPES} />}
-      {type === 'kauf' && <TradeForm key="kauf" type="kauf" ticker={ticker} {...fp} />}
-      {type === 'verkauf' && <TradeForm key="verkauf" type="verkauf" ticker={ticker} {...fp} />}
+      {!confirming && !editing && type !== 'import' && <Segmented className="mb-5 flex w-full [&>button]:flex-1 [&>button]:px-1" label="Art des Eintrags" value={type} onChange={setType} options={TYPES} />}
+      {type === 'kauf' && <TradeForm key="kauf" type="kauf" ticker={ticker} fromId={fromId} {...fp} />}
+      {type === 'verkauf' && <TradeForm key="verkauf" type="verkauf" ticker={ticker} fromId={fromId} {...fp} />}
       {type === 'dividende' && <DividendForm key={fromId ?? 'neu'} fromId={fromId} {...fp} />}
       {type === 'einzahlung' && <CashForm {...fp} />}
       {type === 'notiz' && <NoteForm {...fp} />}
       {type === 'import' && <ImportForm formId={formId} initial={kind ?? 'trades'} initialText={text} setBusy={setBusy} onSaved={fp.onSaved} />}
-      {!confirming && (
+      {!confirming && !editing && (
         <button type="button" className="mt-5 text-[12.5px] text-muted underline decoration-line-2 underline-offset-4 hover:text-ink" onClick={() => setType(type === 'import' ? 'kauf' : 'import')}>
           {type === 'import' ? 'Zurück zum einzelnen Eintrag' : 'Viele Einträge auf einmal? Positionen hochladen'}
         </button>

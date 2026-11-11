@@ -67,7 +67,8 @@ export function apiUrl(path: 'live' | 'chart', params: Record<string, string>) {
 function tickerParams() {
   const db = state.db
   if (!db) return { held: '', watch: '' }
-  return { held: Object.values(db.positions).filter((p) => p.shares > 0).map((p) => p.ticker).join(','), watch: Object.keys(db.watchlist).join(',') }
+  const fx = db.meta.settings?.fx ? [db.meta.settings.fx + '=X'] : []
+  return { held: Object.values(db.positions).filter((p) => p.shares > 0).map((p) => p.ticker).join(','), watch: [...Object.keys(db.watchlist), ...fx].join(',') }
 }
 /** Online: Schlusskurse und Tageswert nach Börsenschluss ins Konto schreiben (lokal macht das der Server). */
 let persisting = false

@@ -33,3 +33,16 @@ export function reverseTx(db: DB, id: string, x: Tx): Op[] {
 export function reverseDividend(db: DB, id: string, d: Dividend): Op[] {
   return [{ op: 'delete', coll: 'dividends', id }, ...(d.status === 'erhalten' ? cashOp(db, -(d.net || 0)) : [])]
 }
+
+/** Operationen im Speicher anwenden, wie es der Server tut (für «Bearbeiten» = Storno + neue Buchung in einem Zug). */
+export function applyOps(db: DB, ops: Op[]): DB {
+  const out = { ...db } as unknown as Record<string, Record<string, Record<string, unknown>>>
+  for (const o of ops) {
+    const c = o.op === 'clear' ? {} : { ...out[o.coll] }
+    if (o.op === 'delete') delete c[o.id]
+    else if (o.op === 'set') c[o.id] = { ...(o.data as Record<string, unknown>) }
+    else if (o.op === 'merge') c[o.id] = { ...c[o.id], ...(o.data as Record<string, unknown>) }
+    out[o.coll] = c
+  }
+  return out as unknown as DB
+}

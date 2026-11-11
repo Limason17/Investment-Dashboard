@@ -120,6 +120,10 @@ export interface Settings {
   targets?: Partial<Record<BucketId, number>>
   /** Bausteine, deren Zielanteil eine harte Obergrenze ist (ohne Angabe: ETF-Kern) */
   caps?: BucketId[]
+  /** Eigene Namen der Bausteine */
+  bucketNames?: Partial<Record<BucketId, string>>
+  /** Zweite Anzeigewährung neben USD */
+  fx?: 'CHF' | 'EUR'
   /** Name des Brokers, nur zur Anzeige */
   broker?: string
   withholding?: number

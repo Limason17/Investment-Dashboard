@@ -1,4 +1,4 @@
-import { Check, Upload } from 'lucide-react'
+import { Check, Pencil, Upload } from 'lucide-react'
 import { useMemo } from 'react'
 import { DIV_EXPECTED, DIV_RECEIVED, DividendBars, type DivMonth } from '@/components/charts/DividendBars'
 import { Card, Chip, ConfirmDelete, DemoTag, Empty, Stat } from '@/components/ui'
@@ -120,7 +120,7 @@ export function Dividends() {
                       </td>
                       <td className="r">
                         <span className="inline-flex items-center gap-1">
-                          {d.status === 'erwartet' && <button type="button" className="btn btn-sm" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Check /> Bestätigen</button>}
+                          {d.status === 'erwartet' ? <button type="button" className="btn btn-sm" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Check /> Bestätigen</button> : <button type="button" className="btn btn-ghost btn-sm" aria-label="Dividende bearbeiten" title="Dividende bearbeiten" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Pencil /></button>}
                           <ConfirmDelete label={d.status === 'erhalten' ? 'Dividende stornieren (Cash wird zurückgesetzt)' : 'Erwartete Dividende löschen'} onConfirm={() => void del(d.id)} />
                         </span>
                       </td>

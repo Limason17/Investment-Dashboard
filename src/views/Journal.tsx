@@ -1,4 +1,4 @@
-import { NotebookPen, Trash2 } from 'lucide-react'
+import { NotebookPen, Pencil, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { MonthBars, type MonthPair } from '@/components/charts/MonthBars'
 import { Card, Chip, Delta, DemoTag, Empty, Segmented, Stat } from '@/components/ui'
@@ -128,7 +128,7 @@ export function Journal() {
                     <Delta value={x.cashDelta} kind="usd" icon={false} className="text-[13.5px] font-medium" />
                     {x.type === 'verkauf' && x.realized != null && <div className="whitespace-nowrap text-[11.5px] text-muted">realisiert <Delta value={x.realized} kind="usd" icon={false} /></div>}
                   </div>
-                  <DeleteButton onConfirm={() => del(x.id)} />
+                  <span className="flex">{(x.type === 'kauf' || x.type === 'verkauf') && <button type="button" className="btn btn-ghost btn-sm" aria-label="Buchung bearbeiten" title="Buchung bearbeiten" onClick={() => nav.openEntry(x.type as 'kauf' | 'verkauf', { fromId: x.id })}><Pencil /></button>}<DeleteButton onConfirm={() => del(x.id)} /></span>
                 </div>
               </li>
             ))}
@@ -157,7 +157,7 @@ export function Journal() {
                         {x.demo && x.note && x.note !== 'Testbuchung' && <span>{x.note.replace(' (Testbuchung)', '')}</span>}
                       </span>
                     </td>
-                    <td className="r"><DeleteButton onConfirm={() => del(x.id)} /></td>
+                    <td className="r whitespace-nowrap">{(x.type === 'kauf' || x.type === 'verkauf') && <button type="button" className="btn btn-ghost btn-sm" aria-label="Buchung bearbeiten" title="Buchung bearbeiten" onClick={() => nav.openEntry(x.type as 'kauf' | 'verkauf', { fromId: x.id })}><Pencil /></button>}<DeleteButton onConfirm={() => del(x.id)} /></td>
                   </tr>
                 ))}
               </tbody>

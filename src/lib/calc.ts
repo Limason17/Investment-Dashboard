@@ -1,4 +1,4 @@
-import { BUCKETS } from './buckets'
+import { applyBucketNames, BUCKETS } from './buckets'
 import { daysBetween, dfmt, dshort, pctPlain } from './format'
 import type { BucketId, DB, LiveResult, DepotEvent, Dividend, Position, Quote, Settings, Snapshot, ViewId, WatchItem, WithId } from './types'
 
@@ -82,6 +82,7 @@ export function quoteLabel(q: Quote | undefined, fallback?: string) {
 
 export function compute(db: DB): Calc {
   const settings = settingsOf(db)
+  applyBucketNames(settings.bucketNames)
   const rows: Row[] = []
   let sec = 0, prevSec = 0, costKnown = 0, valKnownCost = 0
   let lastDate: string | null = null
@@ -135,6 +136,15 @@ export function compute(db: DB): Calc {
 export const targetOf = (s: Settings, id: BucketId) => (s.targets?.[id] ?? BUCKETS.find((b) => b.id === id)!.target) / 100
 /** Ist der Zielanteil eine harte Obergrenze? Einstellbar im Plan; ohne Angabe gilt sie für den ETF-Kern. */
 export const isCap = (s: Settings, id: BucketId) => (s.caps ? s.caps.includes(id) : !!BUCKETS.find((b) => b.id === id)?.cap)
+/** Kurs-Symbol der zweiten Währung (Yahoo: USD in CHF bzw. EUR) */
+export const fxSymbol = (s: Settings) => (s.fx ? s.fx + '=X' : null)
+/** Zweite Anzeigewährung mit aktuellem Kurs; null ohne Einstellung oder ohne Kurs. */
+export function fxOf(db: DB): { code: string; rate: number } | null {
+  const s = settingsOf(db)
+  const sym = fxSymbol(s)
+  const rate = sym ? quote(db, sym)?.close : null
+  return s.fx && rate ? { code: s.fx, rate } : null
+}
 /** Broker für Hinweistexte */
 export const brokerOf = (s: Settings) => s.broker?.trim() || 'deinem Broker'
 
