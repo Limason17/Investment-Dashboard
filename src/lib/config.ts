@@ -30,7 +30,7 @@ const PROJECT_CONFIG: FirebaseConfig | null = {
   messagingSenderId: '826841855193',
   appId: '1:826841855193:web:3d8d097e15883361f43ac8',
 }
-const QUOTES = ''
+const QUOTES = 'https://depot-kurse.liambruno007.workers.dev'
 
 function fromEnv(): FirebaseConfig | null {
   const raw = import.meta.env.VITE_FIREBASE_CONFIG as string | undefined
