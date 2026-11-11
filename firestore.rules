@@ -1,19 +1,33 @@
 rules_version = '2';
 
-// Depot: jedes Konto hat seine Daten unter depots/{uid}/data/{Sammlung}, ein Dokument je Sammlung.
+// Depot: jedes Konto hat
+//   depots/{uid}                              Portfolio-Liste ({ portfolios: { id: { name, order } } })
+//   depots/{uid}/data/{Sammlung}              das erste Portfolio
+//   depots/{uid}/portfolios/{pid}/data/{Sammlung}  weitere Portfolios
 // Nur das angemeldete Konto selbst darf seine Daten lesen und ändern. Alles andere ist gesperrt.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /depots/{uid}/data/{coll} {
-      function isOwner() {
-        return request.auth != null && request.auth.uid == uid;
-      }
-      function validColl() {
-        return coll in ['positions', 'prices', 'watchlist', 'pots', 'events', 'log', 'transactions', 'dividends', 'snapshots', 'meta', 'market'];
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function validColl(coll) {
+      return coll in ['positions', 'prices', 'watchlist', 'pots', 'events', 'log', 'transactions', 'dividends', 'snapshots', 'meta', 'market'];
+    }
+
+    match /depots/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && request.resource.data.keys().hasOnly(['portfolios'])
+        && request.resource.data.portfolios is map && request.resource.data.portfolios.size() <= 20;
+
+      match /data/{coll} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validColl(coll) && request.resource.data.size() <= 20000;
       }
 
-      allow read, delete: if isOwner();
-      allow create, update: if isOwner() && validColl() && request.resource.data.size() <= 20000;
+      match /portfolios/{pid}/data/{coll} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && validColl(coll) && pid.matches('^[a-z0-9][a-z0-9-]{0,39}$') && request.resource.data.size() <= 20000;
+      }
     }
 
     match /{document=**} {

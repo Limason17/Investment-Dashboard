@@ -4,6 +4,7 @@ import { Chip, Segmented } from '@/components/ui'
 import { COLUMNS, detectKind, EXAMPLES, LIMITS, parseImport, template, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
 import { planImport, type ItemState } from '@/lib/bulk-plan'
 import { downloadBackup } from '@/lib/backup'
+import { getPortfolio } from '@/lib/store'
 import type { Coll } from '@/lib/cloud'
 import { commit } from '@/lib/commit'
 import { useDepot } from '@/lib/context'
@@ -255,7 +256,7 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
               {lost.length > 0 && (
                 <div className="mt-1 grid gap-2 rounded-lg border border-down/25 bg-down/[0.06] px-3 py-2.5">
                   <p><b className="text-ink">Achtung:</b> Vor dem Übernehmen wird gelöscht: {lost.map((a) => `${a.label} (${a.n})`).join(', ')}. Das lässt sich nicht rückgängig machen.</p>
-                  <button type="button" className="btn btn-sm w-fit" onClick={() => downloadBackup(db)}><Download />Vorher Sicherungskopie herunterladen</button>
+                  <button type="button" className="btn btn-sm w-fit" onClick={() => downloadBackup(db, getPortfolio())}><Download />Vorher Sicherungskopie herunterladen</button>
                   <label className="flex cursor-pointer items-center gap-2 font-medium text-ink">
                     <input type="checkbox" className="accent-[var(--color-down)]" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
                     Ja, diese Daten löschen und ersetzen

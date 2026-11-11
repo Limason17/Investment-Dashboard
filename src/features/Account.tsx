@@ -6,6 +6,7 @@ import { authMessage, cloudReplace, COLLECTIONS, deleteAccount, PASSWORD_MIN, re
 import { detectKind, LIMITS, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
 import { BACKUP_KIND, downloadBackup } from '@/lib/backup'
 import { CLOUD } from '@/lib/config'
+import { ALL } from '@/lib/portfolios'
 import { useNav } from '@/lib/context'
 import { loadDb, useStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -155,7 +156,9 @@ export function AuthScreen({ brand }: { brand: ReactNode }) {
 
 export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAccount()
-  const { db } = useStore()
+  const { db, portfolio, portfolios } = useStore()
+  const allView = portfolio === ALL
+  const pfName = portfolios.length > 1 ? portfolios.find((p) => p.id === portfolio)?.name : undefined
   const file = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState<Partial<DB> | null>(null)
   const [del, setDel] = useState(false)
@@ -177,7 +180,8 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
     if (!pending) return
     setBusy(true)
     try {
-      await cloudReplace(pending)
+      if (allView) throw new Error('In der Gesamtansicht lässt sich nichts wiederherstellen. Wähle zuerst ein Portfolio.')
+      await cloudReplace(pending, portfolio)
       await loadDb()
       setPending(null)
       toast('Sicherungskopie wiederhergestellt.')
@@ -250,11 +254,11 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
           <h3 className="text-[13px] font-semibold">Sicherungskopie</h3>
           <p className="text-[12.5px] leading-[1.55] text-muted">
             {CLOUD
-              ? 'Eine Kopie aller Daten deines Kontos zum Aufbewahren. Nicht zum Ausfüllen gedacht. «Wiederherstellen» ersetzt alle Daten im Konto durch die Kopie, z. B. um die Daten der lokalen Version zu übernehmen.'
+              ? `Eine Kopie aller Daten ${pfName ? `des Portfolios «${pfName}»` : 'deines Depots'} zum Aufbewahren. Nicht zum Ausfüllen gedacht. «Wiederherstellen» ersetzt alle Daten dieses Portfolios durch die Kopie, z. B. um die Daten der lokalen Version zu übernehmen.`
               : 'Eine Kopie aller Daten dieses Rechners zum Aufbewahren. In der Online-Version stellst du sie unter «Konto» wieder her.'}
           </p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-sm" disabled={!db || empty} title={empty ? 'Dein Depot ist noch leer.' : undefined} onClick={() => db && downloadBackup(db)}><Download />Sicherungskopie herunterladen</button>
+            <button type="button" className="btn btn-sm" disabled={!db || empty} title={empty ? 'Dein Depot ist noch leer.' : undefined} onClick={() => db && downloadBackup(db, portfolio)}><Download />Sicherungskopie herunterladen</button>
             {CLOUD && <button type="button" className="btn btn-sm btn-ghost" onClick={() => file.current?.click()}><RotateCcw />Wiederherstellen</button>}
             <input ref={file} type="file" accept=".json,application/json" hidden onChange={(e) => void pick(e.target.files?.[0])} />
           </div>

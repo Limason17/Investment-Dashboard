@@ -17,6 +17,8 @@ import { exportCsv } from '@/lib/export'
 import { daysBetween, dfmt, today, weekday } from '@/lib/format'
 import { initStore, loadDb, refreshAll, useStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
+import { PortfoliosSheet, PortfolioSwitcher } from '@/features/Portfolios'
+import { ALL } from '@/lib/portfolios'
 import type { DB, LiveResult, ViewId } from '@/lib/types'
 import { Dividends } from '@/views/Dividends'
 import { Journal } from '@/views/Journal'
@@ -183,7 +185,10 @@ export default function App() {
 }
 
 function Dashboard() {
-  const { db: stored, error, live } = useStore()
+  const { db: stored, error, live, portfolio, portfolios } = useStore()
+  const [portfoliosOpen, setPortfoliosOpen] = useState(false)
+  const allView = portfolio === ALL
+  const pfName = allView ? 'Alle Portfolios' : portfolios.find((p) => p.id === portfolio)?.name
   const db = useMemo(() => (stored ? withLive(stored, live) : null), [stored, live])
   const [view, setView] = useState<ViewId>(viewFromHash)
   const [palette, setPalette] = useState(false)
@@ -225,9 +230,9 @@ function Dashboard() {
       goto,
       openPosition: (t) => { setWatchT(null); setPosT(t) },
       openWatch: (t) => { setPosT(null); setWatchT(t) },
-      openEntry: (type = 'kauf', opt) => setEntry((e) => ({ open: true, n: e.n + 1, type, fromId: opt?.fromId, ticker: opt?.ticker, kind: opt?.kind, text: opt?.text })),
+      openEntry: (type = 'kauf', opt) => (allView ? toast('In der Gesamtansicht lässt sich nichts erfassen. Wähle zuerst ein Portfolio.') : setEntry((e) => ({ open: true, n: e.n + 1, type, fromId: opt?.fromId, ticker: opt?.ticker, kind: opt?.kind, text: opt?.text }))),
     }),
-    [view, goto],
+    [view, goto, allView],
   )
 
   const c = useMemo(() => (db ? compute(db) : null), [db])
@@ -281,6 +286,7 @@ function Dashboard() {
           {/* Seitenleiste (ab 1024px) */}
           <aside className="fixed inset-y-0 left-0 z-30 hidden w-[252px] flex-col border-r border-line bg-[#08090c]/70 px-4 pb-4 pt-5 backdrop-blur-xl lg:flex">
             <div className="px-1.5"><Brand /></div>
+            <PortfolioSwitcher className="mt-5" onManage={() => setPortfoliosOpen(true)} />
             <button type="button" onClick={() => setPalette(true)} className="mt-5 flex h-9 w-full items-center gap-2.5 rounded-[10px] border border-line bg-white/[0.03] px-3 text-[13px] text-muted transition-colors hover:border-line-2 hover:text-ink-2">
               <Search className="size-3.5" /> Suchen
               <span className="ml-auto flex gap-1"><span className="kbd">Ctrl</span><span className="kbd">K</span></span>
@@ -312,7 +318,9 @@ function Dashboard() {
             <main className="mx-auto max-w-[1440px] px-3 pb-[calc(104px+env(safe-area-inset-bottom))] sm:px-6 lg:px-9 lg:pb-14">
               <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-1 pb-4 pt-5 sm:px-0 sm:pb-6 lg:pt-8 [@media(max-height:800px)]:lg:pb-4 [@media(max-height:800px)]:lg:pt-5">
                 <div className="min-w-0">
-                  <div className="text-[12.5px] text-muted">{dateLine}{c.settings.demo && <span className="ml-2 inline-flex h-[17px] items-center rounded-[5px] border border-warn/25 bg-warn/10 px-1.5 align-middle text-[10px] font-medium uppercase tracking-[0.06em] text-warn lg:hidden">Testdaten</span>}</div>
+                  <PortfolioSwitcher className="mb-3 max-w-[280px] lg:hidden" onManage={() => setPortfoliosOpen(true)} />
+                  {allView && <div className="mb-2 inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/[0.08] px-2.5 py-1 text-[12px] text-ink-2">Gesamtansicht aller Portfolios · nur ansehen</div>}
+                  <div className="text-[12.5px] text-muted">{dateLine}{pfName && portfolios.length > 1 && <span className="max-lg:hidden"> · {pfName}</span>}{c.settings.demo && <span className="ml-2 inline-flex h-[17px] items-center rounded-[5px] border border-warn/25 bg-warn/10 px-1.5 align-middle text-[10px] font-medium uppercase tracking-[0.06em] text-warn lg:hidden">Testdaten</span>}</div>
                   <h1 className="mt-1 text-[24px] font-semibold leading-8 tracking-[-0.03em] sm:text-[26px]">{meta.label}</h1>
                   <p className="mt-1 text-[13.5px] text-muted max-sm:hidden [@media(max-height:800px)]:hidden">{meta.sub}</p>
                 </div>
@@ -351,6 +359,7 @@ function Dashboard() {
           <WatchSheet key={'w' + (watchT ?? '')} ticker={watchT} onClose={() => setWatchT(null)} />
           <CommandPalette open={palette} onOpenChange={setPalette} views={VIEWS} onExport={() => exportCsv(c)} onRefresh={() => void refresh()} onAccount={() => setAccountOpen(true)} />
           <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} />
+          <PortfoliosSheet open={portfoliosOpen} onClose={() => setPortfoliosOpen(false)} />
           <Toaster />
         </NavContext.Provider>
       </DepotContext.Provider>

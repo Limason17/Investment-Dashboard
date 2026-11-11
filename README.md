@@ -64,6 +64,16 @@ Allokation und Watchlist-Abstände rechnen mit dem neuesten Kurs.
 - Yahoo ist eine inoffizielle Schnittstelle: Sie kann sich ohne Ankündigung ändern. Fällt sie aus,
   gelten die gespeicherten Schlusskurse.
 
+## Mehrere Portfolios
+
+Auswahl oben links (Handy: über dem Titel). Jedes Portfolio hat eigene Positionen, Buchungen, Cash, Plan und Watchlist.
+
+- «Portfolios verwalten»: anlegen, umbenennen, sortieren, löschen. Das Hauptportfolio bleibt immer.
+- «Alle Portfolios (Gesamt)» zählt alles zusammen: Positionen je Ticker addiert, Cash summiert. Dort lässt sich nichts ändern.
+- Lokal: das Hauptportfolio liegt in `data/`, weitere in `data/p/{id}/`, die Liste in `data/portfolios.json`.
+- Online: `depots/{uid}` (Liste), `depots/{uid}/data` (Hauptportfolio), `depots/{uid}/portfolios/{id}/data` (weitere).
+- Code: `src/lib/portfolios.ts` (Liste, Gesamtansicht), `src/features/Portfolios.tsx` (Auswahl, Verwaltung).
+
 ## Positionen hochladen
 
 Unten links «Konto» (lokal «Daten hochladen und sichern»), oder der Knopf «Hochladen» bei Positionen und Dividenden.

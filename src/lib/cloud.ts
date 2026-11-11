@@ -9,6 +9,7 @@ import type { Auth, User } from 'firebase/auth'
 import type { Firestore } from 'firebase/firestore/lite'
 import { useSyncExternalStore } from 'react'
 import { EMULATOR, FIREBASE_CONFIG } from './config'
+import { MAIN, portfolioList, toMap, type PortfolioInfo, type PortfolioMap } from './portfolios'
 import type { DB } from './types'
 
 type AuthModule = typeof import('firebase/auth')
@@ -112,15 +113,45 @@ export async function deleteAccount(password: string) {
   const u = x.auth.currentUser
   if (!u?.email) throw new Error('Nicht angemeldet.')
   await x.a.reauthenticateWithCredential(u, x.a.EmailAuthProvider.credential(u.email, password))
+  // Alle Portfolios und die Portfolio-Liste löschen, dann das Konto.
+  const list = await cloudPortfolios()
   const b = x.f.writeBatch(x.db)
-  for (const c of COLLECTIONS) b.delete(x.f.doc(x.db, 'depots', u.uid, 'data', c))
+  for (const pf of list) for (const c of COLLECTIONS) b.delete(x.f.doc(x.db, ...collPath(u.uid, pf.id), c))
+  b.delete(x.f.doc(x.db, 'depots', u.uid))
   await b.commit()
   await x.a.deleteUser(u)
 }
 
 /* ------------------------------------------------------------------ Daten */
 
-const existing = new Set<Coll>()
+/** Firestore-Pfad der Sammlungen eines Portfolios: das erste am bisherigen Ort, weitere darunter. */
+const collPath = (uid: string, pid: string): [string, ...string[]] => (pid === MAIN ? ['depots', uid, 'data'] : ['depots', uid, 'portfolios', pid, 'data'])
+/** Welche Sammlungs-Dokumente es schon gibt, je Portfolio (neue werden ganz geschrieben, bestehende feldweise). */
+const existingBy = new Map<string, Set<Coll>>()
+const existingOf = (pid: string) => {
+  let e = existingBy.get(pid)
+  if (!e) existingBy.set(pid, (e = new Set()))
+  return e
+}
+
+/** Portfolio-Liste des Kontos (Dokument depots/{uid}). */
+export async function cloudPortfolios(): Promise<PortfolioInfo[]> {
+  const x = await load()
+  const snap = await x.f.getDoc(x.f.doc(x.db, 'depots', uidNow()))
+  return portfolioList(snap.exists() ? (snap.data().portfolios as PortfolioMap) : null)
+}
+export async function cloudSavePortfolios(list: PortfolioInfo[]) {
+  const x = await load()
+  await x.f.setDoc(x.f.doc(x.db, 'depots', uidNow()), { portfolios: toMap(list) })
+}
+/** Alle Daten eines Portfolios löschen. */
+export async function cloudDeletePortfolio(pid: string) {
+  const x = await load()
+  const b = x.f.writeBatch(x.db)
+  for (const c of COLLECTIONS) b.delete(x.f.doc(x.db, ...collPath(uidNow(), pid), c))
+  await b.commit()
+  existingBy.delete(pid)
+}
 const uidNow = () => {
   const u = account.user
   if (!u) throw new Error('Nicht angemeldet.')
@@ -128,10 +159,11 @@ const uidNow = () => {
 }
 
 /** Alle Sammlungen des Kontos lesen. */
-export async function cloudLoad(): Promise<Partial<DB>> {
+export async function cloudLoad(pid = MAIN): Promise<Partial<DB>> {
   const x = await load()
   const uid = uidNow()
-  const snap = await x.f.getDocs(x.f.collection(x.db, 'depots', uid, 'data'))
+  const snap = await x.f.getDocs(x.f.collection(x.db, ...collPath(uid, pid)))
+  const existing = existingOf(pid)
   const out: Record<string, unknown> = {}
   existing.clear()
   snap.forEach((d) => {
@@ -149,7 +181,7 @@ const clean = <T,>(v: T): T => JSON.parse(JSON.stringify(v ?? null))
  * Änderungen wie /api/batch anwenden und in einem Zug schreiben.
  * Einzelne Einträge werden per Feldpfad geändert; so überschreiben sich zwei Geräte nicht ganze Sammlungen.
  */
-export async function cloudBatch(db: DB, ops: Op[]): Promise<Partial<DB>> {
+export async function cloudBatch(db: DB, ops: Op[], pid = MAIN): Promise<Partial<DB>> {
   const x = await load()
   const uid = uidNow()
   const touched = new Map<Coll, Record<string, unknown>>()
@@ -177,32 +209,32 @@ export async function cloudBatch(db: DB, ops: Op[]): Promise<Partial<DB>> {
   }
   const b = x.f.writeBatch(x.db)
   for (const [c, data] of touched) {
-    const ref = x.f.doc(x.db, 'depots', uid, 'data', c)
-    if (!existing.has(c) || full.has(c)) b.set(ref, data)
+    const ref = x.f.doc(x.db, ...collPath(uid, pid), c)
+    if (!existingOf(pid).has(c) || full.has(c)) b.set(ref, data)
     else {
       const pairs = [...fields.get(c)!.entries()].flatMap(([id, v]) => [new x.f.FieldPath(id), v])
       if (pairs.length) b.update(ref, pairs[0] as InstanceType<StoreModule['FieldPath']>, pairs[1], ...pairs.slice(2))
     }
   }
   await b.commit()
-  for (const c of touched.keys()) existing.add(c)
+  for (const c of touched.keys()) existingOf(pid).add(c)
   return Object.fromEntries(touched) as Partial<DB>
 }
 
 /** Ersetzt alle Daten des Kontos (Backup einspielen). */
-export async function cloudReplace(all: Partial<DB>) {
+export async function cloudReplace(all: Partial<DB>, pid = MAIN) {
   const x = await load()
   const uid = uidNow()
   const b = x.f.writeBatch(x.db)
   for (const c of COLLECTIONS) {
-    const ref = x.f.doc(x.db, 'depots', uid, 'data', c)
+    const ref = x.f.doc(x.db, ...collPath(uid, pid), c)
     const v = all[c]
     if (v && typeof v === 'object' && Object.keys(v).length) {
       b.set(ref, clean(v))
-      existing.add(c)
+      existingOf(pid).add(c)
     } else {
       b.delete(ref)
-      existing.delete(c)
+      existingOf(pid).delete(c)
     }
   }
   await b.commit()
