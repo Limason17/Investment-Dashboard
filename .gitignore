@@ -1,0 +1,25 @@
+# Abhängigkeiten und Builds
+node_modules/
+dist/
+*.tsbuildinfo
+*.log
+
+# Echte Depotdaten: nie ins Repo
+data/
+import-backups/
+vorlage/
+*.tmp
+
+# Testdaten: erzeugt «npm run seed» neu
+data-demo/
+
+# Schlüssel: nur lokal
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# System
+.DS_Store
+Thumbs.db
+desktop.ini

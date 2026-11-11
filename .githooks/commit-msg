@@ -1,0 +1,15 @@
+#!/bin/sh
+# Investment Dashboard: every commit is authored by Limason17 only.
+# Rejects co-author trailers and foreign author identities.
+msg_file="$1"
+if grep -qiE '^(co-authored-by|[a-z]+-session):' "$msg_file"; then
+  echo "commit-msg: co-author and session trailer lines are not allowed in this repo." >&2
+  exit 1
+fi
+author_name="$(git var GIT_AUTHOR_IDENT | sed -E 's/ <.*//')"
+committer_name="$(git var GIT_COMMITTER_IDENT | sed -E 's/ <.*//')"
+if [ "$author_name" != "Limason17" ] || [ "$committer_name" != "Limason17" ]; then
+  echo "commit-msg: author and committer must be Limason17 (got '$author_name' / '$committer_name')." >&2
+  echo "Run: git config user.name Limason17 && git config user.email 206816254+Limason17@users.noreply.github.com" >&2
+  exit 1
+fi
