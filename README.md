@@ -64,12 +64,16 @@ Allokation und Watchlist-Abstände rechnen mit dem neuesten Kurs.
 - Yahoo ist eine inoffizielle Schnittstelle: Sie kann sich ohne Ankündigung ändern. Fällt sie aus,
   gelten die gespeicherten Schlusskurse.
 
-## Massen-Import
+## Positionen hochladen
 
-`Eintrag` → «Massen-Import öffnen», oder der Knopf «Import» bei Positionen und Dividenden.
+Unten links «Konto» (lokal «Daten hochladen und sichern»), oder der Knopf «Hochladen» bei Positionen und Dividenden.
 
-- Arten: Bestand (Stück und Einstand je Titel), Käufe/Verkäufe, Dividenden.
-- «Vorlage kopieren» gibt die Kopfzeile; in Excel ausfüllen, Zellen mit Kopfzeile kopieren und einfügen.
+1. Vorlage herunterladen: CSV mit Erklärung und zwei Beispielen als Kommentar (`#`, wird nie übernommen).
+2. In Excel ausfüllen: eine Zeile je Kauf mit Datum. Das Datum braucht es für Wertverlauf und Charts.
+3. Ausgefüllte Vorlage hochladen, Vorschau prüfen, «Übernehmen».
+
+- Arten: Käufe/Verkäufe, Dividenden, Nur Bestand (ohne Datum, darum ohne Verlauf).
+- Die «Sicherungskopie» (JSON) ist davon getrennt: zum Aufbewahren und Wiederherstellen, nicht zum Ausfüllen.
 - Die Vorschau zeigt neue Einträge, Änderungen, schon vorhandene Einträge und Fehler je Zeile.
   Mit Fehlern übernimmt der Import nichts.
 - Den Schwab-Export «Transaction History» (CSV) erkennt der Import selbst.
