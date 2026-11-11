@@ -154,7 +154,7 @@ export function AuthScreen({ brand }: { brand: ReactNode }) {
 
 /* ------------------------------------------------------------------ Konto-Blatt */
 
-export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AccountSheet({ open, onClose, onPortfolios }: { open: boolean; onClose: () => void; onPortfolios: () => void }) {
   const { user } = useAccount()
   const { db, portfolio, portfolios } = useStore()
   const allView = portfolio === ALL
@@ -226,6 +226,14 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
         {CLOUD && user && !user.verified && (
           <p className="rounded-xl border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[12.5px] text-ink-2">Bestätige deine E-Mail-Adresse über den Link in der Willkommens-Mail.</p>
         )}
+
+        <section className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold">Portfolios</div>
+            <div className="truncate text-[12px] text-muted">{portfolios.length > 1 ? `${portfolios.length} Portfolios · offen: ${allView ? 'Gesamtansicht' : portfolios.find((p) => p.id === portfolio)?.name}` : 'Getrennte Depots anlegen, z. B. je Broker'}</div>
+          </div>
+          <button type="button" className="btn btn-sm flex-none" onClick={onPortfolios}>Verwalten</button>
+        </section>
 
         <section className="grid gap-3">
           <div>

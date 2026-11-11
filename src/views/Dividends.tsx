@@ -88,7 +88,10 @@ export function Dividends() {
                   </div>
                   <div className="text-right">
                     <div className="num text-[14px] font-medium">{usd(d.net)}</div>
-                    {d.status === 'erwartet' && <button type="button" className="btn btn-sm mt-1.5" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Check /> Bestätigen</button>}
+                    <div className="mt-1 flex items-center justify-end gap-0.5">
+                      {d.status === 'erwartet' ? <button type="button" className="btn btn-sm" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Check /> Bestätigen</button> : <button type="button" className="btn btn-ghost btn-sm" aria-label="Dividende bearbeiten" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Pencil /></button>}
+                      <ConfirmDelete label={d.status === 'erhalten' ? 'Dividende stornieren' : 'Erwartete Dividende löschen'} onConfirm={() => void del(d.id)} />
+                    </div>
                   </div>
                 </li>
               )

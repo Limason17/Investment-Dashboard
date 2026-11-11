@@ -19,7 +19,7 @@ const TYPES: { value: EntryType; label: string }[] = [
   { value: 'kauf', label: 'Kauf' },
   { value: 'verkauf', label: 'Verkauf' },
   { value: 'dividende', label: 'Dividende' },
-  { value: 'einzahlung', label: 'Ein-/Auszahlung' },
+  { value: 'einzahlung', label: 'Cash' },
   { value: 'notiz', label: 'Notiz' },
 ]
 

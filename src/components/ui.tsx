@@ -24,7 +24,7 @@ export function Card({ title, sub, action, children, className, bodyClassName, f
             <h2 className="card-title">{title}</h2>
             {sub && <span className="card-sub">{sub}</span>}
           </div>
-          {action && <div className="flex max-w-full flex-none items-center gap-2 overflow-x-auto [scrollbar-width:none]">{action}</div>}
+          {action && <div className="ml-auto flex max-w-full flex-none items-center gap-2 overflow-x-auto [scrollbar-width:none]">{action}</div>}
         </header>
       )}
       <div className={clsx(flush ? 'px-2 pb-2 pt-2' : 'card-body', 'min-w-0 flex-1', bodyClassName)}>{children}</div>

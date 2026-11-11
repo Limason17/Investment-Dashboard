@@ -678,6 +678,11 @@
   [cmdk-input] {
     font-size: 16px;
   }
+  /* iOS zoomt bei Eingabefeldern unter 16px hinein */
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
   [cmdk-item] {
     height: 44px;
   }

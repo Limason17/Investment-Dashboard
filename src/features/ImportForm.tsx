@@ -41,7 +41,7 @@ const MODES: { id: Mode; label: string; text: string }[] = [
 const freshSettings = (db: DB) => ({ cash: 0, cashExcluded: true, withholding: db.meta.settings?.withholding ?? 0.15, caps: [] })
 
 const FILL: Record<ImportKind, string> = {
-  trades: 'Eine Zeile je Kauf (oder Verkauf) mit Datum, Ticker, Stück und Preis je Stück in USD. Hast du einen Titel in mehreren Käufen gekauft, trägst du jeden Kauf einzeln ein.',
+  trades: 'Eine Zeile je Kauf mit Datum, Ticker, Stück und Preis je Stück in USD; mehrere Käufe desselben Titels einzeln.',
   dividenden: 'Eine Zeile je Zahlung mit Zahltag, Ticker und Bruttobetrag in USD.',
   bestand: 'Eine Zeile je Titel mit Stück und Einstand gesamt in USD.',
 }
@@ -146,14 +146,13 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
 
       <ol className="grid gap-3 text-[12.5px] leading-[1.55] text-ink-2">
         <Step n={1} title="Vorlage herunterladen">
-          <p>Eine CSV-Datei für Excel, Numbers oder Google Sheets. Oben stehen Erklärung und zwei Beispiele als Kommentar (#); sie werden nie übernommen.</p>
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" className="btn btn-sm" onClick={() => download(templateFile(kind), TEMPLATE_NAME[kind])}><Download />Vorlage herunterladen</button>
             <button type="button" className="btn btn-sm btn-ghost" onClick={copy}><ClipboardCopy />{copied ? 'Kopiert' : 'Oder kopieren'}</button>
           </div>
         </Step>
         <Step n={2} title="Ausfüllen">
-          <p>{FILL[kind]} Die Kopfzeile bleibt stehen. Danach als CSV speichern.</p>
+          <p>{FILL[kind]} Danach als CSV speichern.</p>
           <details className="mt-1.5">
             <summary className="cursor-pointer select-none text-muted hover:text-ink">Spalten und Beispiele</summary>
             <div className="mt-2 overflow-x-auto rounded-lg border border-line">
@@ -167,7 +166,7 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
           </details>
         </Step>
         <Step n={3} title="Ausgefüllte Vorlage hochladen">
-          <p>Du siehst zuerst eine Vorschau. Erst «Übernehmen» speichert. Einträge, die schon da sind, werden übersprungen. Den Schwab-Export «Transaction History» kannst du direkt hochladen.</p>
+          <p>Zuerst kommt eine Vorschau, erst «Übernehmen» speichert. Ein Schwab-Export «Transaction History» geht auch direkt.</p>
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" className="btn btn-sm btn-primary" onClick={() => file.current?.click()}><FileUp />Ausgefüllte Vorlage hochladen</button>
             <button type="button" className="btn btn-sm btn-ghost" onClick={() => setPaste((p) => !p)}>{paste ? 'Einfügen ausblenden' : 'Oder Zeilen einfügen'}</button>

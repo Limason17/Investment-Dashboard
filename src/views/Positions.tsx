@@ -74,7 +74,7 @@ export function Positions() {
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
       {/* Bausteine: Gewicht gegen Plan und Rendite im Zeitraum */}
       <Card
-        className="col-span-12"
+        className="col-span-12 max-md:-order-2"
         title="Bausteine"
         sub={<span className="max-sm:hidden">Gewicht gegen Plan · Rendite {RANGE_TEXT[range]}, Käufe und Verkäufe herausgerechnet</span>}
         action={rangeSwitch}
@@ -143,7 +143,7 @@ export function Positions() {
       </Card>
 
       <Card
-        className="col-span-12"
+        className="col-span-12 max-md:-order-1"
         title="Alle Positionen"
         sub={`${c.rows.length} Titel · ${c.valuationComplete ? usd(c.sec) + ' USD' : 'Marktwert offen'}`}
         flush
