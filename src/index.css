@@ -23,8 +23,8 @@
   --color-accent-2: #b39fff;
 
   /* Status: nur für Zustand und Richtung, nie für Serien */
-  --color-up: #1ff08a;
-  --color-down: #ff3b3b;
+  --color-up: #18e35c;
+  --color-down: #ff2b2b;
   --color-warn: #ffc31f;
 
   /* Bausteine (kategorial, feste Reihenfolge, gegen die Kartenfläche validiert) */

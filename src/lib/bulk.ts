@@ -23,7 +23,7 @@ export const COLUMNS: Record<ImportKind, Col[]> = {
     { key: 'shares', label: 'Stück', required: true, example: '3', hint: 'Bruchteile erlaubt', aliases: ['stueck', 'anzahl', 'menge', 'shares', 'quantity', 'qty', 'qtyquantity'] },
     { key: 'cost', label: 'Einstand', example: '1077.00', hint: 'Einstand gesamt in USD, nicht je Stück; leer = unbekannt', aliases: ['einstand', 'kosten', 'cost', 'costbasis', 'einstandgesamt'] },
     { key: 'name', label: 'Name', example: 'Vanguard Total Stock Market ETF', hint: 'leer = Ticker', aliases: ['name', 'bezeichnung', 'description', 'beschreibung'] },
-    { key: 'bucket', label: 'Baustein', example: 'etf', hint: 'etf, aktien, zukunft oder metalle; leer = aktien', aliases: ['baustein', 'bucket', 'kategorie'] },
+    { key: 'bucket', label: 'Kategorie', example: 'etf', hint: 'etf, aktien, zukunft oder metalle; leer = aktien', aliases: ['baustein', 'bucket', 'kategorie'] },
     { key: 'note', label: 'Notiz', example: '', hint: 'optional', aliases: ['notiz', 'note', 'bemerkung'] },
   ],
   trades: [
@@ -33,7 +33,7 @@ export const COLUMNS: Record<ImportKind, Col[]> = {
     { key: 'shares', label: 'Stück', required: true, example: '1', hint: 'Bruchteile erlaubt', aliases: ['stueck', 'anzahl', 'menge', 'shares', 'quantity', 'qty'] },
     { key: 'price', label: 'Preis', required: true, example: '359.00', hint: 'Preis je Stück in USD', aliases: ['preis', 'kurs', 'price', 'preisjestueck'] },
     { key: 'fees', label: 'Gebühren', example: '0', hint: 'in USD; leer = 0', aliases: ['gebuehren', 'gebuehr', 'fees', 'feescomm', 'kommission'] },
-    { key: 'bucket', label: 'Baustein', example: 'etf', hint: 'nur für neue Titel; leer = aktien', aliases: ['baustein', 'bucket', 'kategorie'] },
+    { key: 'bucket', label: 'Kategorie', example: 'etf', hint: 'nur für neue Titel; leer = aktien', aliases: ['baustein', 'bucket', 'kategorie'] },
     { key: 'note', label: 'Notiz', example: '', hint: 'optional', aliases: ['notiz', 'note', 'bemerkung'] },
   ],
   dividenden: [
@@ -345,7 +345,7 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       const shares = num(get(r, 'shares'))
       if (shares == null || shares < 0) return void err('Stück fehlt oder ungültig')
       const b = bucket(get(r, 'bucket'))
-      if (b === null) return void err(`Baustein «${get(r, 'bucket')}» unbekannt`)
+      if (b === null) return void err(`Kategorie «${get(r, 'bucket')}» unbekannt`)
       const costRaw = get(r, 'cost')
       const cost = num(costRaw)
       if (costRaw && cost == null) return void err(`Einstand «${costRaw}» ungültig`)
@@ -360,7 +360,7 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       if (!t) return void err(get(r, 'ticker') ? `Ticker «${get(r, 'ticker')}» ungültig` : 'Ticker fehlt')
       if (!shares || shares <= 0) return void err('Stück fehlt oder ungültig')
       if (!price || price <= 0) return void err('Preis fehlt oder ungültig')
-      if (b === null) return void err(`Baustein «${get(r, 'bucket')}» unbekannt`)
+      if (b === null) return void err(`Kategorie «${get(r, 'bucket')}» unbekannt`)
       res.trades.push({ line, date: d, type, ticker: t, shares: Math.abs(shares), price, fees: Math.abs(fees), bucket: b, note: get(r, 'note') })
     } else {
       const d = date(get(r, 'payDate'))

@@ -1,15 +1,15 @@
 import clsx from 'clsx'
-import { ArrowRight, RefreshCw, Table2 } from 'lucide-react'
+import { ArrowRight, RefreshCw } from 'lucide-react'
 import { animate } from 'motion/react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertItem, EventItem, EventStrip, LimitRow } from '@/components/blocks'
 import { FluidSparkline } from '@/components/charts/Small'
-import { LineLegend, TimeChart, type RefLine, type TimeSeries, type VLine } from '@/components/charts/TimeChart'
+import { TimeChart, type TimeSeries, type VLine } from '@/components/charts/TimeChart'
 import { Card, Chip, Delta, DemoTag, Empty, Segmented } from '@/components/ui'
 import { alerts, capChecks, divAnnual, eventsSorted, fxOf, watchRows, yearStats } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TITLE, refreshCharts } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { dfmt, dlong, hhmm, int, pct, pctPlain, sign, sUsd, usd } from '@/lib/format'
+import { dlong, hhmm, int, pct, pctPlain, sign, sUsd, usd } from '@/lib/format'
 import { BENCH, useMedia, usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { RangeId } from '@/lib/types'
 
@@ -37,7 +37,7 @@ function Hero() {
   const range = ranges.includes(stored) ? stored : 'MAX'
   const [mode, setMode] = useStored<'wert' | 'rendite'>('depot.mode', 'wert', ['wert', 'rendite'])
   const [hover, setHover] = useState<number | null>(null)
-  const [table, setTable] = useState(false)
+  const [benchOn, setBenchOn] = useStored<'an' | 'aus'>('depot.bench', 'an', ['an', 'aus'])
   const wide = useMedia('(min-width: 640px)')
   const tall = useMedia('(min-height: 800px)')
   const { series: ps, pending, error } = usePortfolio(range)
@@ -48,23 +48,36 @@ function Hero() {
   const fx = fxOf(db)
   const n = ps?.t.length ?? 0
   const hi = hover != null && hover < n ? hover : null
-  const withInvested = mode === 'wert' && (range === '3M' || range === '1J' || range === 'MAX')
   const valueLabel = cashOff ? 'Wertpapiere' : 'Gesamtwert'
   const investedLabel = ps?.cashTracked ? 'Einzahlungen netto' : 'Netto investiert'
 
+  // Linie grün bei Gewinn, rot bei Verlust im Zeitraum
+  const endRet = ps && n ? (mode === 'rendite' ? ps.twr : ps.mwr)[n - 1] : null
+  const tone = sign(endRet)
+  const lineColor = tone === 'up' ? 'var(--color-up)' : tone === 'down' ? 'var(--color-down)' : 'var(--color-accent)'
+  // VTI im Wert-Modus: dieselben Ein- und Auszahlungen, in VTI angelegt
+  const benchValues = useMemo(() => {
+    if (!ps?.bench || ps.bench.length !== ps.value.length) return null
+    if (mode === 'rendite') return ps.bench.map((v) => v * 100)
+    const p = ps.bench.map((v) => 1 + v)
+    const out: number[] = []
+    for (let i = 0, units = p[0] > 0 ? ps.value[0] / p[0] : 0; i < p.length; i++) {
+      if (i > 0 && p[i] > 0) units += (ps.invested[i] - ps.invested[i - 1]) / p[i]
+      out.push(units * p[i])
+    }
+    return out
+  }, [ps, mode])
+  const showBench = benchOn === 'an' && !!benchValues
+  const benchLabel = <>{BENCH}<span className="max-sm:hidden">{mode === 'rendite' ? ', US-Gesamtmarkt' : ', gleiche Einzahlungen'}</span></>
+
   const series: TimeSeries[] = useMemo(() => {
     if (!ps) return []
-    if (mode === 'rendite') {
-      const s: TimeSeries[] = [{ key: 'twr', label: 'Depot', values: ps.twr.map((v) => v * 100), color: 'var(--color-accent)', color2: 'var(--color-accent-2)', area: true, glow: true }]
-      if (ps.bench) s.push({ key: 'bench', label: BENCH, values: ps.bench.map((v) => v * 100), color: 'var(--color-bench)', width: 1.5 })
-      return s
-    }
-    const s: TimeSeries[] = [{ key: 'total', label: valueLabel, values: ps.value, color: 'var(--color-accent)', color2: 'var(--color-accent-2)', area: true, glow: true }]
-    if (withInvested) s.push({ key: 'inv', label: investedLabel, values: ps.invested, color: 'var(--color-ref)', kind: 'step', width: 1.5 })
+    const s: TimeSeries[] = [mode === 'rendite'
+      ? { key: 'twr', label: 'Depot', values: ps.twr.map((v) => v * 100), color: lineColor, area: true, glow: true }
+      : { key: 'total', label: valueLabel, values: ps.value, color: lineColor, area: true, glow: true }]
+    if (showBench && benchValues) s.push({ key: 'bench', label: BENCH, values: benchValues, color: 'var(--color-etf)', width: 1.5, opacity: 0.5 })
     return s
-  }, [ps, mode, withInvested, valueLabel, investedLabel])
-
-  const refs: RefLine[] = ps && mode === 'wert' && range === '1T' && ps.base != null ? [{ y: ps.base, label: `Vortag ${usd(ps.base)}`, color: 'var(--color-ref)' }] : []
+  }, [ps, mode, valueLabel, lineColor, showBench, benchValues])
   const vlines: VLine[] = useMemo(() => {
     if (!ps?.session || range !== '1T') return []
     const out: VLine[] = []
@@ -162,7 +175,6 @@ function Hero() {
             d={ps.d}
             kind={ps.kind}
             series={series}
-            refs={refs}
             vlines={vlines}
             height={chartH}
             baseline={mode === 'rendite' ? 0 : undefined}
@@ -178,7 +190,7 @@ function Hero() {
               <>
                 {mode === 'rendite' && <div className="tip-row"><span>{valueLabel}</span><b>{usd(ps.value[i])}</b></div>}
                 {mode === 'wert' && <div className="tip-row"><span>Ertrag im Zeitraum</span><b className={ps.pl[i] >= 0 ? '!text-up' : '!text-down'}>{sUsd(ps.pl[i])} · {pct(ps.mwr[i], 2)}</b></div>}
-                {mode === 'wert' && !withInvested && range !== '1T' && <div className="tip-row"><span>{investedLabel}</span><b>{usd(ps.invested[i])}</b></div>}
+                {mode === 'wert' && range !== '1T' && <div className="tip-row"><span>{investedLabel}</span><b>{usd(ps.invested[i])}</b></div>}
               </>
             )}
           />
@@ -199,47 +211,18 @@ function Hero() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pb-4 sm:px-6">
-        <LineLegend
-          items={
-            mode === 'rendite'
-              ? [{ label: 'Depot, zeitgewichtet', color: 'var(--color-accent-2)' }, ...(ps?.bench ? [{ label: `${BENCH}, US-Gesamtmarkt`, color: 'var(--color-bench)' }] : [])]
-              : [{ label: valueLabel, color: 'var(--color-accent-2)' }, ...(withInvested ? [{ label: investedLabel, color: 'var(--color-ref)' }] : [])]
-          }
-        />
         {/* Handy: Umschalter links, damit der Plus-Knopf unten rechts ihn nicht verdeckt */}
-        <div className="flex items-center gap-1.5 max-sm:order-first">
-          <Segmented className="sm:hidden" label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'wert', label: 'Wert' }, { value: 'rendite', label: 'Rendite' }]} />
-          <button type="button" className="btn btn-ghost btn-sm max-sm:hidden" aria-pressed={table} onClick={() => setTable((v) => !v)}>
-            <Table2 /> {table ? 'Tabelle ausblenden' : 'Als Tabelle'}
-          </button>
+        <Segmented className="sm:hidden" label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'wert', label: 'Wert' }, { value: 'rendite', label: 'Rendite' }]} />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-2">
+          <span className="inline-flex items-center"><i className="linekey" style={{ background: lineColor }} />{mode === 'rendite' ? 'Depot, zeitgewichtet' : valueLabel}</span>
+          {ps?.bench && (
+            <button type="button" aria-pressed={showBench} onClick={() => setBenchOn(showBench ? 'aus' : 'an')} title={showBench ? `${BENCH} ausblenden` : `${BENCH} einblenden`} className={clsx('inline-flex items-center rounded-md px-1.5 py-1 transition-opacity hover:bg-white/[0.05]', !showBench && 'opacity-45 line-through decoration-white/40')}>
+              <i className="linekey opacity-60" style={{ background: 'var(--color-etf)' }} />{benchLabel}
+            </button>
+          )}
         </div>
       </div>
       {ps && ps.approx.length > 0 && <p className="px-4 pb-3 text-[12px] text-muted sm:px-6">Ohne Kursverlauf, zum letzten Kurs bewertet: {ps.approx.join(', ')}.</p>}
-
-      {table && ps && (
-        <div className="max-h-[280px] overflow-auto border-t border-line px-2">
-          <table className="tbl">
-            <caption className="sr-only">Verlauf aus den Buchungen und den Kursen von Yahoo Finance berechnet</caption>
-            <thead>
-              <tr><th className="bg-card">{ps.kind === 'intraday' ? 'Zeitpunkt' : 'Datum'}</th><th className="r bg-card">{valueLabel}</th><th className="r bg-card">{investedLabel}</th><th className="r bg-card">Ertrag</th><th className="r bg-card">Rendite, zeitgewichtet</th></tr>
-            </thead>
-            <tbody>
-              {ps.t.map((_, k) => {
-                const i = n - 1 - k
-                return (
-                  <tr key={ps.t[i]}>
-                    <td className="num">{ps.kind === 'intraday' ? `${dfmt(new Date(ps.t[i]).toLocaleDateString('en-CA'))} ${hhmm(ps.t[i])}` : dfmt(ps.d[i])}</td>
-                    <td className="r num">{usd(ps.value[i])}</td>
-                    <td className="r num text-ink-2">{usd(ps.invested[i])}</td>
-                    <td className="r"><Delta value={ps.pl[i]} kind="usd" icon={false} /></td>
-                    <td className="r"><Delta value={ps.twr[i]} icon={false} /></td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
 
       {/* Tag, Woche, Monat, Jahr auf einen Blick; ein Tipp wählt den Zeitraum des Charts */}
       <div className={clsx('grid grid-cols-2 border-t border-line [&>*]:border-line max-lg:[&>*:nth-child(even)]:border-l max-lg:[&>*:nth-child(n+3)]:border-t lg:[&>*+*]:border-l', periods.length === 4 ? 'lg:grid-cols-4' : periods.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2')}>
@@ -400,7 +383,7 @@ function FirstSteps() {
   const steps: { title: string; text: string; action: string; run: () => void; done?: boolean }[] = [
     { title: 'Positionen hochladen', text: 'Alle bisherigen Käufe auf einmal, mit Vorlage für Excel. Oder einzeln über «Eintrag».', action: 'Hochladen', run: () => nav.openEntry('import', { kind: 'trades' }) },
     { title: 'Cash-Stand eintragen', text: 'Den Saldo laut Broker. Dann zählen Gesamtwert, Anteile und Obergrenzen mit Cash.', action: 'Eintragen', run: () => nav.openEntry('einzahlung'), done: !c.settings.cashExcluded },
-    { title: 'Plan festlegen', text: 'Zielanteile je Baustein, Obergrenzen und eigene Regeln.', action: 'Zum Plan', run: () => nav.goto('plan') },
+    { title: 'Plan festlegen', text: 'Zielanteile je Kategorie, Obergrenzen und eigene Regeln.', action: 'Zum Plan', run: () => nav.goto('plan') },
     { title: 'Watchlist anlegen', text: 'Titel mit Kaufgrenze beobachten.', action: 'Zur Watchlist', run: () => nav.goto('limits') },
   ]
   return (

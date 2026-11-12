@@ -135,7 +135,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
       {type === 'kauf' && (
         <>
           {!p && (
-            <Field label="Baustein (neuer Titel)">{(id) => (
+            <Field label="Kategorie (neuer Titel)">{(id) => (
               <select id={id} className="input" value={bucket} onChange={(e) => setBucket(e.target.value)}>
                 {HOLDING_BUCKETS.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>

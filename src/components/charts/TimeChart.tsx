@@ -18,6 +18,8 @@ export interface TimeSeries {
   width?: number
   glow?: boolean
   dashed?: boolean
+  /** Deckkraft der Linie, z. B. für eine Vergleichslinie im Hintergrund */
+  opacity?: number
 }
 export interface RefLine {
   y: number
@@ -229,7 +231,7 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
                   <stop offset="1" stopColor={s.color2 ?? s.color} />
                 </linearGradient>
                 <linearGradient id={`${id}-a${k}`} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={T} y2={T + ih}>
-                  <stop offset="0" stopColor={s.color} stopOpacity={baseline != null ? 0.12 : 0.24} />
+                  <stop offset="0" stopColor={s.color} stopOpacity={baseline != null ? 0.1 : 0.16} />
                   <stop offset="1" stopColor={s.color} stopOpacity={baseline != null ? 0.12 : 0} />
                 </linearGradient>
               </g>
@@ -283,6 +285,7 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
                   fill="none"
                   stroke={`url(#${id}-s${k})`}
                   strokeWidth={s.width ?? 2}
+                  strokeOpacity={s.opacity}
                   strokeLinejoin="round"
                   strokeLinecap="round"
                   strokeDasharray={s.dashed ? '1 5' : undefined}

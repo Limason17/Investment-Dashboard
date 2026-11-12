@@ -115,9 +115,9 @@ export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => voi
   }
 
   return (
-    <EditSheet open={open} onClose={onClose} title="Plan und Einstellungen" sub="Bausteine, Zielanteile, Obergrenzen, Währung und Regeln" save={save}>
+    <EditSheet open={open} onClose={onClose} title="Plan und Einstellungen" sub="Kategorien, Zielanteile, Obergrenzen, Währung und Regeln" save={save}>
       <div className="grid gap-2">
-        <div className="text-[13px] font-semibold">Bausteine: Name, Zielanteil, Obergrenze</div>
+        <div className="text-[13px] font-semibold">Kategorien: Name, Zielanteil, Obergrenze</div>
         {BUCKETS.map((b) => (
           <div key={b.id} className="grid grid-cols-[minmax(0,1fr)_76px_auto] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_88px_auto] sm:gap-3">
             <span className="flex min-w-0 items-center gap-2 text-[13px]">

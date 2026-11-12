@@ -245,7 +245,7 @@ export function alerts(db: DB, c: Calc, now: string): Attention[] {
   const fails = db.market.latest?.failures ?? []
   if (fails.length) out.push({ tone: 'warn', kind: 'Prüfen', title: `${fails.length} Titel ohne Live-Kurs`, detail: fails.map((f) => f.split(' ')[0]).join(', ') + ': Es gilt der letzte gespeicherte Kurs.' })
   for (const k of capChecks(c)) {
-    if (k.state === 'ueber') out.push({ tone: 'down', kind: 'Achtung', goto: 'plan', title: `${k.name}: Obergrenze überschritten`, detail: `${pctPlain(k.w)} statt höchstens ${pctPlain(k.cap, 0)}. Keine weiteren Käufe in diesem Baustein.` })
+    if (k.state === 'ueber') out.push({ tone: 'down', kind: 'Achtung', goto: 'plan', title: `${k.name}: Obergrenze überschritten`, detail: `${pctPlain(k.w)} statt höchstens ${pctPlain(k.cap, 0)}. Keine weiteren Käufe in dieser Kategorie.` })
     else if (k.state === 'nahe') out.push({ tone: 'warn', kind: 'Prüfen', goto: 'plan', title: `${k.name} nahe an der Obergrenze`, detail: `${pctPlain(k.w)} von höchstens ${pctPlain(k.cap, 0)}.` })
   }
   const pend = dividendsList(db).filter((d) => d.status === 'erwartet' && d.payDate && d.payDate <= now)

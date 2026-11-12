@@ -49,7 +49,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
       if (open > 0) vlines.push({ i: open, label: 'Eröffnung' })
       if (close > 0 && close < chart.t.length - 1) vlines.push({ i: close, label: 'Schluss' })
     }
-    const shown: RefLine[] = chart.range === '1T' ? [...near, { y: base, label: `Vortag ${usd(base)}`, color: 'var(--color-ref)' }] : near
+    const shown: RefLine[] = near
     return { values, markers, byIndex, base, chg: base > 0 ? values[values.length - 1] / base - 1 : null, refs: shown, away: refs.filter((r) => !near.includes(r)), vlines }
   }, [chart, t, txs, refs])
 
@@ -254,7 +254,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
             <div className="field"><label htmlFor={formId + 'c'}>Einstand gesamt (USD)</label><input id={formId + 'c'} className="input num" inputMode="decimal" placeholder="laut Broker" value={cost} onChange={(e) => setCost(e.target.value)} /></div>
           </div>
           <div className="field">
-            <label htmlFor={formId + 'b'}>Baustein</label>
+            <label htmlFor={formId + 'b'}>Kategorie</label>
             <select id={formId + 'b'} className="input" value={bucket} onChange={(e) => setBucket(e.target.value)}>
               {HOLDING_BUCKETS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </select>

@@ -32,7 +32,7 @@ import { Watchlist } from '@/views/Watchlist'
 
 const VIEWS: { id: ViewId; label: string; short: string; icon: LucideIcon; sub: string }[] = [
   { id: 'uebersicht', label: 'Übersicht', short: 'Übersicht', icon: LayoutDashboard, sub: 'Wert, Limits und die nächsten Termine' },
-  { id: 'positionen', label: 'Positionen', short: 'Positionen', icon: Briefcase, sub: 'Bausteine, Kursentwicklung und Bestand' },
+  { id: 'positionen', label: 'Positionen', short: 'Positionen', icon: Briefcase, sub: 'Kategorien, Gewinn/Verlust und Bestand' },
   { id: 'limits', label: 'Limits & Watchlist', short: 'Limits', icon: Target, sub: 'Kandidaten mit Kaufgrenze und Bedingung' },
   { id: 'dividenden', label: 'Dividenden', short: 'Dividenden', icon: Coins, sub: 'Erhalten, erwartet und Prognose' },
   { id: 'plan', label: 'Plan & Termine', short: 'Plan', icon: CalendarRange, sub: 'Allokation, Cash-Töpfe, Termine und Regeln' },
