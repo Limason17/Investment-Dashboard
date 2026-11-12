@@ -54,13 +54,8 @@ export function Journal() {
       .then(() => toast('Notiz gelöscht.'))
       .catch((e) => toast('Nicht gelöscht: ' + e.message))
 
-  // Handel der letzten zwölf Monate und die Summen des laufenden Jahres
-  // Kennzahlen fürs laufende Jahr; ohne Buchungen darin fürs letzte Jahr mit Buchungen (z. B. nach dem Hochladen älterer Käufe).
-  const year = useMemo(() => {
-    const cur = now.slice(0, 4)
-    const years = tx.filter((x) => x.type === 'kauf' || x.type === 'verkauf').map((x) => (x.date || '').slice(0, 4)).filter(Boolean).sort()
-    return !years.length || years.includes(cur) ? cur : years[years.length - 1]
-  }, [tx, now])
+  // Handel der letzten zwölf Monate; die Kennzahlen zählen alle Buchungen seit der ersten.
+  const since = tx.length ? tx[tx.length - 1].date : null
   const stats = useMemo(() => {
     const months: MonthPair[] = Array.from({ length: 12 }, (_, i) => ({ key: addMonths(now.slice(0, 8) + '01', i - 11).slice(0, 7), a: 0, b: 0 }))
     const at = new Map(months.map((m) => [m.key, m]))
@@ -70,7 +65,6 @@ export function Journal() {
       const m = at.get((x.date || '').slice(0, 7))
       if (m && x.type === 'kauf') m.a += amount
       if (m && x.type === 'verkauf') m.b += amount
-      if (!(x.date || '').startsWith(year)) continue
       if (x.type === 'kauf') { y.buys += amount; y.nBuys++ }
       else if (x.type === 'verkauf') { y.sells += amount; y.nSells++ }
       else if (x.type === 'einzahlung' || x.type === 'auszahlung') { y.flow += x.cashDelta || 0; y.nFlow++ }
@@ -78,20 +72,20 @@ export function Journal() {
     // Leere Monate vor der ersten Buchung weglassen (mindestens sechs Monate bleiben stehen).
     const firstUsed = months.findIndex((m) => m.a || m.b)
     return { months: months.slice(Math.max(0, Math.min(firstUsed, 6))), y, any: firstUsed >= 0 }
-  }, [tx, now, year])
-  const ys = useMemo(() => yearStats(db, year), [db, year])
+  }, [tx, now])
+  const ys = useMemo(() => yearStats(db, ''), [db])
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
       <section className="card col-span-12 grid grid-cols-2 divide-line lg:grid-cols-4 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l">
-        <Stat label={`Käufe ${year}`} value={usd(stats.y.buys)} sub={<span>{plural(stats.y.nBuys, 'Kauf', 'Käufe')}</span>} />
-        <Stat label={`Verkäufe ${year}`} value={usd(stats.y.sells)} sub={<span>{plural(stats.y.nSells, 'Verkauf', 'Verkäufe')}</span>} />
-        <Stat label={`Realisiert ${year}`} value={ys.sales ? <Delta value={ys.realized} kind="usd" icon={false} /> : '–'} sub={<span>{ys.sales ? `aus ${plural(ys.sales, 'Verkauf', 'Verkäufen')}${ys.fifo ? ', FIFO' : ''}` : 'noch kein Verkauf mit Ergebnis'}</span>} />
+        <Stat label="Käufe insgesamt" value={usd(stats.y.buys)} sub={<span>{plural(stats.y.nBuys, 'Kauf', 'Käufe')}{since ? ` seit ${dfmt(since)}` : ''}</span>} />
+        <Stat label="Verkäufe insgesamt" value={usd(stats.y.sells)} sub={<span>{plural(stats.y.nSells, 'Verkauf', 'Verkäufe')}</span>} />
+        <Stat label="Realisiert insgesamt" value={ys.sales ? <Delta value={ys.realized} kind="usd" icon={false} /> : '–'} sub={<span>{ys.sales ? `aus ${plural(ys.sales, 'Verkauf', 'Verkäufen')}${ys.fifo ? ', FIFO' : ''}` : 'noch kein Verkauf mit Ergebnis'}</span>} />
         {stats.y.nFlow ? (
-          <Stat label={`Einzahlungen netto ${year}`} value={<Delta value={stats.y.flow} kind="usd" icon={false} className="!text-ink" />} sub={<span>{plural(stats.y.nFlow, 'Buchung', 'Buchungen')}</span>} />
+          <Stat label="Einzahlungen netto" value={<Delta value={stats.y.flow} kind="usd" icon={false} className="!text-ink" />} sub={<span>{plural(stats.y.nFlow, 'Buchung', 'Buchungen')}</span>} />
         ) : (
-          <Stat label={`Netto investiert ${year}`} value={usd(stats.y.buys - stats.y.sells)} sub={<span>Käufe abzüglich Verkäufe</span>} />
+          <Stat label="Netto investiert" value={usd(stats.y.buys - stats.y.sells)} sub={<span>Käufe abzüglich Verkäufe</span>} />
         )}
       </section>
 
