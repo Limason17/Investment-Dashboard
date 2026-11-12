@@ -38,6 +38,7 @@ function Hero() {
   const [mode, setMode] = useStored<'wert' | 'rendite'>('depot.mode', 'wert', ['wert', 'rendite'])
   const [hover, setHover] = useState<number | null>(null)
   const [benchOn, setBenchOn] = useStored<'an' | 'aus'>('depot.bench', 'an', ['an', 'aus'])
+  const [invOn, setInvOn] = useStored<'an' | 'aus'>('depot.inv', 'an', ['an', 'aus'])
   const wide = useMedia('(min-width: 640px)')
   const tall = useMedia('(min-height: 800px)')
   const { series: ps, pending, error } = usePortfolio(range)
@@ -67,6 +68,8 @@ function Hero() {
     return out
   }, [ps, mode])
   const showBench = benchOn === 'an' && !!benchValues
+  // Eingezahltes Kapital als Treppe im Wert-Modus
+  const showInv = invOn === 'an' && mode === 'wert'
   const benchLabel = <>{BENCH}<span className="max-sm:hidden">{mode === 'rendite' ? ', US-Gesamtmarkt' : ', gleiche Einzahlungen'}</span></>
 
   const series: TimeSeries[] = useMemo(() => {
@@ -74,9 +77,10 @@ function Hero() {
     const s: TimeSeries[] = [mode === 'rendite'
       ? { key: 'twr', label: 'Depot', values: ps.twr.map((v) => v * 100), color: lineColor, area: true, glow: true }
       : { key: 'total', label: valueLabel, values: ps.value, color: lineColor, area: true, glow: true }]
+    if (showInv) s.push({ key: 'inv', label: investedLabel, values: ps.invested, color: 'var(--color-ref)', kind: 'step', width: 1.5, opacity: 0.65 })
     if (showBench && benchValues) s.push({ key: 'bench', label: BENCH, values: benchValues, color: 'var(--color-etf)', width: 1.5, opacity: 0.5 })
     return s
-  }, [ps, mode, valueLabel, lineColor, showBench, benchValues])
+  }, [ps, mode, valueLabel, lineColor, showBench, benchValues, showInv, investedLabel])
   const vlines: VLine[] = useMemo(() => {
     if (!ps?.session || range !== '1T') return []
     const out: VLine[] = []
@@ -187,7 +191,7 @@ function Hero() {
               <>
                 {mode === 'rendite' && <div className="tip-row"><span>{valueLabel}</span><b>{usd(ps.value[i])}</b></div>}
                 {mode === 'wert' && <div className="tip-row"><span>Ertrag im Zeitraum</span><b className={ps.pl[i] >= 0 ? '!text-up' : '!text-down'}>{sUsd(ps.pl[i])} · {pct(ps.mwr[i], 2)}</b></div>}
-                {mode === 'wert' && range !== '1T' && <div className="tip-row"><span>{investedLabel}</span><b>{usd(ps.invested[i])}</b></div>}
+                {mode === 'wert' && <div className="tip-row"><span>{investedLabel}</span><b>{usd(ps.invested[i])}</b></div>}
               </>
             )}
           />
@@ -212,6 +216,11 @@ function Hero() {
         <Segmented className="sm:hidden" label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'wert', label: 'Wert' }, { value: 'rendite', label: 'Rendite' }]} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-2">
           <span className="inline-flex items-center"><i className="linekey" style={{ background: lineColor }} />{mode === 'rendite' ? 'Depot, zeitgewichtet' : valueLabel}</span>
+          {mode === 'wert' && ps && (
+            <button type="button" aria-pressed={showInv} onClick={() => setInvOn(showInv ? 'aus' : 'an')} title={showInv ? `${investedLabel} ausblenden` : `${investedLabel} einblenden`} className={clsx('inline-flex items-center rounded-md px-1.5 py-1 transition-opacity hover:bg-white/[0.05]', !showInv && 'opacity-45 line-through decoration-white/40')}>
+              <i className="linekey opacity-70" style={{ background: 'var(--color-ref)' }} />{investedLabel}
+            </button>
+          )}
           {ps?.bench && (
             <button type="button" aria-pressed={showBench} onClick={() => setBenchOn(showBench ? 'aus' : 'an')} title={showBench ? `${BENCH} ausblenden` : `${BENCH} einblenden`} className={clsx('inline-flex items-center rounded-md px-1.5 py-1 transition-opacity hover:bg-white/[0.05]', !showBench && 'opacity-45 line-through decoration-white/40')}>
               <i className="linekey opacity-60" style={{ background: 'var(--color-etf)' }} />{benchLabel}
