@@ -24,6 +24,8 @@ export interface Timeline {
   external: { date: string; amount: number }[]
   /** jede Änderung des Cash-Stands (Buchungen und erhaltene Dividenden) */
   cashMoves: { date: string; amount: number }[]
+  /** Datum des ersten Cash-Stands; davor gilt dieser Stand unverändert (Cash war nicht erfasst). */
+  cashStart: string | null
   /** erstes Datum mit Bestand; null, wenn es Bestände ohne Buchung gibt */
   first: string | null
   tickers: string[]
@@ -38,6 +40,8 @@ export function timeline(db: DB): Timeline {
   const trades: Timeline['trades'] = []
   const external: Timeline['external'] = []
   const cashMoves: Timeline['cashMoves'] = []
+  let cashStart = null as string | null
+  let sawFlow = false
   const mark = (t: string, date: string) => {
     const s = (steps[t] ??= [])
     const v = Math.abs(raw[t]) < 1e-9 ? 0 : raw[t]
@@ -61,9 +65,13 @@ export function timeline(db: DB): Timeline {
         if (cd) trades.push({ date: x.date, ticker: t, amount: -cd })
       }
     }
+    // Erster Cash-Stand ohne vorherige Ein- oder Auszahlung: Startwert (auch bei älteren Einträgen ohne Kennzeichen).
+    const isStart = !t && x.type === 'korrektur' && (x.cashStart || (cashStart == null && !sawFlow))
+    if (isStart && (cashStart == null || x.date < cashStart)) cashStart = x.date
+    if (x.type === 'einzahlung' || x.type === 'auszahlung') sawFlow = true
     if (cd) {
       cashMoves.push({ date: x.date, amount: cd })
-      if (x.type === 'einzahlung' || x.type === 'auszahlung' || (x.type === 'korrektur' && !t)) external.push({ date: x.date, amount: cd })
+      if (x.type === 'einzahlung' || x.type === 'auszahlung' || (x.type === 'korrektur' && !t && !isStart)) external.push({ date: x.date, amount: cd })
     }
   }
   for (const d of Object.values(db.dividends)) if (d.status === 'erhalten' && d.payDate && d.net) cashMoves.push({ date: d.payDate, amount: d.net })
@@ -80,7 +88,9 @@ export function timeline(db: DB): Timeline {
   }
   const firsts = Object.values(steps).map((s) => s[0]?.date).filter(Boolean) as string[]
   const first = firsts.length && !firsts.includes(BEGIN) ? firsts.reduce((a, b) => (a < b ? a : b)) : null
-  return { steps, trades, external, cashMoves, first, tickers: Object.keys(steps).filter((t) => steps[t].length), unbooked }
+  // Vor dem ersten Cash-Stand war Cash nicht erfasst: Ein- und Auszahlungen davor zählen nicht als Zufluss.
+  const ext = cashStart ? external.filter((f) => f.date >= cashStart!) : external
+  return { steps, trades, external: ext, cashMoves, cashStart, first, tickers: Object.keys(steps).filter((t) => steps[t].length), unbooked }
 }
 
 /** Den neuesten (Live-)Kurs als letzten Punkt einsetzen, damit der Chart dort endet, wo die Kennzahl steht. */
@@ -159,7 +169,7 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   const settings = settingsOf(db)
   const cashTracked = !settings.cashExcluded
   const cashNow = cashTracked ? Number(settings.cash) || 0 : 0
-  const firstCash = cashTracked ? tl.cashMoves[0]?.date : undefined
+  const firstCash = cashTracked ? (tl.cashStart ?? tl.cashMoves[0]?.date) : undefined
   const first = tl.first && firstCash && firstCash < tl.first ? firstCash : tl.first
   const s0 = first ? chart.d.findIndex((x) => x >= first) : 0
   if (s0 < 0) return null
@@ -196,11 +206,13 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   // Cash am Ende eines Tages = heutiger Stand minus alle späteren Bewegungen
   let cp = tl.cashMoves.length
   let cashAfter = 0
-  const cashAt = (date: string) => {
+  const cashRaw = (date: string) => {
     while (cp > 0 && tl.cashMoves[cp - 1].date > date) cashAfter += tl.cashMoves[--cp].amount
     while (cp < tl.cashMoves.length && tl.cashMoves[cp].date <= date) cashAfter -= tl.cashMoves[cp++].amount
     return cashNow - cashAfter
   }
+  // Vor dem ersten Cash-Stand gilt dieser Stand (sonst spränge der Verlauf am Tag der Erfassung).
+  const cashAt = (date: string) => cashRaw(tl.cashStart && date < tl.cashStart ? tl.cashStart : date)
   const before = (list: { date: string; amount: number }[]) => list.reduce((s, f) => (f.date < start ? s + f.amount : s), 0)
   const flows = cashTracked ? tl.external : tl.trades
   let invested = before(flows)

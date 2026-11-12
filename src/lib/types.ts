@@ -81,6 +81,8 @@ export interface Tx {
   realized?: number | null
   costMethod?: string
   realizedDemo?: boolean
+  /** Erster Cash-Stand (vorher war Cash nicht erfasst): Startwert, keine Einzahlung */
+  cashStart?: boolean
   demo?: boolean
   createdAt?: string
 }

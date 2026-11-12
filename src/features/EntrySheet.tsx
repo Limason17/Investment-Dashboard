@@ -234,7 +234,7 @@ function CashForm(fp: FormProps) {
     if (off && dir !== 'korrektur') throw new Error('Cash ist derzeit nicht erfasst. Trage zuerst mit «Cash-Stand korrigieren» den Saldo von deinem Broker ein.')
     await commit(
       [
-        { op: 'set', coll: 'transactions', id: uid(), data: { type: dir, date, cashDelta: r2(after - cash), note, createdAt: new Date().toISOString(), by: 'Dashboard' } },
+        { op: 'set', coll: 'transactions', id: uid(), data: { type: dir, date, cashDelta: r2(after - cash), note, createdAt: new Date().toISOString(), by: 'Dashboard', ...(dir === 'korrektur' && off ? { cashStart: true } : {}) } },
         { op: 'merge', coll: 'meta', id: 'settings', data: { cash: r2(after), ...(dir === 'korrektur' ? { cashEstimate: false, cashExcluded: false, cashNote: 'Saldo laut Broker ' + dfmt(date), cashDate: date } : {}) } },
       ],
       dir === 'korrektur' ? 0 : after - cash,
