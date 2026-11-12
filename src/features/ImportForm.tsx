@@ -77,6 +77,7 @@ export function ImportForm({ formId, initial, initialText, initialWay, setBusy, 
   const [fileName, setFileName] = useState(initialText ? 'ausgefüllte Vorlage' : '')
   const [err, setErr] = useState('')
   const [copied, setCopied] = useState(false)
+  const [copyNote, setCopyNote] = useState(false)
   const file = useRef<HTMLInputElement>(null)
 
   const parsed = useMemo(() => parseImport(kind, text), [kind, text])
@@ -107,7 +108,9 @@ export function ImportForm({ formId, initial, initialText, initialWay, setBusy, 
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     } catch {
+      // Manche Browser erlauben das Kopieren nicht: dann steht die Vorlage direkt im Feld.
       setText((t) => (t.trim() ? t : template(kind)))
+      setCopyNote(true)
     }
   }
   const loadFile = async (f: File | undefined) => {
@@ -168,6 +171,7 @@ export function ImportForm({ formId, initial, initialText, initialWay, setBusy, 
               <button type="button" className="btn btn-sm" onClick={copy}><ClipboardCopy />{copied ? 'Kopiert' : 'Vorlage kopieren'}</button>
               <button type="button" className="btn btn-sm btn-ghost" onClick={() => setText((t) => (t.trim() ? t : template(kind)))}>Hier einsetzen</button>
             </div>
+            {copyNote && <p className="mt-1.5 text-[12px] text-warn">Der Browser erlaubt das Kopieren nicht. Die Vorlage steht darum im Feld unten: Dort direkt ausfüllen.</p>}
           </Step>
           <Step n={2} title="Ausfüllen">
             <p>{FILL[kind]} In Excel oder direkt im Feld unten.</p>

@@ -132,8 +132,25 @@ function delimiter(text: string): string {
   return semi >= comma && semi > 1 ? ';' : ','
 }
 
+/**
+ * Zeilen mit einem anderen Trennzeichen als die Kopfzeile angleichen: z. B. Kopfzeile aus der kopierten
+ * Vorlage (Tabulator) und darunter von Hand getippte Zeilen mit Semikolon.
+ */
+function unifyDelimiters(text: string, d: string) {
+  const others = ['\t', ';', ','].filter((x) => x !== d)
+  return text
+    .split(/\r?\n/)
+    .map((l) => {
+      if (!l.trim() || l.trimStart().startsWith('#') || l.includes('"') || l.includes(d)) return l
+      const o = others.find((x) => l.includes(x) && !(x === ',' && d === ';'))
+      return o ? l.split(o).join(d) : l
+    })
+    .join('\n')
+}
+
 /** Zerlegt Text in Zeilen und Zellen; beachtet Anführungszeichen wie in CSV. */
 export function splitTable(text: string, d = delimiter(text)): string[][] {
+  text = unifyDelimiters(text, d)
   const rows: string[][] = []
   let row: string[] = [], cell = '', q = false
   for (let i = 0; i < text.length; i++) {
