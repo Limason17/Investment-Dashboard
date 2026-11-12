@@ -56,15 +56,15 @@ function Hero() {
     if (!ps) return []
     if (mode === 'rendite') {
       const s: TimeSeries[] = [{ key: 'twr', label: 'Depot', values: ps.twr.map((v) => v * 100), color: 'var(--color-accent)', color2: 'var(--color-accent-2)', area: true, glow: true }]
-      if (ps.bench) s.push({ key: 'bench', label: BENCH, values: ps.bench.map((v) => v * 100), color: '#7d8494', width: 1.5 })
+      if (ps.bench) s.push({ key: 'bench', label: BENCH, values: ps.bench.map((v) => v * 100), color: 'var(--color-bench)', width: 1.5 })
       return s
     }
     const s: TimeSeries[] = [{ key: 'total', label: valueLabel, values: ps.value, color: 'var(--color-accent)', color2: 'var(--color-accent-2)', area: true, glow: true }]
-    if (withInvested) s.push({ key: 'inv', label: investedLabel, values: ps.invested, color: '#6b7385', kind: 'step', width: 1.5 })
+    if (withInvested) s.push({ key: 'inv', label: investedLabel, values: ps.invested, color: 'var(--color-ref)', kind: 'step', width: 1.5 })
     return s
   }, [ps, mode, withInvested, valueLabel, investedLabel])
 
-  const refs: RefLine[] = ps && mode === 'wert' && range === '1T' && ps.base != null ? [{ y: ps.base, label: `Vortag ${usd(ps.base)}`, color: '#8a91a0' }] : []
+  const refs: RefLine[] = ps && mode === 'wert' && range === '1T' && ps.base != null ? [{ y: ps.base, label: `Vortag ${usd(ps.base)}`, color: 'var(--color-ref)' }] : []
   const vlines: VLine[] = useMemo(() => {
     if (!ps?.session || range !== '1T') return []
     const out: VLine[] = []
@@ -202,8 +202,8 @@ function Hero() {
         <LineLegend
           items={
             mode === 'rendite'
-              ? [{ label: 'Depot, zeitgewichtet', color: 'var(--color-accent-2)' }, ...(ps?.bench ? [{ label: `${BENCH}, US-Gesamtmarkt`, color: '#7d8494' }] : [])]
-              : [{ label: valueLabel, color: 'var(--color-accent-2)' }, ...(withInvested ? [{ label: investedLabel, color: '#6b7385' }] : [])]
+              ? [{ label: 'Depot, zeitgewichtet', color: 'var(--color-accent-2)' }, ...(ps?.bench ? [{ label: `${BENCH}, US-Gesamtmarkt`, color: 'var(--color-bench)' }] : [])]
+              : [{ label: valueLabel, color: 'var(--color-accent-2)' }, ...(withInvested ? [{ label: investedLabel, color: 'var(--color-ref)' }] : [])]
           }
         />
         {/* Handy: Umschalter links, damit der Plus-Knopf unten rechts ihn nicht verdeckt */}

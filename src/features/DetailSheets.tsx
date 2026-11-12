@@ -49,7 +49,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
       if (open > 0) vlines.push({ i: open, label: 'Eröffnung' })
       if (close > 0 && close < chart.t.length - 1) vlines.push({ i: close, label: 'Schluss' })
     }
-    const shown: RefLine[] = chart.range === '1T' ? [...near, { y: base, label: `Vortag ${usd(base)}`, color: '#6b7385' }] : near
+    const shown: RefLine[] = chart.range === '1T' ? [...near, { y: base, label: `Vortag ${usd(base)}`, color: 'var(--color-ref)' }] : near
     return { values, markers, byIndex, base, chg: base > 0 ? values[values.length - 1] / base - 1 : null, refs: shown, away: refs.filter((r) => !near.includes(r)), vlines }
   }, [chart, t, txs, refs])
 
@@ -173,7 +173,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
     return `${ticker} gespeichert.`
   }, () => setEdit(false))
 
-  const refs: RefLine[] = r?.avg != null ? [{ y: r.avg, label: `Ø Einstand ${usd(r.avg)}`, color: '#8a91a0' }] : []
+  const refs: RefLine[] = r?.avg != null ? [{ y: r.avg, label: `Ø Einstand ${usd(r.avg)}`, color: 'var(--color-ref)' }] : []
   const yearly = p && q?.divAnnual ? p.shares * q.divAnnual * (1 - wht(db)) : null
 
   return (
@@ -292,7 +292,7 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
 
   const refs: RefLine[] = []
   if (w?.limit) refs.push({ y: w.limit, label: `Grenze ${usd(w.limit)}`, color: 'var(--color-warn)' })
-  if (w?.limitCautious) refs.push({ y: w.limitCautious, label: `vorsichtig ${usd(w.limitCautious)}`, color: '#8a91a0' })
+  if (w?.limitCautious) refs.push({ y: w.limitCautious, label: `vorsichtig ${usd(w.limitCautious)}`, color: 'var(--color-bench)' })
 
   return (
     <Sheet

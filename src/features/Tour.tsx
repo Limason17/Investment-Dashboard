@@ -146,7 +146,7 @@ export function Tour({ onClose, onStart }: { onClose: () => void; onStart: () =>
               initial={false}
               animate={{ left: rect.left - PAD, top: rect.top - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2 }}
               transition={{ type: 'spring', stiffness: 380, damping: 36 }}
-              style={{ boxShadow: '0 0 0 9999px rgb(4 5 8 / 0.8), 0 0 0 6px rgb(143 155 255 / 0.18), 0 0 28px 6px rgb(143 155 255 / 0.35)' }}
+              style={{ boxShadow: '0 0 0 9999px rgb(4 5 8 / 0.8), 0 0 0 6px rgb(143 125 255 / 0.18), 0 0 28px 6px rgb(143 125 255 / 0.35)' }}
             />
           ) : (
             <motion.div key="dim" className="fixed inset-0 bg-[rgb(4_5_8/0.8)] backdrop-blur-[2px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />

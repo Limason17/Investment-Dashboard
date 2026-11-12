@@ -22,7 +22,7 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
   const x = (i: number) => 1 + (i / (n - 1)) * (width - 6)
   const y = (v: number) => 4 + ((hi - v) / (hi - lo || 1)) * (height - 8)
   const d = d3line<number>().x((_, i) => x(i)).y((v) => y(v)).curve(curveMonotoneX)(values) ?? ''
-  const color = tone === 'up' ? 'var(--color-up)' : tone === 'down' ? 'var(--color-down)' : 'var(--color-muted)'
+  const color = tone === 'up' ? 'var(--color-up)' : tone === 'down' ? 'var(--color-down)' : 'var(--color-accent)'
   return (
     <svg width={width} height={height} role="img" aria-label={label} className="block overflow-visible">
       <defs>
@@ -50,7 +50,7 @@ export function FluidSparkline(props: Omit<Parameters<typeof Sparkline>[0], 'wid
   )
 }
 
-const TONE_COLOR: Record<Tone, string> = { up: 'var(--color-up)', down: 'var(--color-down)', warn: 'var(--color-warn)', info: 'var(--color-accent)', mute: '#8a91a0' }
+const TONE_COLOR: Record<Tone, string> = { up: 'var(--color-up)', down: 'var(--color-down)', warn: 'var(--color-warn)', info: 'var(--color-accent)', mute: '#9aa2b4' }
 
 /**
  * Kurs relativ zur Kaufgrenze. Strich = Grenze, links davon die Kaufzone, Punkt = aktueller Kurs.

@@ -84,7 +84,7 @@ export function EventStrip({ events, now, days = 56, className }: { events: With
           <span
             key={e.id}
             title={`${e.date.slice(8)}.${e.date.slice(5, 7)}. ${e.title}`}
-            className={clsx('absolute size-[7px] -translate-x-1/2 rounded-full', e.tentative ? 'border border-accent-2/80 bg-card' : 'bg-accent shadow-[0_0_8px_rgb(143_155_255/0.55)]')}
+            className={clsx('absolute size-[7px] -translate-x-1/2 rounded-full', e.tentative ? 'border border-accent-2/80 bg-card' : 'bg-accent shadow-[0_0_8px_rgb(143_125_255/0.55)]')}
             style={{ left: `${x * 100}%`, bottom: 5 + lane * 11 }}
           />
         ))}

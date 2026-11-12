@@ -64,9 +64,9 @@ function Brand({ compact }: { compact?: boolean }) {
   const grad = useId()
   return (
     <div className="flex items-center gap-3">
-      <div className={clsx('relative grid place-items-center rounded-[11px] border border-white/10 bg-gradient-to-b from-[#1b1e28] to-[#0c0d11] shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_6px_16px_-6px_rgb(143_155_255/0.45)]', compact ? 'size-8' : 'size-9')}>
+      <div className={clsx('relative grid place-items-center rounded-[11px] border border-white/10 bg-gradient-to-b from-[#1b1e28] to-[#0c0d11] shadow-[inset_0_1px_0_rgb(255_255_255/0.08),0_6px_16px_-6px_rgb(143_125_255/0.45)]', compact ? 'size-8' : 'size-9')}>
         <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-          <defs><linearGradient id={grad} x1="0" y1="1" x2="1" y2="0"><stop offset="0" stopColor="#8f9bff" /><stop offset="1" stopColor="#e3e6ff" /></linearGradient></defs>
+          <defs><linearGradient id={grad} x1="0" y1="1" x2="1" y2="0"><stop offset="0" stopColor="#8f7dff" /><stop offset="1" stopColor="#e3e6ff" /></linearGradient></defs>
           <path d="M2.5 13 6.6 8.2l3 2.3L15 4.5" fill="none" stroke={`url(#${grad})`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           <circle cx="15" cy="4.5" r="1.7" fill="#eef0ff" />
         </svg>
@@ -138,7 +138,7 @@ function SideNav({ view, goto, counts }: { view: ViewId; goto: (v: ViewId) => vo
           >
             {active && (
               <motion.span layoutId="nav-v" className="absolute inset-0 rounded-[10px] border border-white/[0.07] bg-white/[0.06] shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]" transition={{ type: 'spring', stiffness: 480, damping: 40 }}>
-                <span className="absolute -left-[13px] top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-accent shadow-[0_0_12px_rgb(143_155_255/0.9)]" />
+                <span className="absolute -left-[13px] top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-accent shadow-[0_0_12px_rgb(143_125_255/0.9)]" />
               </motion.span>
             )}
             <v.icon className={clsx('relative size-4 flex-none transition-colors', active ? 'text-accent-2' : 'text-faint group-hover:text-muted')} strokeWidth={2} />
@@ -163,7 +163,7 @@ function TabBar({ view, goto }: { view: ViewId; goto: (v: ViewId) => void }) {
           const active = v.id === view
           return (
             <button key={v.id} type="button" onClick={() => goto(v.id)} aria-current={active ? 'page' : undefined} className={clsx('relative flex h-[58px] min-w-0 flex-col items-center justify-center gap-[5px] transition-colors', active ? 'text-ink' : 'text-muted')}>
-              {active && <motion.span layoutId="nav-b" className="absolute top-0 h-[2px] w-9 rounded-full bg-accent shadow-[0_0_12px_rgb(143_155_255/0.9)]" transition={{ type: 'spring', stiffness: 480, damping: 40 }} />}
+              {active && <motion.span layoutId="nav-b" className="absolute top-0 h-[2px] w-9 rounded-full bg-accent shadow-[0_0_12px_rgb(143_125_255/0.9)]" transition={{ type: 'spring', stiffness: 480, damping: 40 }} />}
               <v.icon className={clsx('size-[20px]', active ? 'text-accent-2' : 'text-muted')} strokeWidth={active ? 2.1 : 1.9} />
               <span className="max-w-full truncate px-0.5 text-[10px] font-medium leading-none tracking-[-0.01em]">{v.short}</span>
             </button>
@@ -392,7 +392,7 @@ function Dashboard() {
           </div>
 
           {/* Handy: neuer Eintrag mit dem Daumen */}
-          <button type="button" data-tour="entry" onClick={() => nav.openEntry('kauf')} aria-label="Neuer Eintrag" className={`fixed bottom-[calc(72px+env(safe-area-inset-bottom))] right-4 z-30 grid size-[52px] place-items-center rounded-full bg-gradient-to-b from-white to-[#dfe2ee] text-[#0b0c10] shadow-[inset_0_1px_0_#fff,0_2px_4px_rgb(0_0_0/0.5),0_14px_30px_-8px_rgb(143_155_255/0.6)] transition-[transform,opacity] duration-200 active:scale-95 lg:hidden ${fabAway ? 'pointer-events-none translate-y-24 opacity-0' : ''}`}>
+          <button type="button" data-tour="entry" onClick={() => nav.openEntry('kauf')} aria-label="Neuer Eintrag" className={`fixed bottom-[calc(72px+env(safe-area-inset-bottom))] right-4 z-30 grid size-[52px] place-items-center rounded-full bg-gradient-to-b from-white to-[#dfe2ee] text-[#0b0c10] shadow-[inset_0_1px_0_#fff,0_2px_4px_rgb(0_0_0/0.5),0_14px_30px_-8px_rgb(143_125_255/0.6)] transition-[transform,opacity] duration-200 active:scale-95 lg:hidden ${fabAway ? 'pointer-events-none translate-y-24 opacity-0' : ''}`}>
             <Plus className="size-6" strokeWidth={2.2} />
           </button>
           <TabBar view={view} goto={goto} />

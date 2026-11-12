@@ -97,7 +97,7 @@ export function Journal() {
 
       {stats.any && (
         <Card className="col-span-12" title="Käufe und Verkäufe" sub={`je Monat, letzte ${stats.months.length} Monate, in USD`}>
-          <MonthBars months={stats.months} labels={['Käufe', 'Verkäufe']} colors={['var(--color-accent)', '#6b7385']} format={int} current={now.slice(0, 7)} />
+          <MonthBars months={stats.months} labels={['Käufe', 'Verkäufe']} colors={['var(--color-accent)', 'var(--color-ref)']} format={int} current={now.slice(0, 7)} />
         </Card>
       )}
 

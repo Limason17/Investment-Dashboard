@@ -13,7 +13,7 @@ export interface DivMonth {
 }
 
 export const DIV_RECEIVED = 'var(--color-accent)'
-export const DIV_EXPECTED = '#4d57ad'
+export const DIV_EXPECTED = '#5b5fd6'
 
 const topRounded = (x: number, y: number, w: number, h: number, r: number) => {
   if (h <= 0) return ''
