@@ -61,9 +61,10 @@ function timeTicks(t: number[], d: string[], kind: 'intraday' | 'daily', iw: num
     for (const c of list) if (!c.strong && fits(c)) kept.push(c)
     return kept.sort((a, b) => a.i - b.i)
   }
-  if (kind === 'intraday') {
-    const starts: number[] = [0]
-    for (let i = 1; i < n; i++) if (d[i] !== d[i - 1]) starts.push(i)
+  const starts: number[] = [0]
+  if (kind === 'intraday') for (let i = 1; i < n; i++) if (d[i] !== d[i - 1]) starts.push(i)
+  // Viele Handelstage mit Stundenwerten (3M, 1J): Achse wie bei Tageswerten, nach Monaten beschriftet.
+  if (kind === 'intraday' && starts.length <= 25) {
     if (starts.length === 1) {
       for (let i = 1; i < n; i++) {
         const h = new Date(t[i]).getHours()

@@ -1,8 +1,9 @@
 /**
- * Portfolio-Wechsel (Auswahlfeld) und Verwaltung: anlegen, umbenennen, sortieren, löschen.
+ * Portfolio-Wechsel (Aufklappmenü) und Verwaltung: anlegen, umbenennen, sortieren, löschen.
  */
-import { ArrowDown, ArrowUp, ChevronsUpDown, Plus } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { ArrowDown, ArrowUp, Check, ChevronsUpDown, Layers, Plus, Settings2 } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import clsx from 'clsx'
 import { Sheet } from '@/components/Sheet'
 import { ConfirmDelete } from '@/components/ui'
@@ -10,27 +11,113 @@ import { ALL, MAIN } from '@/lib/portfolios'
 import { createPortfolio, deletePortfolio, movePortfolio, renamePortfolio, setPortfolio, useStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
 
-const MANAGE = '__manage'
+/** Kurze Initialen als Kennzeichen eines Portfolios */
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '·'
 
+/**
+ * Portfolio-Wechsel als eigenes Aufklappmenü: aktuelles Portfolio mit Häkchen, Gesamtansicht,
+ * Neu anlegen und Verwalten. Schliesst bei Klick daneben und mit Esc; Pfeiltasten wählen.
+ */
 export function PortfolioSwitcher({ onManage, className }: { onManage: () => void; className?: string }) {
   const { portfolios, portfolio } = useStore()
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+  const listId = useId()
+  const current = portfolio === ALL ? { name: 'Alle Portfolios', id: ALL } : portfolios.find((p) => p.id === portfolio) ?? portfolios[0]
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpen(false)
+        root.current?.querySelector<HTMLButtonElement>('button')?.focus()
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        const items = [...(root.current?.querySelectorAll<HTMLButtonElement>('[data-item]') ?? [])]
+        const i = items.indexOf(document.activeElement as HTMLButtonElement)
+        items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', onDown)
+    document.addEventListener('keydown', onKey)
+    // Fokus auf den gewählten Eintrag
+    requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>('[data-item][aria-checked="true"]')?.focus())
+    return () => {
+      document.removeEventListener('pointerdown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const pick = (id: string) => {
+    setOpen(false)
+    if (id !== portfolio) void setPortfolio(id)
+  }
+  const item = 'flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left text-[13px] outline-none transition-colors hover:bg-white/[0.06] focus-visible:bg-white/[0.08]'
+
   return (
-    <label data-tour="portfolio" className={clsx('relative flex items-center', className)}>
-      <span className="sr-only">Portfolio wählen</span>
-      <select
-        className="h-9 w-full cursor-pointer appearance-none truncate rounded-[10px] border border-line bg-white/[0.03] pl-3 pr-8 text-[13px] font-medium text-ink transition-colors hover:border-line-2"
-        value={portfolio}
-        onChange={(e) => {
-          if (e.target.value === MANAGE) return onManage()
-          void setPortfolio(e.target.value)
-        }}
+    <div ref={root} data-tour="portfolio" className={clsx('relative', className)}>
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={listId}
+        onClick={() => setOpen((o) => !o)}
+        className={clsx('flex h-10 w-full items-center gap-2.5 rounded-[11px] border bg-white/[0.03] pl-1.5 pr-2.5 text-left transition-colors hover:border-line-2', open ? 'border-line-2 bg-white/[0.05]' : 'border-line')}
       >
-        {portfolios.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        {portfolios.length > 1 && <option value={ALL}>Alle Portfolios (Gesamt)</option>}
-        <option value={MANAGE}>Portfolios verwalten …</option>
-      </select>
-      <ChevronsUpDown className="pointer-events-none absolute right-2.5 size-3.5 text-muted" />
-    </label>
+        <span className={clsx('grid size-7 flex-none place-items-center rounded-[8px] text-[11px] font-semibold', portfolio === ALL ? 'bg-accent/20 text-accent-2' : 'bg-white/[0.07] text-ink-2')}>
+          {portfolio === ALL ? <Layers className="size-3.5" /> : initials(current?.name ?? '')}
+        </span>
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="block truncate text-[13px] font-medium text-ink">{current?.name}</span>
+          <span className="block truncate text-[11px] text-muted">{portfolio === ALL ? 'Gesamtansicht · nur ansehen' : portfolios.length > 1 ? `Portfolio · ${portfolios.length} insgesamt` : 'Portfolio'}</span>
+        </span>
+        <ChevronsUpDown className="size-3.5 flex-none text-muted" />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            id={listId}
+            role="menu"
+            aria-label="Portfolio wählen"
+            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
+            className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 min-w-[240px] origin-top rounded-[14px] border border-line-2 bg-[#101218] p-1.5 shadow-[0_18px_50px_-10px_rgb(0_0_0/0.8),inset_0_1px_0_rgb(255_255_255/0.05)]"
+          >
+            <div className="px-2.5 pb-1 pt-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-faint">Portfolios</div>
+            <div className="max-h-[50vh] overflow-y-auto">
+              {portfolios.map((p) => (
+                <button key={p.id} type="button" role="menuitemradio" aria-checked={p.id === portfolio} data-item className={item} onClick={() => pick(p.id)}>
+                  <span className="grid size-6 flex-none place-items-center rounded-[7px] bg-white/[0.07] text-[10px] font-semibold text-ink-2">{initials(p.name)}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink">{p.name}</span>
+                  {p.id === portfolio && <Check className="size-4 flex-none text-accent-2" />}
+                </button>
+              ))}
+              {portfolios.length > 1 && (
+                <button type="button" role="menuitemradio" aria-checked={portfolio === ALL} data-item className={item} onClick={() => pick(ALL)}>
+                  <span className="grid size-6 flex-none place-items-center rounded-[7px] bg-accent/15 text-accent-2"><Layers className="size-3.5" /></span>
+                  <span className="min-w-0 flex-1 truncate text-ink">Alle Portfolios <span className="text-muted">· Gesamt</span></span>
+                  {portfolio === ALL && <Check className="size-4 flex-none text-accent-2" />}
+                </button>
+              )}
+            </div>
+            <div className="my-1.5 h-px bg-line" />
+            <button type="button" role="menuitem" data-item className={clsx(item, 'text-ink-2')} onClick={() => { setOpen(false); onManage() }}>
+              <span className="grid size-6 flex-none place-items-center"><Plus className="size-4" /></span>Neues Portfolio
+            </button>
+            <button type="button" role="menuitem" data-item className={clsx(item, 'text-ink-2')} onClick={() => { setOpen(false); onManage() }}>
+              <span className="grid size-6 flex-none place-items-center"><Settings2 className="size-4" /></span>Verwalten
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 

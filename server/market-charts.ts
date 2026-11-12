@@ -49,11 +49,12 @@ const UA = { 'User-Agent': 'Mozilla/5.0 (depot-dashboard lokal)' }
 const RANGES: ChartRange[] = ['1T', '1W', '1M', '3M', '1J', '5J', 'MAX']
 const MIN = 60_000
 const SPEC: Record<Exclude<ChartRange, '1T' | 'MAX'>, { q: string; interval: string; kind: 'intraday' | 'daily'; step: number; ttl: number }> = {
-  '1W': { q: 'range=5d&interval=15m', interval: '15m', kind: 'intraday', step: 900, ttl: 5 * MIN },
-  '1M': { q: 'range=1mo&interval=60m', interval: '60m', kind: 'intraday', step: 3600, ttl: 15 * MIN },
-  '3M': { q: 'range=3mo&interval=1d', interval: '1d', kind: 'daily', step: 0, ttl: 30 * MIN },
-  '1J': { q: 'range=1y&interval=1d', interval: '1d', kind: 'daily', step: 0, ttl: 30 * MIN },
-  '5J': { q: 'range=5y&interval=1wk', interval: '1wk', kind: 'daily', step: 0, ttl: 360 * MIN },
+  // Feine Auflösung, soweit Yahoo sie liefert (5 Min. bis 60 Tage, 60 Min. bis 730 Tage zurück).
+  '1W': { q: 'range=5d&interval=5m', interval: '5m', kind: 'intraday', step: 300, ttl: 2 * MIN },
+  '1M': { q: 'range=1mo&interval=15m', interval: '15m', kind: 'intraday', step: 900, ttl: 10 * MIN },
+  '3M': { q: 'range=3mo&interval=60m', interval: '60m', kind: 'intraday', step: 3600, ttl: 20 * MIN },
+  '1J': { q: 'range=1y&interval=60m', interval: '60m', kind: 'intraday', step: 3600, ttl: 30 * MIN },
+  '5J': { q: 'range=5y&interval=1d', interval: '1d', kind: 'daily', step: 0, ttl: 120 * MIN },
 }
 
 const nyDate = (ms: number) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
@@ -218,7 +219,7 @@ export function marketCharts(live: { (force?: boolean): Promise<unknown>; intrad
     if (range === 'MAX') {
       const start = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : addDays(today, -5 * 365)
       const days = Math.max(1, Math.round((noon(today) - noon(start)) / 864e5))
-      interval = days <= 800 ? '1d' : days <= 2300 ? '1wk' : '1mo'
+      interval = days <= 2300 ? '1d' : '1wk'
       // Eine Woche Vorlauf, damit Yahoo den Schlusskurs davor mitliefert; Tagesgrenze, damit der Zwischenspeicher greift.
       q = `period1=${Math.floor(noon(addDays(start, -7)) / 1000)}&period2=${Math.floor(noon(addDays(today, 2)) / 1000)}&interval=${interval}`
       kind = 'daily'
