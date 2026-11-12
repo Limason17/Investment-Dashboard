@@ -46,3 +46,8 @@ export const FIREBASE_CONFIG: FirebaseConfig | null = fromEnv() ?? PROJECT_CONFI
 export const QUOTES_URL = ((import.meta.env.VITE_QUOTES_URL as string | undefined) || QUOTES).replace(/\/$/, '')
 /** Nur für Tests mit den Firebase-Emulatoren, nie im veröffentlichten Build. */
 export const EMULATOR = import.meta.env.VITE_FIREBASE_EMULATOR as string | undefined
+
+/** Betreiber für Datenschutz und Nutzungsbedingungen (Platzhalter, bis die Angaben feststehen). */
+export const OPERATOR = { name: 'Limason17 (Privatperson)', place: 'Schweiz', email: '' }
+/** Stand der rechtlichen Texte; ändert er sich, wird die Zustimmung neu gespeichert. */
+export const LEGAL_VERSION = '12. November 2026'

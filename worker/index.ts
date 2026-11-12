@@ -36,13 +36,28 @@ function pool(held: string[], watch: string[], env: Env) {
   return p
 }
 
+// Anfragebremse je IP und Worker-Instanz: höchstens 90 Anfragen pro Minute (die App braucht wenige pro Minute).
+const LIMIT = 90
+const hits = new Map<string, { n: number; t: number }>()
+function tooMany(ip: string) {
+  const now = Date.now()
+  const h = hits.get(ip)
+  if (!h || now - h.t > 60_000) {
+    if (hits.size > 5000) hits.clear()
+    hits.set(ip, { n: 1, t: now })
+    return false
+  }
+  return ++h.n > LIMIT
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const origin = req.headers.get('Origin') ?? ''
     const allowed = (env.ALLOWED_ORIGINS ?? 'https://limason17.github.io,http://localhost:5173,http://localhost:5175,http://localhost:5177,http://localhost:4173').split(',').map((s) => s.trim())
     const cors: Record<string, string> = allowed.includes(origin) ? { 'Access-Control-Allow-Origin': origin, Vary: 'Origin' } : {}
     const json = (status: number, body: unknown) =>
-      new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...cors } })
+      new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...cors } })
+    if (tooMany(req.headers.get('CF-Connecting-IP') ?? 'unbekannt')) return json(429, { error: 'zu viele Anfragen' })
 
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...cors, 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '86400' } })
     if (req.method !== 'GET') return json(405, { error: 'nur GET' })

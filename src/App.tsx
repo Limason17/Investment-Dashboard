@@ -19,6 +19,7 @@ import { initStore, loadDb, mutate, refreshAll, useStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import { PortfoliosSheet, PortfolioSwitcher } from '@/features/Portfolios'
 import { Tour } from '@/features/Tour'
+import { LegalLinks, LegalSheet, type LegalDoc } from '@/features/Legal'
 import { PullToRefresh } from '@/components/PullToRefresh'
 import { ALL } from '@/lib/portfolios'
 import type { DB, LiveResult, ViewId } from '@/lib/types'
@@ -190,6 +191,7 @@ function Dashboard() {
   const { db: stored, error, live, portfolio } = useStore()
   const [portfoliosOpen, setPortfoliosOpen] = useState(false)
   const [tourOpen, setTourOpen] = useState(false)
+  const [legalDoc, setLegalDoc] = useState<LegalDoc | null>(null)
   // Plus-Knopf auf dem Handy: beim Hinunterscrollen ausblenden (verdeckt sonst Inhalte), beim Hinaufscrollen zeigen.
   const [fabAway, setFabAway] = useState(false)
   useEffect(() => {
@@ -384,6 +386,7 @@ function Dashboard() {
               <footer className="mx-auto mt-10 max-w-3xl px-2 text-center text-[12px] leading-[1.6] text-faint sm:mt-12">
                 Analyse-Werkzeug, keine Anlageberatung und keine Orderausführung. Massgebend sind die Kontoauszüge deines Brokers.
                 <br />Kurse und Verläufe: Yahoo Finance (inoffiziell), splitbereinigt, ohne Dividenden. Der Wertverlauf ist aus den Buchungen nachgerechnet.
+                {CLOUD && <><br /><LegalLinks className="mt-1 inline-block" onOpen={setLegalDoc} /></>}
               </footer>
             </main>
           </div>
@@ -400,6 +403,7 @@ function Dashboard() {
           <CommandPalette open={palette} onOpenChange={setPalette} views={VIEWS} onExport={() => exportCsv(c)} onRefresh={() => void refresh()} onAccount={() => setAccountOpen(true)} onTour={() => setTourOpen(true)} />
           <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} onPortfolios={() => { setAccountOpen(false); setPortfoliosOpen(true) }} onTour={() => { setAccountOpen(false); setTimeout(() => setTourOpen(true), 250) }} />
           <PullToRefresh onRefresh={refresh} disabled={anyDialog || accountOpen || portfoliosOpen || tourOpen} />
+          <LegalSheet doc={legalDoc} onClose={() => setLegalDoc(null)} />
           <PortfoliosSheet open={portfoliosOpen} onClose={() => setPortfoliosOpen(false)} />
           {tourOpen && <Tour onClose={closeTour} onStart={() => nav.openEntry('import', { kind: 'trades' })} />}
           <Toaster />

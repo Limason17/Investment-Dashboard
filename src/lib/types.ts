@@ -124,6 +124,8 @@ export interface Settings {
   caps?: BucketId[]
   /** Eigene Namen der Bausteine */
   bucketNames?: Partial<Record<BucketId, string>>
+  /** Stand der akzeptierten Nutzungsbedingungen (bei der Registrierung) */
+  termsAccepted?: string
   /** Einführung gesehen */
   tourDone?: boolean
   /** Zweite Anzeigewährung neben USD */

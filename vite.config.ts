@@ -23,6 +23,30 @@ export default defineConfig(({ command, mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      // Online-Build: strenge Content-Security-Policy (nur eigene Skripte; Verbindungen nur zu Firebase und zum Kurs-Dienst).
+      cloud && command === 'build' && {
+        name: 'depot-csp',
+        transformIndexHtml: (html: string) =>
+          html.replace(
+            '<meta charset="UTF-8" />',
+            `<meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="${[
+              "default-src 'self'",
+              "script-src 'self'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://*.googleapis.com https://*.workers.dev",
+              "frame-src https://*.firebaseapp.com",
+              "worker-src 'self'",
+              "manifest-src 'self'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "object-src 'none'",
+            ].join('; ')}" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />`,
+          ),
+      },
       // Schlüssel aus .env.local (nur lokal, nie im Browser). Die Testdaten-Vorschau zeigt Live-Kurse, schreibt aber nichts fest.
       !cloud && depotApi(path.resolve(import.meta.dirname, demo ? 'data-demo' : 'data'), { env, persistCloses: !demo }),
       cloud &&

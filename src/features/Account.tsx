@@ -6,6 +6,7 @@ import { authMessage, cloudReplace, COLLECTIONS, deleteAccount, PASSWORD_MIN, re
 import { detectKind, LIMITS, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
 import { BACKUP_KIND, downloadBackup } from '@/lib/backup'
 import { CLOUD } from '@/lib/config'
+import { LegalLinks, LegalSheet, type LegalDoc } from './Legal'
 import { ALL } from '@/lib/portfolios'
 import { useNav } from '@/lib/context'
 import { loadDb, useStore } from '@/lib/store'
@@ -88,11 +89,14 @@ export function AuthScreen({ brand }: { brand: ReactNode }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [info, setInfo] = useState('')
+  const [agree, setAgree] = useState(false)
+  const [legal, setLegal] = useState<LegalDoc | null>(null)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setErr('')
     setInfo('')
+    if (mode === 'register' && !agree) return setErr('Bitte bestätige die Nutzungsbedingungen und die Datenschutzerklärung.')
     setBusy(true)
     try {
       if (mode === 'login') await signIn(email, password)
@@ -128,6 +132,14 @@ export function AuthScreen({ brand }: { brand: ReactNode }) {
                 {(id) => <input id={id} className="input" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} required minLength={mode === 'register' ? PASSWORD_MIN : undefined} value={password} onChange={(e) => setPassword(e.target.value)} />}
               </Field>
             )}
+            {mode === 'register' && (
+              <label className="flex cursor-pointer items-start gap-2.5 text-[12.5px] leading-[1.5] text-ink-2">
+                <input type="checkbox" className="mt-0.5 size-4 flex-none accent-[var(--color-accent)]" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+                <span>
+                  Ich akzeptiere die <button type="button" className="underline underline-offset-4" onClick={() => setLegal('nutzung')}>Nutzungsbedingungen</button> und habe die <button type="button" className="underline underline-offset-4" onClick={() => setLegal('datenschutz')}>Datenschutzerklärung</button> gelesen. Depot ist keine Anlageberatung.
+                </span>
+              </label>
+            )}
             {err && <div role="alert" className="text-[12.5px] text-down">{err}</div>}
             {info && <div role="status" className="text-[12.5px] text-up">{info}</div>}
             <button type="submit" className="btn btn-primary w-full" disabled={busy}>
@@ -138,7 +150,9 @@ export function AuthScreen({ brand }: { brand: ReactNode }) {
             {mode === 'reset' ? 'Zurück zur Anmeldung' : 'Passwort vergessen?'}
           </button>
         </div>
+        <LegalLinks className="mt-5 block text-center text-[12px] text-muted" onOpen={setLegal} />
       </div>
+      <LegalSheet doc={legal} onClose={() => setLegal(null)} />
     </div>
   )
 }
@@ -152,6 +166,7 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
   const pfName = portfolios.length > 1 ? portfolios.find((p) => p.id === portfolio)?.name : undefined
   const file = useRef<HTMLInputElement>(null)
   const [pending, setPending] = useState<Partial<DB> | null>(null)
+  const [legal, setLegal] = useState<LegalDoc | null>(null)
   const [del, setDel] = useState(false)
   const [pw, setPw] = useState('')
   const [busy, setBusy] = useState(false)
@@ -303,7 +318,9 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
           </>
         )}
         {err && <div role="alert" className="text-[12.5px] text-down">{err}</div>}
+        <LegalLinks className="border-t border-line pt-4 text-[12px] text-muted" onOpen={setLegal} />
       </div>
+      <LegalSheet doc={legal} onClose={() => setLegal(null)} />
     </Sheet>
   )
 }

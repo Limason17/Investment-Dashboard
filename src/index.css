@@ -19,20 +19,20 @@
   --color-muted: #8d94a2;
   --color-faint: #5e6472;
 
-  --color-accent: #8f9bff;
+  --color-accent: #96a2ff;
   --color-accent-2: #c9cfff;
 
   /* Status: nur für Zustand und Richtung, nie für Serien */
-  --color-up: #42d593;
-  --color-down: #ff6f6f;
-  --color-warn: #f5b544;
+  --color-up: #3fe39a;
+  --color-down: #ff6262;
+  --color-warn: #ffbd45;
 
   /* Bausteine (kategorial, feste Reihenfolge, gegen die Kartenfläche validiert) */
-  --color-etf: #4492f2;
-  --color-aktien: #e8693a;
-  --color-zukunft: #22b884;
-  --color-metalle: #dd9c1f;
-  --color-cash: #747c8f;
+  --color-etf: #4c9cff;
+  --color-aktien: #ff7440;
+  --color-zukunft: #27cf93;
+  --color-metalle: #f2ad2a;
+  --color-cash: #8790a6;
 
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
