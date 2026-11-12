@@ -259,7 +259,7 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
           <h3 className="text-[13px] font-semibold">Sicherungskopie</h3>
           <p className="text-[12.5px] leading-[1.55] text-muted">
             {CLOUD
-              ? `Eine Kopie aller Daten ${pfName ? `des Portfolios «${pfName}»` : 'deines Depots'} zum Aufbewahren. Nicht zum Ausfüllen gedacht. «Wiederherstellen» ersetzt alle Daten dieses Portfolios durch die Kopie,`
+              ? `Eine Kopie aller Daten ${pfName ? `des Portfolios «${pfName}»` : 'deines Depots'} zum Aufbewahren. Nicht zum Ausfüllen gedacht. «Wiederherstellen» ersetzt alle Daten dieses Portfolios durch die Kopie.`
               : 'Eine Kopie aller Daten dieses Rechners zum Aufbewahren. In der Online-Version stellst du sie unter «Konto» wieder her.'}
           </p>
           <div className="flex flex-wrap gap-2">
