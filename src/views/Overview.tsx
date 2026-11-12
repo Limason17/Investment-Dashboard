@@ -206,7 +206,8 @@ function Hero() {
               : [{ label: valueLabel, color: 'var(--color-accent-2)' }, ...(withInvested ? [{ label: investedLabel, color: '#6b7385' }] : [])]
           }
         />
-        <div className="flex items-center gap-1.5">
+        {/* Handy: Umschalter links, damit der Plus-Knopf unten rechts ihn nicht verdeckt */}
+        <div className="flex items-center gap-1.5 max-sm:order-first">
           <Segmented className="sm:hidden" label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'wert', label: 'Wert' }, { value: 'rendite', label: 'Rendite' }]} />
           <button type="button" className="btn btn-ghost btn-sm max-sm:hidden" aria-pressed={table} onClick={() => setTable((v) => !v)}>
             <Table2 /> {table ? 'Tabelle ausblenden' : 'Als Tabelle'}

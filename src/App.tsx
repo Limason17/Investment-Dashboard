@@ -189,6 +189,19 @@ function Dashboard() {
   const { db: stored, error, live, portfolio, portfolios } = useStore()
   const [portfoliosOpen, setPortfoliosOpen] = useState(false)
   const [tourOpen, setTourOpen] = useState(false)
+  // Plus-Knopf auf dem Handy: beim Hinunterscrollen ausblenden (verdeckt sonst Inhalte), beim Hinaufscrollen zeigen.
+  const [fabAway, setFabAway] = useState(false)
+  useEffect(() => {
+    let last = window.scrollY
+    const onScroll = () => {
+      const y = window.scrollY
+      if (y > last + 8 && y > 120) setFabAway(true)
+      else if (y < last - 8 || y < 120) setFabAway(false)
+      last = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
   const { user } = useAccount()
   const allView = portfolio === ALL
   const pfName = allView ? 'Alle Portfolios' : portfolios.find((p) => p.id === portfolio)?.name
@@ -378,7 +391,7 @@ function Dashboard() {
           </div>
 
           {/* Handy: neuer Eintrag mit dem Daumen */}
-          <button type="button" data-tour="entry" onClick={() => nav.openEntry('kauf')} aria-label="Neuer Eintrag" className="fixed bottom-[calc(72px+env(safe-area-inset-bottom))] right-4 z-30 grid size-[52px] place-items-center rounded-full bg-gradient-to-b from-white to-[#dfe2ee] text-[#0b0c10] shadow-[inset_0_1px_0_#fff,0_2px_4px_rgb(0_0_0/0.5),0_14px_30px_-8px_rgb(143_155_255/0.6)] transition-transform active:scale-95 lg:hidden">
+          <button type="button" data-tour="entry" onClick={() => nav.openEntry('kauf')} aria-label="Neuer Eintrag" className={`fixed bottom-[calc(72px+env(safe-area-inset-bottom))] right-4 z-30 grid size-[52px] place-items-center rounded-full bg-gradient-to-b from-white to-[#dfe2ee] text-[#0b0c10] shadow-[inset_0_1px_0_#fff,0_2px_4px_rgb(0_0_0/0.5),0_14px_30px_-8px_rgb(143_155_255/0.6)] transition-[transform,opacity] duration-200 active:scale-95 lg:hidden ${fabAway ? 'pointer-events-none translate-y-24 opacity-0' : ''}`}>
             <Plus className="size-6" strokeWidth={2.2} />
           </button>
           <TabBar view={view} goto={goto} />
