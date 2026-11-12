@@ -78,14 +78,15 @@ export function Journal() {
 
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
-      <section className="card col-span-12 grid grid-cols-2 divide-line lg:grid-cols-4 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l">
+      <section className="card col-span-12 grid grid-cols-2 divide-line lg:grid-cols-5 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l">
         <Stat label="Käufe insgesamt" value={usd(stats.y.buys)} sub={<span>{plural(stats.y.nBuys, 'Kauf', 'Käufe')}{since ? ` seit ${dfmt(since)}` : ''}</span>} />
         <Stat label="Verkäufe insgesamt" value={usd(stats.y.sells)} sub={<span>{plural(stats.y.nSells, 'Verkauf', 'Verkäufe')}</span>} />
         <Stat label="Realisiert insgesamt" value={ys.sales ? <Delta value={ys.realized} kind="usd" icon={false} /> : '–'} sub={<span>{ys.sales ? `aus ${plural(ys.sales, 'Verkauf', 'Verkäufen')}${ys.fifo ? ', FIFO' : ''}` : 'noch kein Verkauf mit Ergebnis'}</span>} />
+        <Stat label="Dividenden erhalten" value={ys.divCount ? usd(ys.divNet) : '–'} sub={<span>{ys.divCount ? `netto, ${plural(ys.divCount, 'Zahlung', 'Zahlungen')}` : 'noch keine Zahlung'}</span>} />
         {stats.y.nFlow ? (
-          <Stat label="Einzahlungen netto" value={<Delta value={stats.y.flow} kind="usd" icon={false} className="!text-ink" />} sub={<span>{plural(stats.y.nFlow, 'Buchung', 'Buchungen')}</span>} />
+          <Stat className="max-lg:col-span-2" label="Einzahlungen netto" value={<Delta value={stats.y.flow} kind="usd" icon={false} className="!text-ink" />} sub={<span>{plural(stats.y.nFlow, 'Buchung', 'Buchungen')}</span>} />
         ) : (
-          <Stat label="Netto investiert" value={usd(stats.y.buys - stats.y.sells)} sub={<span>Käufe abzüglich Verkäufe</span>} />
+          <Stat className="max-lg:col-span-2" label="Netto investiert" value={usd(stats.y.buys - stats.y.sells)} sub={<span>Käufe abzüglich Verkäufe</span>} />
         )}
       </section>
 

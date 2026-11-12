@@ -5,6 +5,7 @@ import { BUCKETS } from '@/lib/buckets'
 import { isCap, targetOf, type Calc } from '@/lib/calc'
 import { pctPlain, usd } from '@/lib/format'
 import { Empty } from '../ui'
+import { Meter } from './Small'
 
 /**
  * Allokation als Ring mit Liste.
@@ -54,6 +55,8 @@ export function Allocation({ c }: { c: Calc }) {
   const segs = cumulate(rows.filter((r) => r.w > 0.0005), (r) => r.w).map(({ x, a0, a1 }) => ({ r: x, a0, a1 }))
   const tsegs = anyTarget ? cumulate(rows.filter((r) => (r.tgt ?? 0) > 0), (r) => r.tgt! / (tgtSum || 1)).map(({ x, a0, a1 }) => ({ r: x, a0, a1 })) : []
   const focus = rows.find((r) => r.b.id === hot)
+  // Gemeinsame Skala der Balken, damit sie untereinander vergleichbar sind
+  const scale = Math.max(...rows.map((r) => Math.max(r.w, r.tgt ?? 0)), 0.01) * 1.08
 
   return (
     // Nebeneinander erst, wenn die Karte breit genug ist (Container-Abfrage), sonst untereinander.
@@ -106,56 +109,39 @@ export function Allocation({ c }: { c: Calc }) {
 
       {/* Liste */}
       <div className="min-w-0">
-        <ul className="grid gap-1">
-          {rows.map((r) => (
-            <li
-              key={r.b.id}
-              onPointerEnter={() => setHot(r.b.id)}
-              onPointerLeave={() => setHot(null)}
-              className={clsx('grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 rounded-xl px-3 py-2.5 transition-colors', hot === r.b.id ? 'bg-white/[0.05]' : 'hover:bg-white/[0.03]')}
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="h-8 w-1.5 flex-none rounded-full" style={{ background: r.b.color, boxShadow: `0 0 12px -2px ${r.b.color}` }} />
-                <div className="min-w-0">
-                  <div className="truncate text-[13.5px] font-medium">{r.b.name}</div>
-                  <div className="num text-[12px] text-muted">{usd(r.v)} USD</div>
+        {/* Je Kategorie: Name und Betrag, rechts Ist-Anteil; darunter Balken mit Zielstrich und die Abweichung in Worten */}
+        <ul className="grid gap-0.5">
+          {rows.map((r) => {
+            const pp = r.diff != null ? Math.abs(r.diff * 100).toFixed(1).replace('.0', '') : null
+            const note = r.tgt == null ? 'kein Ziel'
+              : r.state === 'over' ? `${pp} Pp über der Obergrenze`
+              : r.cap ? `${pp} Pp Spielraum bis max ${pctPlain(r.tgt, 0)}`
+              : Math.abs(r.diff!) < 0.0005 ? `genau im Ziel ${pctPlain(r.tgt, 0)}`
+              : `${pp} Pp ${r.diff! > 0 ? 'über' : 'unter'} Ziel ${pctPlain(r.tgt, 0)}`
+            return (
+              <li
+                key={r.b.id}
+                onPointerEnter={() => setHot(r.b.id)}
+                onPointerLeave={() => setHot(null)}
+                className={clsx('rounded-xl px-3 py-2.5 transition-colors', hot === r.b.id ? 'bg-white/[0.05]' : 'hover:bg-white/[0.03]')}
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <i className="swatch" style={{ background: r.b.color }} />
+                    <span className="truncate text-[13.5px] font-medium">{r.b.name}</span>
+                    <span className="num truncate text-[12px] text-muted max-[380px]:hidden">{usd(r.v)} USD</span>
+                  </span>
+                  <span className="num text-[15px] font-semibold tracking-[-0.01em]">{pctPlain(r.w)}</span>
                 </div>
-              </div>
-              <div className="text-right">
-                <div className="num text-[16px] font-semibold leading-5 tracking-[-0.01em]">{pctPlain(r.w)}</div>
-                <div className="num mt-0.5 flex items-center justify-end gap-1.5 text-[11.5px]">
-                  {r.tgt == null ? (
-                    <span className="text-faint">kein Ziel</span>
-                  ) : (
-                    <>
-                      <span className="text-muted">{r.cap ? 'max' : 'Ziel'} {pctPlain(r.tgt, 0)}</span>
-                      <span
-                        className={clsx(
-                          'rounded-md px-1.5 py-px font-medium',
-                          r.state === 'over' ? 'bg-down/15 text-down' : r.state === 'off' ? 'bg-warn/12 text-warn' : 'bg-up/12 text-up',
-                        )}
-                      >
-                        {r.state === 'over' ? 'über max' : `${r.diff! >= 0 ? '+' : '−'}${Math.abs(r.diff! * 100).toFixed(1)} Pp`}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </li>
-          ))}
+                <Meter className="mt-2" value={r.w / scale} mark={r.tgt != null ? r.tgt / scale : undefined} color={r.b.color} height={5} />
+                <div className={clsx('mt-1.5 text-[11.5px]', r.state === 'over' ? 'text-down' : r.state === 'off' ? 'text-warn' : 'text-muted')}>{note}</div>
+              </li>
+            )
+          })}
         </ul>
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-3 text-[11.5px] text-muted">
-          {anyTarget ? (
-            <>
-              <span className="inline-flex items-center gap-1.5"><i className="inline-block h-2.5 w-4 rounded-sm bg-white/30" />innen Ist</span>
-              <span className="inline-flex items-center gap-1.5"><i className="inline-block h-1 w-4 rounded-full bg-white/30" />aussen Ziel</span>
-              <span className="inline-flex items-center gap-1.5"><i className="inline-block size-2 rounded-full bg-up" />im Rahmen</span>
-              <span className="inline-flex items-center gap-1.5"><i className="inline-block size-2 rounded-full bg-warn" />mehr als 5 Pp daneben</span>
-            </>
-          ) : (
-            <span>Noch keine Zielanteile. Unter «Ziele» legst du sie fest.</span>
-          )}
-        </div>
+        <p className="mt-2 px-3 text-[11.5px] leading-[1.5] text-muted">
+          {anyTarget ? 'Innerer Ring: aktuelle Anteile. Äusserer Ring und weisser Strich im Balken: Ziele. Gelb: mehr als 5 Pp vom Ziel entfernt.' : 'Noch keine Zielanteile. Unter «Ziele» legst du sie fest.'}
+        </p>
         {noCash && <p className="mt-2 px-3 text-[12px] leading-[1.5] text-muted">Anteile an den Wertpapieren, ohne Cash. Mit erfasstem Cash-Stand rechnet die Ansicht mit dem Gesamtwert.</p>}
       </div>
     </div>
