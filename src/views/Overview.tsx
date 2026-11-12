@@ -52,9 +52,8 @@ function Hero() {
   const investedLabel = ps?.cashTracked ? 'Einzahlungen netto' : 'Netto investiert'
 
   // Linie grün bei Gewinn, rot bei Verlust im Zeitraum
-  const endRet = ps && n ? (mode === 'rendite' ? ps.twr : ps.mwr)[n - 1] : null
-  const tone = sign(endRet)
-  const lineColor = tone === 'up' ? 'var(--color-up)' : tone === 'down' ? 'var(--color-down)' : 'var(--color-accent)'
+  const mainValues = ps ? (mode === 'rendite' ? ps.twr : ps.value) : []
+  const lineColor = n > 1 && mainValues[n - 1] < mainValues[0] ? 'var(--color-down)' : 'var(--color-up)'
   // VTI im Wert-Modus: dieselben Ein- und Auszahlungen, in VTI angelegt
   const benchValues = useMemo(() => {
     if (!ps?.bench || ps.bench.length !== ps.value.length) return null
@@ -98,9 +97,6 @@ function Hero() {
 
   return (
     <section className="card col-span-12 overflow-hidden xl:col-span-1">
-      {/* Lichtkante oben: die eine Stelle, an der der Akzent leuchten darf */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
-      <div className="pointer-events-none absolute -top-24 left-10 h-48 w-[420px] max-w-full rounded-full bg-accent/[0.09] blur-3xl" />
 
       <div className="relative px-4 pt-4 sm:px-6 sm:pt-5">
         {/* Links Stand und Wert, rechts die Umschalter: So bleibt die Zeile neben der grossen Zahl nicht leer. */}
@@ -178,6 +174,7 @@ function Hero() {
             vlines={vlines}
             height={chartH}
             baseline={mode === 'rendite' ? 0 : undefined}
+            split
             format={mode === 'rendite' ? (v) => pct(v / 100, 2) : usd}
             tickFormat={mode === 'rendite' ? pctAxis : undefined}
             onHover={setHover}
@@ -248,7 +245,7 @@ function PeriodTile({ range, active, onSelect }: { range: RangeId; active: boole
   const label = day ? (c.live ? 'Heute' : 'Letzter Tag') : PERIOD_LABEL[range]
   return (
     <button type="button" onClick={onSelect} aria-pressed={active} title={`${label}: im Chart zeigen. Ertrag in USD und im Verhältnis zum eingesetzten Kapital.`} className={clsx('group @container relative min-w-0 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03] sm:px-5', active && 'bg-white/[0.03]')}>
-      {active && <span className="pointer-events-none absolute inset-x-4 top-[-1px] h-px bg-gradient-to-r from-transparent via-accent to-transparent sm:inset-x-5" />}
+      {active && <span className="pointer-events-none absolute inset-x-4 top-[-1px] h-px bg-gradient-to-r from-transparent via-white/40 to-transparent sm:inset-x-5" />}
       <span className="flex items-center justify-between gap-3">
         <span className="min-w-0">
           <span className={clsx('label block truncate transition-colors', active && '!text-ink-2')}>{label}</span>

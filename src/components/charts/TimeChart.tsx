@@ -104,7 +104,7 @@ function timeTicks(t: number[], d: string[], kind: 'intraday' | 'daily', iw: num
  * Zeitreihe als Linie: 2px, Fläche als dünner Schleier, Fadenkreuz rastet auf den Punkt,
  * ein Tooltip für alle Reihen. Pfeiltasten bewegen das Fadenkreuz; auf dem Handy liest der Finger ab.
  */
-export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [], markers = [], vlines = [], baseline, format = usd, tickFormat, onHover, tooltipExtra, ariaLabel, animateKey, pending, live, empty }: {
+export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [], markers = [], vlines = [], baseline, split, format = usd, tickFormat, onHover, tooltipExtra, ariaLabel, animateKey, pending, live, empty }: {
   /** Zeitpunkt je Punkt, Millisekunden */
   t: number[]
   /** Handelstag je Punkt, JJJJ-MM-TT */
@@ -117,6 +117,8 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
   vlines?: VLine[]
   /** Fläche füllt bis zu diesem Wert (z. B. 0 bei Renditen) statt bis zum Boden */
   baseline?: number
+  /** Startwert als feine gestrichelte Linie; die Hauptlinie ist darüber grün, darunter rot */
+  split?: boolean
   format?: (v: number) => string
   tickFormat?: (v: number) => string
   onHover?: (i: number | null) => void
@@ -142,6 +144,7 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
   const iw = Math.max(10, W - L - R)
   const ih = height - T - B
   const x = useCallback((i: number) => L + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw), [n, iw, L])
+  const sv = split ? (baseline ?? series[0]?.values.find(Number.isFinite)) : undefined
 
   const { y, ticks, tickFmt } = useMemo(() => {
     const all = series.flatMap((s) => s.values).concat(refs.map((r) => r.y), baseline != null ? [baseline] : []).filter(Number.isFinite)
@@ -160,11 +163,11 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
       series.map((s) => {
         const curve = s.kind === 'step' ? curveStepAfter : curveMonotoneX
         const ln = d3line<number>().x((_, i) => x(i)).y((v) => y(v)).curve(curve)(s.values) ?? ''
-        const y0 = baseline != null ? y(baseline) : T + ih
+        const y0 = sv != null && s === series[0] ? y(sv) : baseline != null ? y(baseline) : T + ih
         const ar = s.area ? (d3area<number>().x((_, i) => x(i)).y0(y0).y1((v) => y(v)).curve(curve)(s.values) ?? '') : ''
         return { ln, ar }
       }),
-    [series, x, y, ih, baseline],
+    [series, x, y, ih, baseline, sv],
   )
 
   useLayoutEffect(() => {
@@ -194,6 +197,9 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
   }
   const main = series[0]
   const lastI = n - 1
+  const UP = 'var(--color-up)', DOWN = 'var(--color-down)'
+  const colorAt = (s: TimeSeries, i: number) => (s === main && sv != null ? (s.values[i] >= sv ? UP : DOWN) : (s.color2 ?? s.color))
+  const so = sv != null ? Math.max(0, Math.min(1, (y(sv) - T) / ih)) : 0
   const hx = hi != null ? x(hi) : 0
   let tipLeft = hx + 14
   if (tipLeft + tipW > W - 2) tipLeft = hx - 14 - tipW
@@ -224,7 +230,20 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
           onPointerCancel={() => hover(null)}
         >
           <defs>
-            {series.map((s, k) => (
+            {series.map((s, k) => k === 0 && sv != null ? (
+              <g key={s.key}>
+                <linearGradient id={`${id}-s${k}`} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={T} y2={T + ih}>
+                  <stop offset={so} stopColor={UP} />
+                  <stop offset={so} stopColor={DOWN} />
+                </linearGradient>
+                <linearGradient id={`${id}-a${k}`} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={T} y2={T + ih}>
+                  <stop offset="0" stopColor={UP} stopOpacity="0.2" />
+                  <stop offset={so} stopColor={UP} stopOpacity="0.02" />
+                  <stop offset={so} stopColor={DOWN} stopOpacity="0.02" />
+                  <stop offset="1" stopColor={DOWN} stopOpacity="0.2" />
+                </linearGradient>
+              </g>
+            ) : (
               <g key={s.key}>
                 <linearGradient id={`${id}-s${k}`} gradientUnits="userSpaceOnUse" x1={L} x2={L + iw} y1="0" y2="0">
                   <stop offset="0" stopColor={s.color} />
@@ -245,7 +264,9 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
               <text x={L - 9} y={y(v) + 3.5} textAnchor="end" className={`num fill-muted ${narrow ? 'text-[10.5px]' : 'text-[11px]'}`}>{tickFmt(v)}</text>
             </g>
           ))}
-          {baseline != null && <line x1={L} x2={L + iw} y1={y(baseline)} y2={y(baseline)} stroke="#343a47" strokeWidth="1" shapeRendering="crispEdges" />}
+          {sv != null ? (
+            <line x1={L} x2={L + iw} y1={y(sv)} y2={y(sv)} stroke="#4f5668" strokeWidth="1" strokeDasharray="3 4" />
+          ) : baseline != null && <line x1={L} x2={L + iw} y1={y(baseline)} y2={y(baseline)} stroke="#343a47" strokeWidth="1" shapeRendering="crispEdges" />}
           {axis.seps.map((s) => (
             <line key={s} x1={x(s)} x2={x(s)} y1={T} y2={T + ih} stroke="var(--color-grid)" strokeWidth="1" shapeRendering="crispEdges" />
           ))}
@@ -289,7 +310,7 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
                   strokeLinejoin="round"
                   strokeLinecap="round"
                   strokeDasharray={s.dashed ? '1 5' : undefined}
-                  style={s.glow ? { filter: `drop-shadow(0 6px 10px color-mix(in srgb, ${s.color} 38%, transparent))` } : undefined}
+                  style={s.glow ? { filter: `drop-shadow(0 6px 10px color-mix(in srgb, ${colorAt(s, lastI)} 32%, transparent))` } : undefined}
                   initial={reduce || s.dashed ? false : { pathLength: 0, opacity: 0.4 }}
                   animate={s.dashed ? undefined : { pathLength: 1, opacity: 1 }}
                   transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
@@ -316,8 +337,8 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
           {/* Endpunkt */}
           {hi == null && (
             <g>
-              {live && <circle cx={x(lastI)} cy={y(main.values[lastI])} r="5" fill={main.color2 ?? main.color} opacity="0.5" className="pulse-ring" />}
-              <circle cx={x(lastI)} cy={y(main.values[lastI])} r="4.5" fill={main.color2 ?? main.color} stroke="var(--color-card)" strokeWidth="2" />
+              {live && <circle cx={x(lastI)} cy={y(main.values[lastI])} r="5" fill={colorAt(main, lastI)} opacity="0.5" className="pulse-ring" />}
+              <circle cx={x(lastI)} cy={y(main.values[lastI])} r="4.5" fill={colorAt(main, lastI)} stroke="var(--color-card)" strokeWidth="2" />
             </g>
           )}
 
@@ -326,7 +347,7 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
             <g pointerEvents="none">
               <line x1={hx} x2={hx} y1={T} y2={T + ih} stroke="#4a5162" strokeWidth="1" shapeRendering="crispEdges" />
               {series.map((s) => (
-                <circle key={s.key} cx={hx} cy={y(s.values[hi])} r={s === main ? 4.5 : 3.5} fill={s.color2 ?? s.color} stroke="var(--color-card)" strokeWidth="2" />
+                <circle key={s.key} cx={hx} cy={y(s.values[hi])} r={s === main ? 4.5 : 3.5} fill={colorAt(s, hi)} stroke="var(--color-card)" strokeWidth="2" />
               ))}
             </g>
           )}

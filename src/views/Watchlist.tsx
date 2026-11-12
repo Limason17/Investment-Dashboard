@@ -61,7 +61,7 @@ export function Watchlist() {
                       <span className="num mt-0.5 block text-[11.5px] text-muted">{usd(r.px)} <span className="text-faint">/</span> {usd(r.w.limit)}</span>
                     </span>
                   </span>
-                  <FluidSparkline className="mt-3" height={56} values={chart?.series[r.w.ticker] ?? []} baseline={r.w.limit} baselineColor="var(--color-ref)" tone={below ? 'up' : 'flat'} label={`${r.w.ticker}: Kurs der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
+                  <FluidSparkline className="mt-3" height={56} values={chart?.series[r.w.ticker] ?? []} baseline={r.w.limit} baselineColor="var(--color-ref)" split={false} tone={below ? 'up' : 'flat'} label={`${r.w.ticker}: Kurs der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
                 </button>
               )
             })}

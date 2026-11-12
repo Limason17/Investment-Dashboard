@@ -4,7 +4,7 @@ import type { Tone } from '@/lib/calc'
 import { useMeasure } from '@/lib/useMeasure'
 
 /** Mini-Verlauf: Richtung über den Zeitraum bestimmt die Farbe, Endpunkt markiert. */
-export function Sparkline({ values, width = 88, height = 28, tone = 'flat', label, baseline, baselineColor = '#3a4050' }: {
+export function Sparkline({ values, width = 88, height = 28, tone = 'flat', label, baseline, baselineColor = '#3a4050', split = true }: {
   values: number[]
   width?: number
   height?: number
@@ -13,28 +13,51 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
   /** Vergleichswert (z. B. Vortagesschluss) als feine Linie */
   baseline?: number | null
   baselineColor?: string
+  /** Startwert als gestrichelte Linie; darüber grün, darunter rot (Standard) */
+  split?: boolean
 }) {
   const id = useId().replace(/:/g, '')
   if (values.length < 2 || width < 12) return <span className="inline-block text-faint" style={{ width, height, lineHeight: height + 'px' }}>–</span>
-  const all = baseline != null ? [...values, baseline] : values
+  const base = baseline ?? (split ? values.find(Number.isFinite) ?? null : null)
+  const all = base != null ? [...values, base] : values
   const lo = Math.min(...all), hi = Math.max(...all)
   const n = values.length
   const x = (i: number) => 1 + (i / (n - 1)) * (width - 6)
   const y = (v: number) => 4 + ((hi - v) / (hi - lo || 1)) * (height - 8)
   const d = d3line<number>().x((_, i) => x(i)).y((v) => y(v)).curve(curveMonotoneX)(values) ?? ''
   const color = tone === 'up' ? 'var(--color-up)' : tone === 'down' ? 'var(--color-down)' : 'var(--color-accent)'
+  const UP = 'var(--color-up)', DOWN = 'var(--color-down)'
+  // Geteilt: Linie und Fläche über dem Startwert grün, darunter rot
+  const cut = split && base != null ? Math.max(0, Math.min(1, y(base) / height)) : null
+  const end = cut != null ? (values[n - 1] >= base! ? UP : DOWN) : color
+  const floor = cut != null ? y(base!) : height
   return (
     <svg width={width} height={height} role="img" aria-label={label} className="block overflow-visible">
       <defs>
-        <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stopColor={color} stopOpacity="0.2" />
-          <stop offset="1" stopColor={color} stopOpacity="0" />
-        </linearGradient>
+        {cut != null ? (
+          <>
+            <linearGradient id={id + 'l'} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="0" y2={height}>
+              <stop offset={cut} stopColor={UP} />
+              <stop offset={cut} stopColor={DOWN} />
+            </linearGradient>
+            <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="0" y2={height}>
+              <stop offset="0" stopColor={UP} stopOpacity="0.24" />
+              <stop offset={cut} stopColor={UP} stopOpacity="0.03" />
+              <stop offset={cut} stopColor={DOWN} stopOpacity="0.03" />
+              <stop offset="1" stopColor={DOWN} stopOpacity="0.24" />
+            </linearGradient>
+          </>
+        ) : (
+          <linearGradient id={id} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stopColor={color} stopOpacity="0.2" />
+            <stop offset="1" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        )}
       </defs>
-      {baseline != null && <line x1={x(0)} x2={x(n - 1)} y1={y(baseline)} y2={y(baseline)} stroke={baselineColor} strokeWidth="1" strokeDasharray="2 3" />}
-      <path d={`${d}L${x(n - 1)},${height}L${x(0)},${height}Z`} fill={`url(#${id})`} />
-      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={x(n - 1)} cy={y(values[n - 1])} r="2.5" fill={color} stroke="var(--color-card)" strokeWidth="1.5" />
+      {base != null && <line x1={x(0)} x2={x(n - 1)} y1={y(base)} y2={y(base)} stroke={baselineColor} strokeWidth="1" strokeDasharray="2 3" />}
+      <path d={`${d}L${x(n - 1)},${floor}L${x(0)},${floor}Z`} fill={`url(#${id})`} />
+      <path d={d} fill="none" stroke={cut != null ? `url(#${id}l)` : color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={x(n - 1)} cy={y(values[n - 1])} r="2.5" fill={end} stroke="var(--color-card)" strokeWidth="1.5" />
     </svg>
   )
 }

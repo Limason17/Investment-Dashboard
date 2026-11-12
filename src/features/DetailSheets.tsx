@@ -68,6 +68,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
             d={chart.d}
             kind={chart.kind}
             series={[{ key: 'px', label: chart.kind === 'intraday' ? 'Kurs' : 'Schlusskurs', values: view.values, color: 'var(--color-accent)', color2: 'var(--color-accent-2)', area: true }]}
+            split
             refs={view.refs}
             markers={view.markers}
             vlines={view.vlines}

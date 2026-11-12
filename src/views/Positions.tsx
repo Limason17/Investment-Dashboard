@@ -197,8 +197,10 @@ export function Positions() {
                   <Fragment key={b?.id ?? 'alle'}>
                     {b && (
                       <tr className="row-group">
-                        <td colSpan={3}>{b.name} <span className="font-normal text-muted">{rs.length} Titel</span></td>
-                        <td />
+                        <td colSpan={3}>
+                          <span className="inline-flex items-center gap-2.5"><i className="swatch" style={{ background: b.color }} />{b.name}<span className="font-normal text-muted">{rs.length} Titel</span></span>
+                        </td>
+                        <td className="r"><Delta value={rs.every((r) => data[r.t]?.move.abs != null) ? rs.reduce((t, r) => t + data[r.t].move.abs!, 0) : null} kind="usd" icon={false} className="font-medium" /></td>
                         <td className="max-lg:hidden" />
                         <td className="r num">{usd(sum)}</td>
                         <td className="r num">{share(sum)}</td>
@@ -210,7 +212,7 @@ export function Positions() {
                         <tr key={r.t} className="row-click" tabIndex={0} onClick={() => nav.openPosition(r.t)} onKeyDown={(e) => e.key === 'Enter' && nav.openPosition(r.t)}>
                           <td><Ticker t={r.t} name={r.p.name} /></td>
                           <td className={`transition-opacity ${pending ? 'opacity-40' : ''}`}>
-                            <Sparkline values={d?.values ?? []} baseline={range === '1T' ? (d?.base ?? undefined) : undefined} tone={sign(d?.move.pct)} label={`${r.t}: ${pct(d?.move.pct, 1)} ${glTitle}`} />
+                            <Sparkline values={d?.values ?? []} tone={sign(d?.move.pct)} label={`${r.t}: ${pct(d?.move.pct, 1)} ${glTitle}`} />
                           </td>
                           <td className="r num">{usd(r.px)}</td>
                           <td className="r">{gl(d?.move)}</td>
@@ -228,7 +230,8 @@ export function Positions() {
               })}
               {showCash && (
                 <tr className="row-group">
-                  <td colSpan={3}>Cash {c.settings.cashEstimate && <Chip tone="warn" title={c.settings.cashNote}>Schätzung</Chip>}</td>
+                  <td colSpan={3}>
+                    <span className="inline-flex items-center gap-2.5">{grouped === 'an' && <i className="swatch" style={{ background: 'var(--color-cash)' }} />}Cash</span> {c.settings.cashEstimate && <Chip tone="warn" title={c.settings.cashNote}>Schätzung</Chip>}</td>
                   <td />
                   <td className="max-lg:hidden" />
                   <td className="r num">{usd(c.cash)}</td>
@@ -251,7 +254,7 @@ export function Positions() {
               <Fragment key={b?.id ?? 'alle'}>
                 {b && (
                   <div className="flex items-center justify-between gap-3 border-b border-line px-3 pb-2 pt-4 text-[12px] font-medium text-ink-2">
-                    <span>{b.name}</span>
+                    <span className="inline-flex items-center gap-2"><i className="swatch" style={{ background: b.color }} />{b.name}</span>
                     <span className="num">{usd(sum)} <span className="font-normal text-muted">· {share(sum)}</span></span>
                   </div>
                 )}
@@ -262,7 +265,7 @@ export function Positions() {
                       <li key={r.t} className="border-b border-white/[0.04] last:border-b-0">
                         <button type="button" onClick={() => nav.openPosition(r.t)} className="grid min-h-[58px] w-full grid-cols-[minmax(0,1fr)_56px_auto] items-center gap-3 px-3 py-2 text-left active:bg-white/[0.04]">
                           <Ticker t={r.t} name={r.p.name} />
-                          <span className={pending ? 'opacity-40' : ''}><Sparkline width={56} height={26} values={d?.values ?? []} baseline={range === '1T' ? (d?.base ?? undefined) : undefined} tone={sign(d?.move.pct)} /></span>
+                          <span className={pending ? 'opacity-40' : ''}><Sparkline width={56} height={26} values={d?.values ?? []} tone={sign(d?.move.pct)} /></span>
                           <span className="min-w-[96px] text-right leading-tight">
                             <span className="num block text-[13.5px] font-medium">{usd(r.val)}</span>
                             <span className="mt-0.5 block whitespace-nowrap">{gl(d?.move, true)}</span>
@@ -277,7 +280,7 @@ export function Positions() {
           })}
           {showCash && (
             <div className="flex items-center justify-between gap-3 border-t border-line px-3 pb-2 pt-3 text-[12.5px] font-medium text-ink-2">
-              <span>Cash</span>
+              <span className="inline-flex items-center gap-2">{grouped === 'an' && <i className="swatch" style={{ background: 'var(--color-cash)' }} />}Cash</span>
               <span className="num">{usd(c.cash)} <span className="font-normal text-muted">· {share(c.cash)}</span></span>
             </div>
           )}
