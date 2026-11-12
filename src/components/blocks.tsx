@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { CalendarClock, ChartNoAxesColumn, Check, ChevronRight, CircleDot, Eye, Flag, Layers, OctagonAlert, Target, TriangleAlert, type LucideIcon } from 'lucide-react'
 import type { Attention, WatchRow } from '@/lib/calc'
-import { daysBetween, pct, usd, weekday } from '@/lib/format'
+import { daysBetween, dshort, pct, usd, weekday } from '@/lib/format'
 import type { DepotEvent, WithId } from '@/lib/types'
 import { LimitTrack } from './charts/Small'
 import { Chip, DemoTag } from './ui'
@@ -89,10 +89,10 @@ export function EventStrip({ events, now, days = 56, className }: { events: With
           />
         ))}
       </div>
-      <div className="mt-1.5 flex justify-between text-[10.5px] leading-none text-faint">
-        <span>heute</span>
-        <span>in {Math.round(days / 14)} Wochen</span>
-        <span>in {Math.round(days / 7)} Wochen</span>
+      <div className="relative mt-1.5 h-3 text-[10.5px] leading-none text-muted">
+        {weeks.filter((_, i) => i % 2 === 0).map((w, i, all) => (
+          <span key={w} className={clsx('num absolute', i === 0 ? '' : i === all.length - 1 ? '-translate-x-full' : '-translate-x-1/2')} style={{ left: `${(w / days) * 100}%` }}>{dshort(new Date(Date.parse(now + 'T12:00:00Z') + w * 864e5).toISOString().slice(0, 10))}</span>
+        ))}
       </div>
     </div>
   )
@@ -139,10 +139,11 @@ export function LimitRow({ r, onClick }: { r: WatchRow; onClick: () => void }) {
         </span>
         <span className="text-right leading-tight">
           <span className={clsx('num block text-[15px] font-semibold tracking-[-0.01em]', under ? 'text-up' : 'text-ink')}>{pct(r.s.d, 1)}</span>
-          <span className="num mt-0.5 block text-[11.5px] text-muted">{usd(r.px)} <span className="text-faint">/</span> {usd(r.w.limit)}</span>
+          <span className="mt-0.5 block text-[11.5px] text-muted">bis zur Grenze</span>
         </span>
       </span>
       <span className="mt-2 block"><LimitTrack d={r.s.d} tone={r.s.tone} width="100%" /></span>
+      <span className="mt-1.5 flex justify-between gap-3 text-[11.5px] text-muted"><span>Kurs <b className="num font-medium text-ink-2">{usd(r.px)}</b></span><span>Kaufgrenze <b className="num font-medium text-ink-2">{usd(r.w.limit)}</b></span></span>
     </button>
   )
 }

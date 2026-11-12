@@ -10,7 +10,7 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
   height?: number
   tone?: 'up' | 'down' | 'flat'
   label?: string
-  /** Vergleichswert (z. B. Vortagesschluss) als feine Linie */
+  /** Ohne Teilung: Vergleichswert (z. B. Kaufgrenze) als feine durchgezogene Linie. Mit Teilung: Startwert. */
   baseline?: number | null
   baselineColor?: string
   /** Startwert als gestrichelte Linie; darüber grün, darunter rot (Standard) */
@@ -54,7 +54,7 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
           </linearGradient>
         )}
       </defs>
-      {base != null && <line x1={x(0)} x2={x(n - 1)} y1={y(base)} y2={y(base)} stroke={baselineColor} strokeWidth="1" strokeDasharray="2 3" />}
+      {!split && baseline != null && <line x1={x(0)} x2={x(n - 1)} y1={y(baseline)} y2={y(baseline)} stroke={baselineColor} strokeWidth="1" />}
       <path d={`${d}L${x(n - 1)},${floor}L${x(0)},${floor}Z`} fill={`url(#${id})`} />
       <path d={d} fill="none" stroke={cut != null ? `url(#${id}l)` : color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={x(n - 1)} cy={y(values[n - 1])} r="2.5" fill={end} stroke="var(--color-card)" strokeWidth="1.5" />

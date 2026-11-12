@@ -61,15 +61,16 @@ export function Watchlist() {
                     </span>
                     <span className="text-right leading-tight">
                       <span className={`num block text-[15px] font-semibold tracking-[-0.01em] ${below ? 'text-up' : ''}`}>{pct(r.s.d, 1)}</span>
-                      <span className="num mt-0.5 block text-[11.5px] text-muted">{usd(r.px)} <span className="text-faint">/</span> {usd(r.w.limit)}</span>
+                      <span className="mt-0.5 block text-[11.5px] text-muted">bis zur Grenze</span>
                     </span>
                   </span>
-                  <FluidSparkline className="mt-3" height={56} values={chart?.series[r.w.ticker] ?? []} baseline={r.w.limit} split={false} tone={trendOf(chart?.series[r.w.ticker])} label={`${r.w.ticker}: Kurs der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
+                  <FluidSparkline className="mt-3" height={56} values={chart?.series[r.w.ticker] ?? []} baseline={r.w.limit} baselineColor="rgb(255 255 255 / 0.55)" split={false} tone={trendOf(chart?.series[r.w.ticker])} label={`${r.w.ticker}: Kurs der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
+                  <span className="mt-2 flex justify-between gap-3 text-[11.5px] text-muted"><span>Kurs <b className="num font-medium text-ink-2">{usd(r.px)}</b></span><span>Kaufgrenze <b className="num font-medium text-ink-2">{usd(r.w.limit)}</b></span></span>
                 </button>
               )
             })}
           </div>
-          <div className="flex items-center gap-2 px-2.5 pt-2 text-[12px] text-muted"><i className="inline-block w-5 border-t border-dashed border-[#5a6172]" />Kaufgrenze</div>
+          <div className="flex items-center gap-2 px-2.5 pt-2 text-[12px] text-muted"><i className="inline-block w-5 border-t border-white/55" />Kaufgrenze</div>
         </Card>
       )}
 
