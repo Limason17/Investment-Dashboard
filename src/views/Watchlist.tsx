@@ -17,6 +17,9 @@ const GROUPS: { id: string; title: string; hint: string; test: (r: WatchRow) => 
   { id: 'offen', title: 'Ohne Grenze oder Kurs', hint: '', test: (r) => r.s.d == null },
 ]
 
+/** Richtung über den ganzen Verlauf: grün, wenn der Kurs gestiegen ist, sonst rot */
+const trendOf = (v?: number[]) => sign(v && v.length > 1 && v[0] > 0 ? v[v.length - 1] / v[0] - 1 : null)
+
 export function Watchlist() {
   const [add, setAdd] = useState(false)
   const { db } = useDepot()
@@ -61,12 +64,12 @@ export function Watchlist() {
                       <span className="num mt-0.5 block text-[11.5px] text-muted">{usd(r.px)} <span className="text-faint">/</span> {usd(r.w.limit)}</span>
                     </span>
                   </span>
-                  <FluidSparkline className="mt-3" height={56} values={chart?.series[r.w.ticker] ?? []} baseline={r.w.limit} baselineColor="var(--color-ref)" split={false} tone={below ? 'up' : 'flat'} label={`${r.w.ticker}: Kurs der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
+                  <FluidSparkline className="mt-3" height={56} values={chart?.series[r.w.ticker] ?? []} baseline={r.w.limit} split={false} tone={trendOf(chart?.series[r.w.ticker])} label={`${r.w.ticker}: Kurs der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
                 </button>
               )
             })}
           </div>
-          <div className="flex items-center gap-2 px-2.5 pt-2 text-[12px] text-muted"><i className="inline-block w-5 border-t border-dashed border-ref" />Kaufgrenze</div>
+          <div className="flex items-center gap-2 px-2.5 pt-2 text-[12px] text-muted"><i className="inline-block w-5 border-t border-dashed border-[#5a6172]" />Kaufgrenze</div>
         </Card>
       )}
 
