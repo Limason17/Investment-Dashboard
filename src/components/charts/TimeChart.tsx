@@ -264,7 +264,7 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
           {/* Schwellen (Grenze, Einstand, Vortag): gestrichelt, weil es Schwellen sind */}
           {sortedRefs.map((r) => (
             <g key={r.label}>
-              <line x1={L} x2={L + iw} y1={y(r.y)} y2={y(r.y)} stroke={r.color} strokeWidth="1" strokeDasharray="4 4" opacity="0.8" />
+              <line x1={L} x2={L + iw} y1={y(r.y)} y2={y(r.y)} stroke={r.color} strokeWidth="1" strokeDasharray="4 4" />
             </g>
           ))}
 
