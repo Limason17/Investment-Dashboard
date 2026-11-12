@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { ArrowDownRight, ArrowUpRight, Check, CircleDot, Clock, Minus, OctagonAlert, Trash2, TriangleAlert } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Minus, Trash2 } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useId, useState, type ComponentType, type ReactNode } from 'react'
 import type { Tone } from '@/lib/calc'
@@ -32,14 +32,11 @@ export function Card({ title, sub, action, children, className, bodyClassName, f
   )
 }
 
-/* ------------------------------------------------------------------ Chip: Zustand mit Symbol und Wort */
+/* ------------------------------------------------------------------ Status: farbiger Punkt und Wort */
 type IconType = ComponentType<{ className?: string; strokeWidth?: number }>
-const TONE_ICON: Record<Tone | 'down', IconType> = { up: Check, down: OctagonAlert, warn: TriangleAlert, info: CircleDot, mute: Clock }
-export function Chip({ tone = 'mute', icon, children, className, title }: { tone?: Tone | 'down'; icon?: IconType | false; children: ReactNode; className?: string; title?: string }) {
-  const Icon = icon === false ? null : (icon ?? TONE_ICON[tone])
+export function Chip({ tone = 'mute', children, className, title }: { tone?: Tone | 'down'; icon?: IconType | false; children: ReactNode; className?: string; title?: string }) {
   return (
-    <span className={clsx('chip', `chip-${tone}`, className)} title={title}>
-      {Icon && <Icon strokeWidth={2.2} />}
+    <span className={clsx('tag', `tag-${tone}`, className)} title={title}>
       {children}
     </span>
   )

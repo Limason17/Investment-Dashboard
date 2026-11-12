@@ -214,6 +214,30 @@
     background: rgb(143 125 255 / 0.12);
     border-color: rgb(143 125 255 / 0.2);
   }
+  /* Status: farbiger Punkt und Wort, ohne Rahmen */
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .tag::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 999px;
+    background: currentColor;
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+  }
+  .tag-up { color: var(--color-up); }
+  .tag-down { color: var(--color-down); }
+  .tag-warn { color: var(--color-warn); }
+  .tag-info { color: var(--color-accent-2); }
+  .tag-mute { color: var(--color-muted); }
   .chip-mute {
     color: var(--color-ink-2);
     background: rgb(255 255 255 / 0.04);

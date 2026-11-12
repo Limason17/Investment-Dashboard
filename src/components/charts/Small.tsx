@@ -4,7 +4,7 @@ import type { Tone } from '@/lib/calc'
 import { useMeasure } from '@/lib/useMeasure'
 
 /** Mini-Verlauf: Richtung über den Zeitraum bestimmt die Farbe, Endpunkt markiert. */
-export function Sparkline({ values, width = 88, height = 28, tone = 'flat', label, baseline, baselineColor = '#3a4050', split = true }: {
+export function Sparkline({ values, width = 88, height = 28, tone = 'flat', label, baseline, baselineColor = '#3a4050', split = true, baselineLabel, endLabel }: {
   values: number[]
   width?: number
   height?: number
@@ -15,6 +15,10 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
   baselineColor?: string
   /** Startwert als gestrichelte Linie; darüber grün, darunter rot (Standard) */
   split?: boolean
+  /** Text direkt an der Vergleichslinie (links) */
+  baselineLabel?: string
+  /** Text am Endpunkt, z. B. der aktuelle Kurs */
+  endLabel?: string
 }) {
   const id = useId().replace(/:/g, '')
   if (values.length < 2 || width < 12) return <span className="inline-block text-faint" style={{ width, height, lineHeight: height + 'px' }}>–</span>
@@ -58,6 +62,12 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
       <path d={`${d}L${x(n - 1)},${floor}L${x(0)},${floor}Z`} fill={`url(#${id})`} />
       <path d={d} fill="none" stroke={cut != null ? `url(#${id}l)` : color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={x(n - 1)} cy={y(values[n - 1])} r="2.5" fill={end} stroke="var(--color-card)" strokeWidth="1.5" />
+      {!split && baseline != null && baselineLabel && (
+        <text x={x(0)} y={y(baseline) < 14 ? y(baseline) + 12 : y(baseline) - 5} fill={baselineColor} className="num text-[10.5px] font-medium" style={{ paintOrder: 'stroke', stroke: 'var(--color-card)', strokeWidth: 4, strokeLinejoin: 'round' }}>{baselineLabel}</text>
+      )}
+      {endLabel && (
+        <text x={x(n - 1) - 7} y={y(values[n - 1]) < 14 ? y(values[n - 1]) + 15 : y(values[n - 1]) - 7} textAnchor="end" fill="var(--color-ink)" className="num text-[11.5px] font-semibold" style={{ paintOrder: 'stroke', stroke: 'var(--color-card)', strokeWidth: 4, strokeLinejoin: 'round' }}>{endLabel}</text>
+      )}
     </svg>
   )
 }
