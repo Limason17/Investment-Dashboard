@@ -241,12 +241,12 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
             <h3 className="text-[14px] font-semibold">Bestehende Positionen hochladen</h3>
             <p className="mt-1 text-[12.5px] leading-[1.55] text-muted">Alle Käufe oder Dividenden auf einmal statt jeden einzeln. Mit Kaufdatum, damit Wertverlauf und Charts stimmen.</p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" className="btn h-auto flex-col items-start gap-0.5 px-3.5 py-3 text-left" onClick={() => { onClose(); nav.openEntry('import', { kind: 'trades' }) }}>
+          <div className="grid grid-cols-1 gap-2 min-[440px]:grid-cols-2">
+            <button type="button" className="btn h-auto min-w-0 flex-col items-start gap-0.5 whitespace-normal px-3.5 py-3 text-left" onClick={() => { onClose(); nav.openEntry('import', { kind: 'trades' }) }}>
               <span className="flex items-center gap-2 font-semibold"><ClipboardPaste />Text einfügen</span>
               <span className="text-[12px] font-normal text-muted">Vorlage kopieren, ausfüllen, einfügen</span>
             </button>
-            <button type="button" className="btn h-auto flex-col items-start gap-0.5 px-3.5 py-3 text-left" onClick={() => tpl.current?.click()}>
+            <button type="button" className="btn h-auto min-w-0 flex-col items-start gap-0.5 whitespace-normal px-3.5 py-3 text-left" onClick={() => tpl.current?.click()}>
               <span className="flex items-center gap-2 font-semibold"><Upload />Datei hochladen</span>
               <span className="text-[12px] font-normal text-muted">Ausgefüllte CSV-Vorlage oder Schwab-Export</span>
             </button>

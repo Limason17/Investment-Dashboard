@@ -55,7 +55,12 @@ export function Journal() {
       .catch((e) => toast('Nicht gelöscht: ' + e.message))
 
   // Handel der letzten zwölf Monate und die Summen des laufenden Jahres
-  const year = now.slice(0, 4)
+  // Kennzahlen fürs laufende Jahr; ohne Buchungen darin fürs letzte Jahr mit Buchungen (z. B. nach dem Hochladen älterer Käufe).
+  const year = useMemo(() => {
+    const cur = now.slice(0, 4)
+    const years = tx.filter((x) => x.type === 'kauf' || x.type === 'verkauf').map((x) => (x.date || '').slice(0, 4)).filter(Boolean).sort()
+    return !years.length || years.includes(cur) ? cur : years[years.length - 1]
+  }, [tx, now])
   const stats = useMemo(() => {
     const months: MonthPair[] = Array.from({ length: 12 }, (_, i) => ({ key: addMonths(now.slice(0, 8) + '01', i - 11).slice(0, 7), a: 0, b: 0 }))
     const at = new Map(months.map((m) => [m.key, m]))
