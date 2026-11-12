@@ -57,6 +57,7 @@ export function PortfoliosSheet({ open, onClose }: { open: boolean; onClose: () 
     e.preventDefault()
     void run(async () => {
       await createPortfolio(fresh)
+      location.hash = 'uebersicht'
       setFresh('')
       onClose()
     }, `Portfolio «${fresh.trim()}» angelegt und geöffnet.`)

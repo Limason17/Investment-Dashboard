@@ -233,6 +233,9 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
           <button type="button" className="btn btn-sm flex-none" onClick={onTour}>Ansehen</button>
         </section>
 
+        {allView ? (
+          <p className="rounded-xl border border-line px-3.5 py-3 text-[12.5px] text-muted">Du siehst die Gesamtansicht. Zum Hochladen oder Sichern wähle zuerst ein Portfolio.</p>
+        ) : (<>
         <section className="grid gap-3">
           <div>
             <h3 className="text-[14px] font-semibold">Bestehende Positionen hochladen</h3>
@@ -256,7 +259,7 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
           <h3 className="text-[13px] font-semibold">Sicherungskopie</h3>
           <p className="text-[12.5px] leading-[1.55] text-muted">
             {CLOUD
-              ? `Eine Kopie aller Daten ${pfName ? `des Portfolios «${pfName}»` : 'deines Depots'} zum Aufbewahren. Nicht zum Ausfüllen gedacht. «Wiederherstellen» ersetzt alle Daten dieses Portfolios durch die Kopie, z. B. um die Daten der lokalen Version zu übernehmen.`
+              ? `Eine Kopie aller Daten ${pfName ? `des Portfolios «${pfName}»` : 'deines Depots'} zum Aufbewahren. Nicht zum Ausfüllen gedacht. «Wiederherstellen» ersetzt alle Daten dieses Portfolios durch die Kopie,`
               : 'Eine Kopie aller Daten dieses Rechners zum Aufbewahren. In der Online-Version stellst du sie unter «Konto» wieder her.'}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -276,6 +279,7 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
             </div>
           )}
         </section>
+        </>)}
 
         {CLOUD && (
           <>
