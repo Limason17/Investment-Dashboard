@@ -29,6 +29,8 @@ export interface LiveQuote {
   /** Zeitpunkt des Kurses, ISO */
   time: string
   source: string
+  /** Name des Titels laut Yahoo */
+  name?: string
 }
 
 export interface LiveResult {
@@ -162,6 +164,7 @@ function parseChart(r: any): YahooQuote {
     session,
     time: new Date(time).toISOString(),
     source: 'Yahoo Finance',
+    ...(typeof (m.longName ?? m.shortName) === 'string' ? { name: String(m.longName ?? m.shortName).slice(0, 80) } : {}),
     periods,
   }
 }

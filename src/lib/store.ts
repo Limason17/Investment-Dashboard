@@ -147,6 +147,7 @@ export async function loadLive(force = false) {
     const r = await fetch(url, { cache: 'no-store' })
     if (r.ok) set({ live: await r.json() })
     if (r.ok && CLOUD) void persistCloses()
+    if (r.ok) void fillNames()
     return r.ok
   } catch {
     /* ohne Live-Kurse gelten die gespeicherten Schlusskurse */
@@ -166,6 +167,31 @@ function tickerParams() {
   const fx = db.meta.settings?.fx ? [db.meta.settings.fx + '=X'] : []
   return { held: Object.values(db.positions).filter((p) => p.shares > 0).map((p) => p.ticker).join(','), watch: [...Object.keys(db.watchlist), ...fx].join(',') }
 }
+/** Namen von Titeln nachtragen, die nur mit Ticker erfasst sind (z. B. nach dem Hochladen). */
+let naming = false
+async function fillNames() {
+  const db = state.db, live = state.live
+  if (!db || !live || naming || state.portfolio === ALL) return
+  const ops: Op[] = []
+  for (const [t, p] of Object.entries(db.positions)) {
+    const n = live.quotes[t]?.name
+    if (n && (!p.name || p.name === t)) ops.push({ op: 'merge', coll: 'positions', id: t, data: { name: n } })
+  }
+  for (const [t, w] of Object.entries(db.watchlist)) {
+    const n = live.quotes[t]?.name
+    if (n && (!w.name || w.name === t)) ops.push({ op: 'merge', coll: 'watchlist', id: t, data: { name: n } })
+  }
+  if (!ops.length) return
+  naming = true
+  try {
+    await mutate(ops)
+  } catch {
+    /* Namen sind eine Zugabe */
+  } finally {
+    naming = false
+  }
+}
+
 /** Online: Schlusskurse und Tageswert nach Börsenschluss ins Konto schreiben (lokal macht das der Server). */
 let persisting = false
 async function persistCloses() {

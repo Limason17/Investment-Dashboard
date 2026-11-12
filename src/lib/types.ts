@@ -199,6 +199,7 @@ export type ViewId = 'uebersicht' | 'positionen' | 'limits' | 'dividenden' | 'pl
 
 export type LiveSession = 'pre' | 'regular' | 'post' | 'overnight' | 'closed'
 export interface LiveQuote {
+  name?: string
   price: number
   ref: number | null
   regular: number
