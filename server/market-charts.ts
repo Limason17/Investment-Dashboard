@@ -204,13 +204,14 @@ export function marketCharts(live: { (force?: boolean): Promise<unknown>; intrad
         else missing.push(t)
       }
       // Titel ausserhalb der Live-Liste (z. B. bereits verkauft) einzeln nachladen.
-      const extra = await loadAll(missing, 'range=1d&interval=5m&includePrePost=true', MIN)
+      const extra = await loadAll(missing, 'range=1d&interval=1m&includePrePost=true', MIN)
       Object.assign(raws, extra.raws)
-      const { grid, series } = align(raws, (s) => s - (s % 300))
+      // Minutenraster: so fein, wie Yahoo die Kurse des Tages liefert.
+      const { grid, series } = align(raws, (s) => s - (s % 60))
       const t = (grid as number[]).map((s) => s * 1000)
       const reg = Object.values(day)[0]?.regular
       return {
-        range, kind: 'intraday', interval: '5m', at, t, d: t.map(nyDate), series, prev: prevOf(raws), failures: extra.failures,
+        range, kind: 'intraday', interval: '1m', at, t, d: t.map(nyDate), series, prev: prevOf(raws), failures: extra.failures,
         ...(reg ? { session: { open: reg[0] * 1000, close: reg[1] * 1000 } } : {}),
       }
     }

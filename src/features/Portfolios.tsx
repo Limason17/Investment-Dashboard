@@ -18,7 +18,7 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2)
  * Portfolio-Wechsel als eigenes Aufklappmenü: aktuelles Portfolio mit Häkchen, Gesamtansicht,
  * Neu anlegen und Verwalten. Schliesst bei Klick daneben und mit Esc; Pfeiltasten wählen.
  */
-export function PortfolioSwitcher({ onManage, className }: { onManage: () => void; className?: string }) {
+export function PortfolioSwitcher({ onManage, className, compact, sub }: { onManage: () => void; className?: string; compact?: boolean; sub?: string }) {
   const { portfolios, portfolio } = useStore()
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
@@ -66,14 +66,14 @@ export function PortfolioSwitcher({ onManage, className }: { onManage: () => voi
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => setOpen((o) => !o)}
-        className={clsx('flex h-10 w-full items-center gap-2.5 rounded-[11px] border bg-white/[0.03] pl-1.5 pr-2.5 text-left transition-colors hover:border-line-2', open ? 'border-line-2 bg-white/[0.05]' : 'border-line')}
+        className={clsx('flex w-full items-center gap-2.5 rounded-[11px] border text-left transition-colors hover:border-line-2', compact ? 'h-[42px] bg-white/[0.02] pl-1 pr-2' : 'h-10 bg-white/[0.03] pl-1.5 pr-2.5', open ? 'border-line-2 bg-white/[0.05]' : compact ? 'border-transparent' : 'border-line')}
       >
         <span className={clsx('grid size-7 flex-none place-items-center rounded-[8px] text-[11px] font-semibold', portfolio === ALL ? 'bg-accent/20 text-accent-2' : 'bg-white/[0.07] text-ink-2')}>
           {portfolio === ALL ? <Layers className="size-3.5" /> : initials(current?.name ?? '')}
         </span>
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block truncate text-[13px] font-medium text-ink">{current?.name}</span>
-          <span className="block truncate text-[11px] text-muted">{portfolio === ALL ? 'Gesamtansicht · nur ansehen' : portfolios.length > 1 ? `Portfolio · ${portfolios.length} insgesamt` : 'Portfolio'}</span>
+          <span className="block truncate text-[11px] text-muted">{sub ?? (portfolio === ALL ? 'Gesamtansicht · nur ansehen' : portfolios.length > 1 ? `Portfolio · ${portfolios.length} insgesamt` : 'Portfolio')}</span>
         </span>
         <ChevronsUpDown className="size-3.5 flex-none text-muted" />
       </button>
@@ -88,7 +88,7 @@ export function PortfolioSwitcher({ onManage, className }: { onManage: () => voi
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 min-w-[240px] origin-top rounded-[14px] border border-line-2 bg-[#101218] p-1.5 shadow-[0_18px_50px_-10px_rgb(0_0_0/0.8),inset_0_1px_0_rgb(255_255_255/0.05)]"
+            className="absolute left-0 top-[calc(100%+6px)] z-50 w-full min-w-[260px] origin-top rounded-[14px] border border-line-2 bg-[#101218] p-1.5 shadow-[0_18px_50px_-10px_rgb(0_0_0/0.8),inset_0_1px_0_rgb(255_255_255/0.05)]"
           >
             <div className="px-2.5 pb-1 pt-1.5 text-[10.5px] font-medium uppercase tracking-[0.08em] text-faint">Portfolios</div>
             <div className="max-h-[50vh] overflow-y-auto">

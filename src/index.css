@@ -41,6 +41,7 @@
   html {
     color-scheme: dark;
     background: var(--color-bg);
+    overscroll-behavior-y: none;
     scrollbar-color: #2a2f3a transparent;
     scrollbar-gutter: stable;
     -webkit-tap-highlight-color: transparent;

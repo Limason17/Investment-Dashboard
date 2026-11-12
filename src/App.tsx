@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Briefcase, CalendarRange, CircleUser, Coins, LayoutDashboard, NotebookPen, Plus, RefreshCw, Search, Target, type LucideIcon } from 'lucide-react'
+import { Briefcase, CalendarRange, CircleUser, Coins, LayoutDashboard, NotebookPen, Plus, RefreshCw, Target, type LucideIcon } from 'lucide-react'
 import { AnimatePresence, motion, MotionConfig } from 'motion/react'
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { Toaster } from '@/components/Sheet'
@@ -19,6 +19,7 @@ import { initStore, loadDb, mutate, refreshAll, useStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import { PortfoliosSheet, PortfolioSwitcher } from '@/features/Portfolios'
 import { Tour } from '@/features/Tour'
+import { PullToRefresh } from '@/components/PullToRefresh'
 import { ALL } from '@/lib/portfolios'
 import type { DB, LiveResult, ViewId } from '@/lib/types'
 import { Dividends } from '@/views/Dividends'
@@ -186,7 +187,7 @@ export default function App() {
 }
 
 function Dashboard() {
-  const { db: stored, error, live, portfolio, portfolios } = useStore()
+  const { db: stored, error, live, portfolio } = useStore()
   const [portfoliosOpen, setPortfoliosOpen] = useState(false)
   const [tourOpen, setTourOpen] = useState(false)
   // Plus-Knopf auf dem Handy: beim Hinunterscrollen ausblenden (verdeckt sonst Inhalte), beim Hinaufscrollen zeigen.
@@ -204,7 +205,6 @@ function Dashboard() {
   }, [])
   const { user } = useAccount()
   const allView = portfolio === ALL
-  const pfName = allView ? 'Alle Portfolios' : portfolios.find((p) => p.id === portfolio)?.name
   const db = useMemo(() => (stored ? withLive(stored, live) : null), [stored, live])
   const [view, setView] = useState<ViewId>(viewFromHash)
   const [palette, setPalette] = useState(false)
@@ -318,6 +318,7 @@ function Dashboard() {
 
   const meta = VIEWS.find((v) => v.id === view)!
   const counts: Partial<Record<ViewId, number>> = { positionen: c.rows.length, limits: Object.keys(db.watchlist).length }
+  const shortDate = `${WEEKDAY_LONG[weekday(now)].slice(0, 2)}, ${Number(now.slice(8))}. ${LONG_MONTHS[Number(now.slice(5, 7)) - 1].slice(0, 3)}.`
   const dateLine = `${WEEKDAY_LONG[weekday(now)]}, ${Number(now.slice(8))}. ${LONG_MONTHS[Number(now.slice(5, 7)) - 1]} ${now.slice(0, 4)}`
   const stale = isStale(c, now)
 
@@ -329,10 +330,6 @@ function Dashboard() {
           <aside className="fixed inset-y-0 left-0 z-30 hidden w-[252px] flex-col border-r border-line bg-[#08090c]/70 px-4 pb-4 pt-5 backdrop-blur-xl lg:flex">
             <div className="px-1.5"><Brand /></div>
             <PortfolioSwitcher className="mt-5" onManage={() => setPortfoliosOpen(true)} />
-            <button type="button" onClick={() => setPalette(true)} className="mt-5 flex h-9 w-full items-center gap-2.5 rounded-[10px] border border-line bg-white/[0.03] px-3 text-[13px] text-muted transition-colors hover:border-line-2 hover:text-ink-2">
-              <Search className="size-3.5" /> Suchen
-              <span className="ml-auto flex gap-1"><span className="kbd">Ctrl</span><span className="kbd">K</span></span>
-            </button>
             <nav data-tour="nav" className="mt-5 grid gap-0.5" aria-label="Ansichten">
               <SideNav view={view} goto={goto} counts={counts} />
             </nav>
@@ -345,13 +342,12 @@ function Dashboard() {
           <div className="lg:pl-[252px]">
             {/* Kopf für Handy und Tablet: Marke, Datenstand, Suche, Aktualisieren */}
             <div className="flex items-center justify-between gap-3 px-4 pt-[max(12px,env(safe-area-inset-top))] sm:px-6 lg:hidden">
-              <Brand compact />
-              <div className="flex min-w-0 items-center gap-1.5">
-                <span className="mr-1 inline-flex min-w-0 items-center gap-1.5 text-[11.5px] text-muted" title={c.settings.demo ? 'Testdaten aktiv' : undefined}>
+              <PortfolioSwitcher compact sub={shortDate} className="min-w-0 max-w-[62%]" onManage={() => setPortfoliosOpen(true)} />
+              <div className="flex min-w-0 items-center gap-1">
+                <span className="mr-0.5 inline-flex min-w-0 items-center gap-1.5 text-[11.5px] text-muted" title={statusText(c, now, live) ?? undefined}>
                   <StatusDot stale={stale} live={c.live} />
-                  <span className="truncate">{statusText(c, now, live)}</span>
+                  <span className="truncate max-[400px]:hidden">{statusText(c, now, live)}</span>
                 </span>
-                <button type="button" className="btn btn-ghost btn-icon" onClick={() => setPalette(true)} aria-label="Suchen"><Search /></button>
                 <button type="button" data-tour="account" className="btn btn-ghost btn-icon" onClick={() => setAccountOpen(true)} aria-label={CLOUD ? 'Konto und Daten' : 'Daten'}><CircleUser /></button>
                 <button type="button" data-tour="refresh" className="btn btn-ghost btn-icon" onClick={() => void refresh()} disabled={refreshing} aria-label="Kurse und Daten aktualisieren"><RefreshCw className={clsx(refreshing && 'animate-spin')} /></button>
               </div>
@@ -360,13 +356,15 @@ function Dashboard() {
             <main className="mx-auto max-w-[1440px] px-3 pb-[calc(104px+env(safe-area-inset-bottom))] sm:px-6 lg:px-9 lg:pb-14">
               <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-1 pb-4 pt-5 sm:px-0 sm:pb-6 lg:pt-8 [@media(max-height:800px)]:lg:pb-4 [@media(max-height:800px)]:lg:pt-5">
                 <div className="min-w-0">
-                  {portfolios.length > 1 && <PortfolioSwitcher className="mb-3 max-w-[280px] lg:hidden" onManage={() => setPortfoliosOpen(true)} />}
                   {allView && <div className="mb-2 inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/[0.08] px-2.5 py-1 text-[12px] text-ink-2">Gesamtansicht aller Portfolios · nur ansehen</div>}
-                  <div className="text-[12.5px] text-muted">{dateLine}{pfName && portfolios.length > 1 && <span className="max-lg:hidden"> · {pfName}</span>}{c.settings.demo && <span className="ml-2 inline-flex h-[17px] items-center rounded-[5px] border border-warn/25 bg-warn/10 px-1.5 align-middle text-[10px] font-medium uppercase tracking-[0.06em] text-warn lg:hidden">Testdaten</span>}</div>
-                  <h1 className="mt-1 text-[24px] font-semibold leading-8 tracking-[-0.03em] sm:text-[26px]">{meta.label}</h1>
+                  <h1 className="flex items-center gap-2.5 text-[24px] font-semibold leading-8 tracking-[-0.03em] sm:text-[26px]">
+                    {meta.label}
+                    {c.settings.demo && <span className="inline-flex h-[18px] items-center rounded-[5px] border border-warn/25 bg-warn/10 px-1.5 text-[10px] font-medium uppercase tracking-[0.06em] text-warn lg:hidden">Testdaten</span>}
+                  </h1>
                   <p className="mt-1 text-[13.5px] text-muted max-sm:hidden [@media(max-height:800px)]:hidden">{meta.sub}</p>
                 </div>
                 <div className="hidden items-center gap-2 lg:flex">
+                  <span className="mr-2 text-[12.5px] text-muted">{dateLine}</span>
                   <button type="button" data-tour="refresh" className="btn" onClick={() => void refresh()} disabled={refreshing} title="Kurse und Daten jetzt neu holen (R)"><RefreshCw className={clsx(refreshing && 'animate-spin')} /> {refreshing ? 'Aktualisiere …' : 'Aktualisieren'}</button>
                   <button type="button" data-tour="entry" className="btn btn-primary" onClick={() => nav.openEntry('kauf')} title="Kauf, Verkauf, Dividende, Cash oder Notiz erfassen (N)"><Plus /> Eintrag</button>
                 </div>
@@ -401,6 +399,7 @@ function Dashboard() {
           <WatchSheet key={'w' + (watchT ?? '')} ticker={watchT} onClose={() => setWatchT(null)} />
           <CommandPalette open={palette} onOpenChange={setPalette} views={VIEWS} onExport={() => exportCsv(c)} onRefresh={() => void refresh()} onAccount={() => setAccountOpen(true)} onTour={() => setTourOpen(true)} />
           <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} onPortfolios={() => { setAccountOpen(false); setPortfoliosOpen(true) }} onTour={() => { setAccountOpen(false); setTimeout(() => setTourOpen(true), 250) }} />
+          <PullToRefresh onRefresh={refresh} disabled={anyDialog || accountOpen || portfoliosOpen || tourOpen} />
           <PortfoliosSheet open={portfoliosOpen} onClose={() => setPortfoliosOpen(false)} />
           {tourOpen && <Tour onClose={closeTour} onStart={() => nav.openEntry('import', { kind: 'trades' })} />}
           <Toaster />
