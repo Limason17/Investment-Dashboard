@@ -15,7 +15,7 @@ const MANAGE = '__manage'
 export function PortfolioSwitcher({ onManage, className }: { onManage: () => void; className?: string }) {
   const { portfolios, portfolio } = useStore()
   return (
-    <label className={clsx('relative flex items-center', className)}>
+    <label data-tour="portfolio" className={clsx('relative flex items-center', className)}>
       <span className="sr-only">Portfolio wählen</span>
       <select
         className="h-9 w-full cursor-pointer appearance-none truncate rounded-[10px] border border-line bg-white/[0.03] pl-3 pr-8 text-[13px] font-medium text-ink transition-colors hover:border-line-2"

@@ -154,7 +154,7 @@ export function AuthScreen({ brand }: { brand: ReactNode }) {
 
 /* ------------------------------------------------------------------ Konto-Blatt */
 
-export function AccountSheet({ open, onClose, onPortfolios }: { open: boolean; onClose: () => void; onPortfolios: () => void }) {
+export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: boolean; onClose: () => void; onPortfolios: () => void; onTour: () => void }) {
   const { user } = useAccount()
   const { db, portfolio, portfolios } = useStore()
   const allView = portfolio === ALL
@@ -233,6 +233,13 @@ export function AccountSheet({ open, onClose, onPortfolios }: { open: boolean; o
             <div className="truncate text-[12px] text-muted">{portfolios.length > 1 ? `${portfolios.length} Portfolios · offen: ${allView ? 'Gesamtansicht' : portfolios.find((p) => p.id === portfolio)?.name}` : 'Getrennte Depots anlegen, z. B. je Broker'}</div>
           </div>
           <button type="button" className="btn btn-sm flex-none" onClick={onPortfolios}>Verwalten</button>
+        </section>
+        <section className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold">Einführung</div>
+            <div className="truncate text-[12px] text-muted">Die wichtigsten Stellen in einer Minute</div>
+          </div>
+          <button type="button" className="btn btn-sm flex-none" onClick={onTour}>Ansehen</button>
         </section>
 
         <section className="grid gap-3">

@@ -15,9 +15,10 @@ import { DepotContext, NavContext, type EntryType, type Nav } from '@/lib/contex
 import type { ImportKind } from '@/lib/bulk'
 import { exportCsv } from '@/lib/export'
 import { daysBetween, dfmt, today, weekday } from '@/lib/format'
-import { initStore, loadDb, refreshAll, useStore } from '@/lib/store'
+import { initStore, loadDb, mutate, refreshAll, useStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import { PortfoliosSheet, PortfolioSwitcher } from '@/features/Portfolios'
+import { Tour } from '@/features/Tour'
 import { ALL } from '@/lib/portfolios'
 import type { DB, LiveResult, ViewId } from '@/lib/types'
 import { Dividends } from '@/views/Dividends'
@@ -49,7 +50,7 @@ function AccountButton({ onClick }: { onClick: () => void }) {
   const { user } = useAccount()
   const label = CLOUD ? user?.name || user?.email || 'Konto' : 'Daten hochladen und sichern'
   return (
-    <button type="button" onClick={onClick} className="flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-[13px] text-ink-2 transition-colors hover:bg-white/[0.04] hover:text-ink">
+    <button type="button" data-tour="account" onClick={onClick} className="flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-[13px] text-ink-2 transition-colors hover:bg-white/[0.04] hover:text-ink">
       <CircleUser className="size-4 flex-none text-muted" />
       <span className="truncate">{label}</span>
     </button>
@@ -154,7 +155,7 @@ function SideNav({ view, goto, counts }: { view: ViewId; goto: (v: ViewId) => vo
 /** Handy und Tablet: Leiste am unteren Rand, mit dem Daumen erreichbar. */
 function TabBar({ view, goto }: { view: ViewId; goto: (v: ViewId) => void }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-[#08090c]/88 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden" aria-label="Ansichten">
+    <nav data-tour="nav" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-[#08090c]/88 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden" aria-label="Ansichten">
       <div className="mx-auto grid max-w-2xl grid-cols-6">
         {VIEWS.map((v) => {
           const active = v.id === view
@@ -187,6 +188,8 @@ export default function App() {
 function Dashboard() {
   const { db: stored, error, live, portfolio, portfolios } = useStore()
   const [portfoliosOpen, setPortfoliosOpen] = useState(false)
+  const [tourOpen, setTourOpen] = useState(false)
+  const { user } = useAccount()
   const allView = portfolio === ALL
   const pfName = allView ? 'Alle Portfolios' : portfolios.find((p) => p.id === portfolio)?.name
   const db = useMemo(() => (stored ? withLive(stored, live) : null), [stored, live])
@@ -236,6 +239,32 @@ function Dashboard() {
   )
 
   const c = useMemo(() => (db ? compute(db) : null), [db])
+
+  // Einführung: online einmal je Konto, sobald die Daten da sind. Gemerkt im Konto (settings.tourDone)
+  // und auf dem Gerät, damit sie auch bei einem Fehler beim Speichern nicht erneut erscheint.
+  const tourKey = user ? 'depot:tour:' + user.uid : ''
+  const tourSeen = () => {
+    try {
+      return !!tourKey && localStorage.getItem(tourKey) === '1'
+    } catch {
+      return false
+    }
+  }
+  const tourPending = CLOUD && !!c && !!user && !c.settings.tourDone && !tourSeen()
+  useEffect(() => {
+    if (!tourPending) return
+    const t = setTimeout(() => setTourOpen(true), 700)
+    return () => clearTimeout(t)
+  }, [tourPending])
+  const closeTour = useCallback(() => {
+    setTourOpen(false)
+    try {
+      if (tourKey) localStorage.setItem(tourKey, '1')
+    } catch {
+      /* nur Komfort */
+    }
+    if (CLOUD && !c?.settings.tourDone) mutate([{ op: 'merge', coll: 'meta', id: 'settings', data: { tourDone: true } }]).catch(() => {})
+  }, [tourKey, c?.settings.tourDone])
   const anyDialog = palette || entry.open || !!posT || !!watchT
 
   useEffect(() => {
@@ -291,7 +320,7 @@ function Dashboard() {
               <Search className="size-3.5" /> Suchen
               <span className="ml-auto flex gap-1"><span className="kbd">Ctrl</span><span className="kbd">K</span></span>
             </button>
-            <nav className="mt-5 grid gap-0.5" aria-label="Ansichten">
+            <nav data-tour="nav" className="mt-5 grid gap-0.5" aria-label="Ansichten">
               <SideNav view={view} goto={goto} counts={counts} />
             </nav>
             <div className="mt-auto grid gap-2">
@@ -310,8 +339,8 @@ function Dashboard() {
                   <span className="truncate">{statusText(c, now, live)}</span>
                 </span>
                 <button type="button" className="btn btn-ghost btn-icon" onClick={() => setPalette(true)} aria-label="Suchen"><Search /></button>
-                <button type="button" className="btn btn-ghost btn-icon" onClick={() => setAccountOpen(true)} aria-label={CLOUD ? 'Konto und Daten' : 'Daten'}><CircleUser /></button>
-                <button type="button" className="btn btn-ghost btn-icon" onClick={() => void refresh()} disabled={refreshing} aria-label="Kurse und Daten aktualisieren"><RefreshCw className={clsx(refreshing && 'animate-spin')} /></button>
+                <button type="button" data-tour="account" className="btn btn-ghost btn-icon" onClick={() => setAccountOpen(true)} aria-label={CLOUD ? 'Konto und Daten' : 'Daten'}><CircleUser /></button>
+                <button type="button" data-tour="refresh" className="btn btn-ghost btn-icon" onClick={() => void refresh()} disabled={refreshing} aria-label="Kurse und Daten aktualisieren"><RefreshCw className={clsx(refreshing && 'animate-spin')} /></button>
               </div>
             </div>
 
@@ -325,8 +354,8 @@ function Dashboard() {
                   <p className="mt-1 text-[13.5px] text-muted max-sm:hidden [@media(max-height:800px)]:hidden">{meta.sub}</p>
                 </div>
                 <div className="hidden items-center gap-2 lg:flex">
-                  <button type="button" className="btn" onClick={() => void refresh()} disabled={refreshing} title="Kurse und Daten jetzt neu holen (R)"><RefreshCw className={clsx(refreshing && 'animate-spin')} /> {refreshing ? 'Aktualisiere …' : 'Aktualisieren'}</button>
-                  <button type="button" className="btn btn-primary" onClick={() => nav.openEntry('kauf')} title="Kauf, Verkauf, Dividende, Cash oder Notiz erfassen (N)"><Plus /> Eintrag</button>
+                  <button type="button" data-tour="refresh" className="btn" onClick={() => void refresh()} disabled={refreshing} title="Kurse und Daten jetzt neu holen (R)"><RefreshCw className={clsx(refreshing && 'animate-spin')} /> {refreshing ? 'Aktualisiere …' : 'Aktualisieren'}</button>
+                  <button type="button" data-tour="entry" className="btn btn-primary" onClick={() => nav.openEntry('kauf')} title="Kauf, Verkauf, Dividende, Cash oder Notiz erfassen (N)"><Plus /> Eintrag</button>
                 </div>
               </header>
 
@@ -349,7 +378,7 @@ function Dashboard() {
           </div>
 
           {/* Handy: neuer Eintrag mit dem Daumen */}
-          <button type="button" onClick={() => nav.openEntry('kauf')} aria-label="Neuer Eintrag" className="fixed bottom-[calc(72px+env(safe-area-inset-bottom))] right-4 z-30 grid size-[52px] place-items-center rounded-full bg-gradient-to-b from-white to-[#dfe2ee] text-[#0b0c10] shadow-[inset_0_1px_0_#fff,0_2px_4px_rgb(0_0_0/0.5),0_14px_30px_-8px_rgb(143_155_255/0.6)] transition-transform active:scale-95 lg:hidden">
+          <button type="button" data-tour="entry" onClick={() => nav.openEntry('kauf')} aria-label="Neuer Eintrag" className="fixed bottom-[calc(72px+env(safe-area-inset-bottom))] right-4 z-30 grid size-[52px] place-items-center rounded-full bg-gradient-to-b from-white to-[#dfe2ee] text-[#0b0c10] shadow-[inset_0_1px_0_#fff,0_2px_4px_rgb(0_0_0/0.5),0_14px_30px_-8px_rgb(143_155_255/0.6)] transition-transform active:scale-95 lg:hidden">
             <Plus className="size-6" strokeWidth={2.2} />
           </button>
           <TabBar view={view} goto={goto} />
@@ -357,9 +386,10 @@ function Dashboard() {
           <EntrySheet key={entry.n} open={entry.open} type={entry.type} fromId={entry.fromId} ticker={entry.ticker} kind={entry.kind} text={entry.text} onClose={() => setEntry((e) => ({ ...e, open: false }))} />
           <PositionSheet key={'p' + (posT ?? '')} ticker={posT} onClose={() => setPosT(null)} />
           <WatchSheet key={'w' + (watchT ?? '')} ticker={watchT} onClose={() => setWatchT(null)} />
-          <CommandPalette open={palette} onOpenChange={setPalette} views={VIEWS} onExport={() => exportCsv(c)} onRefresh={() => void refresh()} onAccount={() => setAccountOpen(true)} />
-          <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} onPortfolios={() => { setAccountOpen(false); setPortfoliosOpen(true) }} />
+          <CommandPalette open={palette} onOpenChange={setPalette} views={VIEWS} onExport={() => exportCsv(c)} onRefresh={() => void refresh()} onAccount={() => setAccountOpen(true)} onTour={() => setTourOpen(true)} />
+          <AccountSheet open={accountOpen} onClose={() => setAccountOpen(false)} onPortfolios={() => { setAccountOpen(false); setPortfoliosOpen(true) }} onTour={() => { setAccountOpen(false); setTimeout(() => setTourOpen(true), 250) }} />
           <PortfoliosSheet open={portfoliosOpen} onClose={() => setPortfoliosOpen(false)} />
+          {tourOpen && <Tour onClose={closeTour} onStart={() => nav.openEntry('import', { kind: 'trades' })} />}
           <Toaster />
         </NavContext.Provider>
       </DepotContext.Provider>

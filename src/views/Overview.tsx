@@ -412,7 +412,7 @@ function FirstSteps() {
               {s.done && <Chip tone="up">erledigt</Chip>}
             </div>
             <p className="flex-1 text-[12.5px] leading-[1.5] text-muted">{s.text}</p>
-            <button type="button" className={i === 0 ? 'btn btn-sm btn-primary w-fit' : 'btn btn-sm w-fit'} onClick={s.run}>{s.action}</button>
+            <button type="button" data-tour={i === 0 ? 'upload' : undefined} className={i === 0 ? 'btn btn-sm btn-primary w-fit' : 'btn btn-sm w-fit'} onClick={s.run}>{s.action}</button>
           </li>
         ))}
       </ol>

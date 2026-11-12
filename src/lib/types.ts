@@ -122,6 +122,8 @@ export interface Settings {
   caps?: BucketId[]
   /** Eigene Namen der Bausteine */
   bucketNames?: Partial<Record<BucketId, string>>
+  /** Einführung gesehen */
+  tourDone?: boolean
   /** Zweite Anzeigewährung neben USD */
   fx?: 'CHF' | 'EUR'
   /** Name des Brokers, nur zur Anzeige */

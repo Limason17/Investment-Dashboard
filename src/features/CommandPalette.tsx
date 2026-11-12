@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { Command } from 'cmdk'
-import { CircleUser, Download, Plus, RefreshCw, Search, type LucideIcon } from 'lucide-react'
+import { CircleUser, Download, Plus, Sparkles, RefreshCw, Search, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useDepot, useNav, type EntryType } from '@/lib/context'
 import type { ViewId } from '@/lib/types'
@@ -19,8 +19,9 @@ const Item = ({ value, onSelect, children }: { value: string; onSelect: () => vo
 )
 
 /** Schnellsuche: Ansichten, Titel und Aktionen über die Tastatur (Ctrl K). */
-export function CommandPalette({ open, onOpenChange, views, onExport, onRefresh, onAccount }: {
+export function CommandPalette({ open, onOpenChange, views, onExport, onRefresh, onAccount, onTour }: {
   onAccount: () => void
+  onTour: () => void
   open: boolean
   onOpenChange: (o: boolean) => void
   views: { id: ViewId; label: string; icon: LucideIcon }[]
@@ -59,6 +60,7 @@ export function CommandPalette({ open, onOpenChange, views, onExport, onRefresh,
                 <Item value="aktion aktualisieren kurse neu laden refresh" onSelect={run(onRefresh)}><RefreshCw />Kurse und Daten aktualisieren</Item>
                 <Item value="aktion export csv positionen" onSelect={run(onExport)}><Download />Positionen als CSV exportieren</Item>
                 <Item value="aktion konto backup sicherung vorlage hochladen abmelden" onSelect={run(onAccount)}><CircleUser />Konto, Positionen hochladen, Sicherungskopie</Item>
+                <Item value="aktion einführung tour hilfe anleitung" onSelect={run(onTour)}><Sparkles />Einführung ansehen</Item>
               </Command.Group>
               <Command.Group heading="Positionen">
                 {Object.values(db.positions).filter((p) => p.shares > 0).map((p) => (
