@@ -31,6 +31,7 @@ function useCountUp(target: number) {
 /* ------------------------------------------------------------------ Wert + Verlauf */
 function Hero() {
   const { db, c } = useDepot()
+  const nav = useNav()
   const ranges = usePortfolioRanges()
   const [stored, setRange] = useStored<RangeId>('depot.range', '1M')
   const range = ranges.includes(stored) ? stored : 'MAX'
@@ -107,7 +108,7 @@ function Hero() {
                     {c.priceLabel}
                   </span>
                 )}
-                {cashOff && <Chip tone="mute" icon={false} title={c.settings.cashNote}>ohne Cash</Chip>}
+                {cashOff && <button type="button" onClick={() => nav.openEntry('einzahlung')} title="Cash-Stand eintragen" className="rounded-full focus-visible:outline-2"><Chip tone="mute" icon={false}>ohne Cash · eintragen</Chip></button>}
                 {c.settings.demo && <DemoTag />}
               </>
             )}
@@ -428,6 +429,8 @@ export function Overview() {
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
       {fresh && <FirstSteps />}
+      {/* Leeres Depot: nur die ersten Schritte, keine leeren Charts. */}
+      {!fresh && (<>
       {list.length > 0 && (
         <div className="col-span-12 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {list.map((a) => <AlertItem key={a.title} a={a} onClick={a.goto ? () => nav.goto(a.goto!) : undefined} />)}
@@ -442,6 +445,7 @@ export function Overview() {
         <Limits />
         <NextEvents />
       </div>
+      </>)}
     </div>
   )
 }

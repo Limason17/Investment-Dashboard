@@ -71,7 +71,7 @@ function Brand({ compact }: { compact?: boolean }) {
       </div>
       <div className="leading-tight">
         <div className="text-[14.5px] font-semibold tracking-[-0.015em]">{CLOUD ? 'Depot' : 'Depot Liam'}</div>
-        <div className="text-[11.5px] text-muted">{CLOUD ? 'Portfolio · USD' : 'Schwab · USD'}</div>
+        {!compact && <div className="text-[11.5px] text-muted">{CLOUD ? 'Portfolio · USD' : 'Schwab · USD'}</div>}
       </div>
     </div>
   )
@@ -105,7 +105,7 @@ function DataStatus({ db, c, now, live }: { db: DB; c: Calc; now: string; live: 
       {live ? (
         <div className="mt-1 pl-4 text-[11.5px] text-muted">
           Yahoo Finance{live.overnight === 'aktiv' ? ' und Alpaca' : ''} · {c.live ? 'alle 20 s' : 'alle 5 min'}
-          {live.overnight === 'kein Schlüssel' && <div className="text-faint" title="Kurse der Overnight-Sitzung brauchen einen Alpaca-Schlüssel, siehe README">Overnight-Kurse nicht eingerichtet</div>}
+          {live.overnight === 'kein Schlüssel' && !CLOUD && <div className="text-faint" title="Kurse der Overnight-Sitzung brauchen einen Alpaca-Schlüssel, siehe README">Overnight-Kurse nicht eingerichtet</div>}
           {live.overnight === 'fehler' && <div className="text-warn">Overnight-Abfrage fehlgeschlagen</div>}
         </div>
       ) : refreshed && <div className="mt-1 pl-4 text-[11.5px] text-muted">Abgleich {dfmt(refreshed)}{by ? ' · ' + by : ''}</div>}

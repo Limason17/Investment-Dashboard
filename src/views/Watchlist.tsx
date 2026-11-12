@@ -37,12 +37,12 @@ export function Watchlist() {
 
   return (
     <div className="grid gap-3 sm:gap-4">
-      <section className="card grid grid-cols-2 divide-line lg:grid-cols-4 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l">
+      {rows.length > 0 && <section className="card grid grid-cols-2 divide-line lg:grid-cols-4 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l">
         <Stat label="Unter der Grenze" value={priced ? under.length : '–'} sub={priced ? <span>{under.length ? under.map((r) => r.w.ticker).join(', ') : 'kein Titel'}</span> : none} />
         <Stat label="Davon kaufbereit" value={priced ? ready.length : '–'} sub={priced ? <span>{!under.length ? 'kein Titel unter der Grenze' : ready.length ? 'Bedingung erfüllt oder keine' : 'Bedingung überall noch offen'}</span> : none} />
         <Stat label="Nahe (bis 5 %)" value={priced ? near.length : '–'} sub={priced ? <span>{near.length ? near.map((r) => r.w.ticker).join(', ') : 'kein Titel'}</span> : none} />
         <Stat label="Nächster darüber" value={next ? <span className="tk !text-[20px]">{next.w.ticker}</span> : '–'} sub={next ? <span>{pct(next.s.d, 1)} über {usd(next.w.limit)}</span> : priced ? undefined : none} />
-      </section>
+      </section>}
 
       {focus.length > 0 && (
         <Card title="Im Fokus" sub={hot.length ? 'unter oder nahe der Grenze · Kurs der letzten 3 Monate' : 'am nächsten an der Grenze · Kurs der letzten 3 Monate'} bodyClassName="!px-2.5 !pb-2.5 !pt-1.5">

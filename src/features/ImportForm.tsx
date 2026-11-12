@@ -18,7 +18,7 @@ const KINDS: { value: ImportKind; label: string }[] = [
   { value: 'bestand', label: 'Nur Bestand' },
 ]
 const INTRO: Record<ImportKind, string> = {
-  trades: 'So lädst du alle bestehenden Positionen auf einmal hoch: jeden Kauf mit Datum und Preis. Daraus entstehen Bestand, Einstand, Wertverlauf und Charts.',
+  trades: 'Alle bisherigen Käufe auf einmal, mit Datum und Preis. Daraus entstehen Bestand, Einstand, Wertverlauf und Charts.',
   dividenden: 'So lädst du alle erhaltenen Dividenden auf einmal hoch. Passende erwartete Zahlungen werden dabei bestätigt.',
   bestand: 'Setzt nur Stück und Einstand je Titel. Ohne Kaufdatum zeigt das Dashboard keinen Verlauf; nutze besser «Käufe/Verkäufe».',
 }
@@ -41,7 +41,7 @@ const MODES: { id: Mode; label: string; text: string }[] = [
 const freshSettings = (db: DB) => ({ cash: 0, cashExcluded: true, withholding: db.meta.settings?.withholding ?? 0.15, caps: [] })
 
 const FILL: Record<ImportKind, string> = {
-  trades: 'Eine Zeile je Kauf mit Datum, Ticker, Stück und Preis je Stück in USD; mehrere Käufe desselben Titels einzeln.',
+  trades: 'Eine Zeile je Kauf: Datum, Ticker, Stück, Preis je Stück (USD). Mehrere Käufe eines Titels einzeln.',
   dividenden: 'Eine Zeile je Zahlung mit Zahltag, Ticker und Bruttobetrag in USD.',
   bestand: 'Eine Zeile je Titel mit Stück und Einstand gesamt in USD.',
 }
@@ -68,11 +68,12 @@ const STATE: Record<ItemState, { tone: 'up' | 'info' | 'mute' | 'down'; label: s
   fehler: { tone: 'down', label: 'Fehler' },
 }
 
-export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: { formId: string; initial: ImportKind; initialText?: string; setBusy: (b: boolean) => void; onSaved: (msg: string) => void }) {
+export function ImportForm({ formId, initial, initialText, initialWay, setBusy, onSaved }: { formId: string; initial: ImportKind; initialText?: string; initialWay?: 'text' | 'file'; setBusy: (b: boolean) => void; onSaved: (msg: string) => void }) {
   const { db } = useDepot()
   const [kind, setKind] = useState<ImportKind>(initial)
   const [text, setText] = useState(initialText ?? '')
-  const [paste, setPaste] = useState(false)
+  // Text einfügen ist der Standard; kommt schon eine Datei mit (Konto → Datei hochladen), gilt «Datei».
+  const [way, setWay] = useState<'text' | 'file'>(initialText ? 'file' : initialWay ?? 'text')
   const [fileName, setFileName] = useState(initialText ? 'ausgefüllte Vorlage' : '')
   const [err, setErr] = useState('')
   const [copied, setCopied] = useState(false)
@@ -83,7 +84,7 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
   const [mode, setMode] = useState<Mode>('add')
   const [parts, setParts] = useState<Part[]>(['trades'])
   const [confirmed, setConfirmed] = useState(false)
-  const hasData = AREAS.some((a) => a.colls.some((c) => Object.keys(db[c]).length))
+  const hasData = AREAS.some((a) => a.count(db) > 0)
   const cleared = useMemo<Coll[]>(() => (mode === 'add' ? [] : mode === 'all' ? [...ALL] : [...new Set(AREAS.filter((a) => parts.includes(a.id)).flatMap((a) => a.colls))]), [mode, parts])
   const base = useMemo<DB>(() => {
     if (!cleared.length) return db
@@ -106,8 +107,7 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     } catch {
-      setPaste(true)
-      setText(template(kind))
+      setText((t) => (t.trim() ? t : template(kind)))
     }
   }
   const loadFile = async (f: File | undefined) => {
@@ -121,11 +121,24 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
     setFileName(f.name)
     setText(t)
   }
+  const columnHelp = (
+    <details className="mt-1.5">
+      <summary className="cursor-pointer select-none text-muted hover:text-ink">Spalten und Beispiele</summary>
+      <div className="mt-2 overflow-x-auto rounded-lg border border-line">
+        <table className="w-full text-[11.5px]">
+          <thead><tr>{COLUMNS[kind].map((c) => <th key={c.key} className="whitespace-nowrap border-b border-line px-2 py-1.5 text-left font-medium text-ink">{c.label}{c.required && <span className="text-down">*</span>}</th>)}</tr></thead>
+          <tbody>{EXAMPLES[kind].map((r, i) => <tr key={i}>{r.map((v, j) => <td key={j} className="num whitespace-nowrap px-2 py-1 text-muted">{v || '–'}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
+      <ul className="mt-2 grid gap-0.5 text-[12px] text-muted">{COLUMNS[kind].map((c) => <li key={c.key}><b className="font-medium text-ink-2">{c.label}{c.required ? '*' : ''}</b>: {c.hint}</li>)}</ul>
+      <p className="mt-1.5 text-[12px] text-muted">* Pflicht. Zahlen mit Punkt oder Komma, Datum als 2025-03-14 oder 14.03.2025.</p>
+    </details>
+  )
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setErr('')
     if (errors.length) return setErr(`${errors.length} Zeile${errors.length > 1 ? 'n haben' : ' hat'} einen Fehler. Korrigiere oder lösche sie, dann übernehmen.`)
-    if (!plan.count) return setErr(text.trim() ? 'Nichts Neues zum Übernehmen.' : 'Zuerst die ausgefüllte Vorlage hochladen.')
+    if (!plan.count) return setErr(text.trim() ? 'Nichts Neues zum Übernehmen.' : way === 'text' ? 'Zuerst die ausgefüllten Zeilen einfügen.' : 'Zuerst die ausgefüllte Datei hochladen.')
     if (mode === 'parts' && !parts.length) return setErr('Wähle mindestens einen Bereich zum Ersetzen, oder «Ergänzen».')
     if (lost.length && !confirmed) return setErr('Bestätige zuerst, dass die vorhandenen Daten gelöscht werden.')
     setBusy(true)
@@ -144,44 +157,53 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
       <Segmented className="flex w-full [&>button]:flex-1 [&>button]:px-1" label="Was hochladen" value={kind} onChange={setKind} options={KINDS} />
       <p className="text-[12.5px] leading-[1.55] text-ink-2">{INTRO[kind]}</p>
 
-      <ol className="grid gap-3 text-[12.5px] leading-[1.55] text-ink-2">
-        <Step n={1} title="Vorlage herunterladen">
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" className="btn btn-sm" onClick={() => download(templateFile(kind), TEMPLATE_NAME[kind])}><Download />Vorlage herunterladen</button>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={copy}><ClipboardCopy />{copied ? 'Kopiert' : 'Oder kopieren'}</button>
-          </div>
-        </Step>
-        <Step n={2} title="Ausfüllen">
-          <p>{FILL[kind]} Danach als CSV speichern.</p>
-          <details className="mt-1.5">
-            <summary className="cursor-pointer select-none text-muted hover:text-ink">Spalten und Beispiele</summary>
-            <div className="mt-2 overflow-x-auto rounded-lg border border-line">
-              <table className="w-full text-[11.5px]">
-                <thead><tr>{COLUMNS[kind].map((c) => <th key={c.key} className="whitespace-nowrap border-b border-line px-2 py-1.5 text-left font-medium text-ink">{c.label}{c.required && <span className="text-down">*</span>}</th>)}</tr></thead>
-                <tbody>{EXAMPLES[kind].map((r, i) => <tr key={i}>{r.map((v, j) => <td key={j} className="num whitespace-nowrap px-2 py-1 text-muted">{v || '–'}</td>)}</tr>)}</tbody>
-              </table>
-            </div>
-            <ul className="mt-2 grid gap-0.5 text-[12px] text-muted">{COLUMNS[kind].map((c) => <li key={c.key}><b className="font-medium text-ink-2">{c.label}{c.required ? '*' : ''}</b>: {c.hint}</li>)}</ul>
-            <p className="mt-1.5 text-[12px] text-muted">* Pflicht. Zahlen mit Punkt oder Komma, Datum als 2025-03-14 oder 14.03.2025.</p>
-          </details>
-        </Step>
-        <Step n={3} title="Ausgefüllte Vorlage hochladen">
-          <p>Zuerst kommt eine Vorschau, erst «Übernehmen» speichert. Ein Schwab-Export «Transaction History» geht auch direkt.</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" className="btn btn-sm btn-primary" onClick={() => file.current?.click()}><FileUp />Ausgefüllte Vorlage hochladen</button>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setPaste((p) => !p)}>{paste ? 'Einfügen ausblenden' : 'Oder Zeilen einfügen'}</button>
-          </div>
-          <input ref={file} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden onChange={(e) => void loadFile(e.target.files?.[0])} />
-          {fileName && <p className="mt-1.5 text-[12px] text-muted">Datei: {fileName}</p>}
-        </Step>
-      </ol>
+      {/* Zwei gleichwertige Wege: Text einfügen (Standard) oder Datei. */}
+      <Segmented className="flex w-full [&>button]:flex-1" label="Wie hochladen" value={way} onChange={setWay} options={[{ value: 'text', label: 'Text einfügen' }, { value: 'file', label: 'Datei' }]} />
 
-      {paste && (
+      {way === 'text' ? (
+        <ol className="grid gap-3 text-[12.5px] leading-[1.55] text-ink-2">
+          <Step n={1} title="Vorlage kopieren">
+            <p>Kopfzeile und zwei Beispiele; Zeilen mit # zählen nicht.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" className="btn btn-sm" onClick={copy}><ClipboardCopy />{copied ? 'Kopiert' : 'Vorlage kopieren'}</button>
+              <button type="button" className="btn btn-sm btn-ghost" onClick={() => setText((t) => (t.trim() ? t : template(kind)))}>Hier einsetzen</button>
+            </div>
+          </Step>
+          <Step n={2} title="Ausfüllen">
+            <p>{FILL[kind]} In Excel oder direkt im Feld unten.</p>
+            {columnHelp}
+          </Step>
+          <Step n={3} title="Einfügen">
+            <p>Zeilen samt Kopfzeile hier einfügen. Erst «Übernehmen» speichert.</p>
+          </Step>
+        </ol>
+      ) : (
+        <ol className="grid gap-3 text-[12.5px] leading-[1.55] text-ink-2">
+          <Step n={1} title="Vorlage herunterladen">
+            <p>CSV-Datei mit Kopfzeile und zwei Beispielen.</p>
+            <button type="button" className="btn btn-sm mt-2" onClick={() => download(templateFile(kind), TEMPLATE_NAME[kind])}><Download />Vorlage herunterladen</button>
+          </Step>
+          <Step n={2} title="Ausfüllen und als CSV speichern">
+            <p>{FILL[kind]}</p>
+            {columnHelp}
+          </Step>
+          <Step n={3} title="Datei hochladen">
+            <p>Darunter erscheint die Vorschau, erst «Übernehmen» speichert. Ein Schwab-Export «Transaction History» geht auch direkt.</p>
+            <button type="button" className="btn btn-sm btn-primary mt-2" onClick={() => file.current?.click()}><FileUp />Datei hochladen</button>
+            <input ref={file} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden onChange={(e) => void loadFile(e.target.files?.[0])} />
+            {fileName && <p className="mt-1.5 text-[12px] text-muted">Datei: {fileName}</p>}
+          </Step>
+        </ol>
+      )}
+
+      {way === 'text' && (
         <textarea
           aria-label="Zeilen einfügen"
-          className="input num min-h-[140px] whitespace-pre font-mono text-[12px] leading-[1.5]"
-          placeholder={COLUMNS[kind].map((c) => c.label).join('\t') + '\n' + EXAMPLES[kind][0].join('\t')}
+          className="input num min-h-[150px] whitespace-pre font-mono text-[12px] leading-[1.5]"
+          placeholder={'Hier einfügen, z. B.\n' + COLUMNS[kind].map((c) => c.label).join('\t') + '\n' + EXAMPLES[kind][0].join('\t')}
           spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
@@ -202,7 +224,22 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
             </ul>
           )}
           {plan.items.length > 0 && (
-            <div className="max-h-64 overflow-auto rounded-xl border border-line [&_th]:bg-[#0c0e12]">
+            <>
+            <ul className="max-h-72 divide-y divide-white/[0.05] overflow-y-auto rounded-xl border border-line px-3 sm:hidden">
+              {plan.items.map((i) => (
+                <li key={'m' + i.kind + i.line} className={'flex items-center justify-between gap-3 py-2.5 ' + (i.state === 'doppelt' ? 'opacity-50' : '')}>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[13px]"><span className="tk">{i.ticker}</span><span className="text-ink-2">{i.kind}</span></div>
+                    <div className="num truncate text-[11.5px] text-muted">Z. {i.line}{i.date ? ' · ' + dfmt(i.date) : ''} · {i.detail}</div>
+                  </div>
+                  <div className="flex flex-none flex-col items-end gap-1">
+                    {i.kind !== 'Bestand' && <span className="num text-[12.5px]">{sUsd(i.amount)}</span>}
+                    <span title={i.msg}><Chip tone={STATE[i.state].tone} icon={false}>{STATE[i.state].label}</Chip></span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="max-h-64 overflow-auto rounded-xl border border-line max-sm:hidden [&_th]:bg-[#0c0e12]">
               <table className="tbl text-[12px] [&_td]:py-2 [&_th]:py-2">
                 <thead><tr><th className="r">Z.</th><th>Art</th><th>Titel</th><th>Datum</th><th>Angaben</th><th className="r">Cash</th><th>Status</th></tr></thead>
                 <tbody>
@@ -220,6 +257,7 @@ export function ImportForm({ formId, initial, initialText, setBusy, onSaved }: {
                 </tbody>
               </table>
             </div>
+            </>
           )}
           {parsed.skipped.length > 0 && (
             <details className="text-[12px] text-muted">

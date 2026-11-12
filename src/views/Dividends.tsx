@@ -55,7 +55,7 @@ export function Dividends() {
       <div className="col-span-12 grid content-start gap-3 sm:gap-4 xl:col-span-7">
       <Card title="Dividenden nach Monat" sub="netto nach Quellensteuer, in USD">
         {all.length === 0 ? (
-          <Empty title="Noch keine Dividenden erfasst">Erhaltene Beträge trägst du mit «Eintrag» ein.</Empty>
+          <Empty title="Noch keine Dividenden erfasst">Erhaltene Beträge trägst du mit «Eintrag» ein, viele auf einmal mit «Hochladen».</Empty>
         ) : (
           <>
             <DividendBars months={months} current={now.slice(0, 7)} />

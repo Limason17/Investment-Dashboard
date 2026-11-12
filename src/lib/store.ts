@@ -218,6 +218,7 @@ export async function mutate(ops: Op[]) {
   if (CLOUD) {
     if (!state.db) throw new Error('Daten noch nicht geladen')
     const changed = await cloudBatch(state.db, ops, pid)
+    if (ops.some((o) => o.coll === 'positions' || o.coll === 'watchlist')) setTimeout(() => void loadLive(), 0)
     set({ db: { ...state.db, ...changed } })
     return state.db!
   }

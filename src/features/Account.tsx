@@ -1,4 +1,4 @@
-import { Download, LogOut, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { ClipboardPaste, Download, LogOut, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
 import { Segmented } from '@/components/ui'
@@ -63,15 +63,6 @@ function download(text: string, name: string) {
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' })), download: name })
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-}
-
-function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
-  return (
-    <li className="grid grid-cols-[22px_1fr] gap-x-2.5">
-      <span className="num mt-px grid size-[22px] place-items-center rounded-full border border-line-2 text-[11.5px] font-semibold text-ink">{n}</span>
-      <div><div className="font-semibold text-ink">{title}</div>{children}</div>
-    </li>
-  )
 }
 
 /* ------------------------------------------------------------------ Anmelden und Registrieren */
@@ -245,24 +236,20 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
         <section className="grid gap-3">
           <div>
             <h3 className="text-[14px] font-semibold">Bestehende Positionen hochladen</h3>
-            <p className="mt-1 text-[12.5px] leading-[1.55] text-muted">Alle Käufe oder Dividenden auf einmal statt jeden einzeln erfassen. Mit Datum, damit Wertverlauf und Charts stimmen.</p>
+            <p className="mt-1 text-[12.5px] leading-[1.55] text-muted">Alle Käufe oder Dividenden auf einmal statt jeden einzeln. Mit Kaufdatum, damit Wertverlauf und Charts stimmen.</p>
           </div>
-          <ol className="grid gap-3 text-[12.5px] leading-[1.55] text-ink-2">
-            <Step n={1} title="Vorlage herunterladen">
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" className="btn btn-sm" onClick={() => download(templateFile('trades'), TEMPLATE_NAME.trades)}><Download />Käufe/Verkäufe</button>
-                <button type="button" className="btn btn-sm" onClick={() => download(templateFile('dividenden'), TEMPLATE_NAME.dividenden)}><Download />Dividenden</button>
-              </div>
-            </Step>
-            <Step n={2} title="Ausfüllen und als CSV speichern">
-              <p>Eine Zeile je Kauf: Datum, Ticker, Stück, Preis je Stück. Mehrere Käufe desselben Titels einzeln eintragen.</p>
-            </Step>
-            <Step n={3} title="Ausgefüllte Vorlage hochladen">
-              <p>Du siehst zuerst eine Vorschau mit allen Zeilen und Fehlern. Erst «Übernehmen» speichert.</p>
-              <button type="button" className="btn btn-sm btn-primary mt-2" onClick={() => tpl.current?.click()}><Upload />Ausgefüllte Vorlage hochladen</button>
-              <input ref={tpl} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden onChange={(e) => void upload(e.target.files?.[0])} />
-            </Step>
-          </ol>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" className="btn h-auto flex-col items-start gap-0.5 px-3.5 py-3 text-left" onClick={() => { onClose(); nav.openEntry('import', { kind: 'trades' }) }}>
+              <span className="flex items-center gap-2 font-semibold"><ClipboardPaste />Text einfügen</span>
+              <span className="text-[12px] font-normal text-muted">Vorlage kopieren, ausfüllen, einfügen</span>
+            </button>
+            <button type="button" className="btn h-auto flex-col items-start gap-0.5 px-3.5 py-3 text-left" onClick={() => tpl.current?.click()}>
+              <span className="flex items-center gap-2 font-semibold"><Upload />Datei hochladen</span>
+              <span className="text-[12px] font-normal text-muted">Ausgefüllte CSV-Vorlage oder Schwab-Export</span>
+            </button>
+          </div>
+          <input ref={tpl} type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden onChange={(e) => void upload(e.target.files?.[0])} />
+          <p className="text-[12px] text-muted">Vorlagen als Datei: <button type="button" className="underline decoration-line-2 underline-offset-4 hover:text-ink" onClick={() => download(templateFile('trades'), TEMPLATE_NAME.trades)}>Käufe/Verkäufe</button> · <button type="button" className="underline decoration-line-2 underline-offset-4 hover:text-ink" onClick={() => download(templateFile('dividenden'), TEMPLATE_NAME.dividenden)}>Dividenden</button></p>
         </section>
 
         <section className="grid gap-2 border-t border-line pt-5">
