@@ -133,7 +133,12 @@ export function compute(db: DB): Calc {
   }
 }
 
-export const targetOf = (s: Settings, id: BucketId) => (s.targets?.[id] ?? BUCKETS.find((b) => b.id === id)!.target) / 100
+/** Zielanteil (0–1) oder null, solange im Plan keiner festgelegt ist. */
+export const targetOf = (s: Settings, id: BucketId): number | null => {
+  const v = s.targets?.[id]
+  return typeof v === 'number' ? v / 100 : null
+}
+export const hasTargets = (s: Settings) => BUCKETS.some((b) => typeof s.targets?.[b.id] === 'number')
 /** Ist der Zielanteil eine harte Obergrenze? Einstellbar im Plan; ohne Angabe gilt sie für den ETF-Kern. */
 export const isCap = (s: Settings, id: BucketId) => (s.caps ? s.caps.includes(id) : !!BUCKETS.find((b) => b.id === id)?.cap)
 /** Kurs-Symbol der zweiten Währung (Yahoo: USD in CHF bzw. EUR) */
@@ -222,10 +227,10 @@ export interface Attention {
 export function capChecks(c: Calc): { id: BucketId; name: string; w: number; cap: number; state: 'ueber' | 'nahe' | 'ok' }[] {
   if (!c.valuationComplete || c.settings.cashExcluded || !c.total) return []
   const rank = { ueber: 0, nahe: 1, ok: 2 }
-  return BUCKETS.filter((b) => b.id !== 'cash' && isCap(c.settings, b.id))
+  return BUCKETS.filter((b) => b.id !== 'cash' && isCap(c.settings, b.id) && targetOf(c.settings, b.id) != null)
     .map((b) => {
       const w = c.b[b.id] / c.total
-      const cap = targetOf(c.settings, b.id)
+      const cap = targetOf(c.settings, b.id) ?? 1
       return { id: b.id, name: b.name, w, cap, state: (w > cap ? 'ueber' : w > cap - 0.02 ? 'nahe' : 'ok') as 'ueber' | 'nahe' | 'ok' }
     })
     .sort((a, b) => rank[a.state] - rank[b.state])

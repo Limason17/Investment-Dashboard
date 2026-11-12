@@ -70,7 +70,7 @@ export async function loadDb() {
     if (seq !== loadSeq) return
     set({ db, error: null })
     // Neues Portfolio: Cash erst zählen, wenn der Saldo eingetragen ist (Eintrag → Ein-/Auszahlung → Cash-Stand).
-    if (!db.meta.settings) await mutate([{ op: 'set', coll: 'meta', id: 'settings', data: { cash: 0, cashExcluded: true, withholding: 0.15, caps: [] } }])
+    if (!db.meta.settings) await mutate([{ op: 'set', coll: 'meta', id: 'settings', data: { cash: 0, cashExcluded: true, withholding: 0.15, caps: [], targets: {} } }])
   } catch (e) {
     if (seq === loadSeq) set({ error: e instanceof Error ? e.message : String(e) })
   }

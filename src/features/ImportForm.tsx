@@ -38,7 +38,7 @@ const MODES: { id: Mode; label: string; text: string }[] = [
   { id: 'all', label: 'Alles ersetzen', text: 'Alle Daten werden zuerst gelöscht, auch Watchlist, Termine und Journal.' },
 ]
 /** Einstellungen nach «Alles ersetzen»: Cash zählt erst, wenn der Saldo eingetragen ist; Quellensteuer bleibt. */
-const freshSettings = (db: DB) => ({ cash: 0, cashExcluded: true, withholding: db.meta.settings?.withholding ?? 0.15, caps: [] })
+const freshSettings = (db: DB) => ({ cash: 0, cashExcluded: true, withholding: db.meta.settings?.withholding ?? 0.15, caps: [], targets: {} })
 
 const FILL: Record<ImportKind, string> = {
   trades: 'Eine Zeile je Kauf: Datum, Ticker, Stück, Preis je Stück (USD). Mehrere Käufe eines Titels einzeln.',

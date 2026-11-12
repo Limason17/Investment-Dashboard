@@ -87,7 +87,7 @@ function EditSheet({ open, onClose, title, sub, save, remove, children }: {
 export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { db, c } = useDepot()
   const s = c.settings
-  const [targets, setTargets] = useState<Record<BucketId, string>>(() => Object.fromEntries(BUCKETS.map((b) => [b.id, String(Math.round(targetOf(s, b.id) * 1000) / 10)])) as Record<BucketId, string>)
+  const [targets, setTargets] = useState<Record<BucketId, string>>(() => Object.fromEntries(BUCKETS.map((b) => [b.id, targetOf(s, b.id) == null ? '' : String(Math.round(targetOf(s, b.id)! * 1000) / 10)])) as Record<BucketId, string>)
   const [caps, setCaps] = useState<BucketId[]>(() => BUCKETS.filter((b) => isCap(s, b.id)).map((b) => b.id))
   const [names, setNames] = useState<Record<BucketId, string>>(() => Object.fromEntries(BUCKETS.map((b) => [b.id, s.bucketNames?.[b.id] ?? ''])) as Record<BucketId, string>)
   const [wht, setWht] = useState(String(Math.round((s.withholding ?? 0.15) * 1000) / 10))
@@ -95,15 +95,17 @@ export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => voi
   const [fx, setFx] = useState<'' | 'CHF' | 'EUR'>(s.fx ?? '')
   const [rules, setRules] = useState(() => (s.rules ?? []).map((r) => ({ ...r })))
   const sum = BUCKETS.reduce((t, b) => t + (parseNum(targets[b.id]) ?? 0), 0)
+  const filled = BUCKETS.some((b) => targets[b.id].trim() !== '')
 
   const save = async () => {
     const tg: Partial<Record<BucketId, number>> = {}
     for (const b of BUCKETS) {
+      if (!targets[b.id].trim()) continue
       const v = parseNum(targets[b.id])
       if (v == null || v < 0 || v > 100) throw new Error(`Zielanteil für ${b.name} muss zwischen 0 und 100 liegen.`)
       tg[b.id] = r2(v)
     }
-    if (Math.abs(sum - 100) > 0.05) throw new Error(`Die Zielanteile ergeben ${r2(sum)} %. Sie müssen zusammen 100 % ergeben.`)
+    if (Object.keys(tg).length && Math.abs(sum - 100) > 0.05) throw new Error(`Die Zielanteile ergeben ${r2(sum)} %. Sie müssen zusammen 100 % ergeben.`)
     const w = parseNum(wht)
     if (w == null || w < 0 || w > 60) throw new Error('Quellensteuer muss zwischen 0 und 60 % liegen.')
     const clean = rules.map((r) => ({ tag: r.tag?.trim() || undefined, title: r.title.trim().slice(0, 120), detail: r.detail?.trim().slice(0, 400) || undefined })).filter((r) => r.title)
@@ -132,7 +134,7 @@ export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => voi
             </label>
           </div>
         ))}
-        <div className={`num text-right text-[12px] ${Math.abs(sum - 100) > 0.05 ? 'text-down' : 'text-muted'}`}>Summe {r2(sum)} % {Math.abs(sum - 100) > 0.05 ? '(muss 100 % sein)' : ''}</div>
+        <div className={`num text-right text-[12px] ${filled && Math.abs(sum - 100) > 0.05 ? 'text-down' : 'text-muted'}`}>{filled ? `Summe ${r2(sum)} %${Math.abs(sum - 100) > 0.05 ? ' (muss 100 % sein)' : ''}` : 'Leer lassen = kein Ziel'}</div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 border-t border-line pt-4">

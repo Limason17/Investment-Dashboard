@@ -118,7 +118,7 @@ export function Plan() {
             <span key={b.id} className="inline-flex items-center gap-2 rounded-full border border-line bg-white/[0.025] py-1 pl-2.5 pr-3 text-[12.5px]">
               <i className="swatch" style={{ background: b.color }} />
               <span className="text-ink-2">{b.name}</span>
-              <span className="num font-medium">{isCap(c.settings, b.id) ? 'max ' : ''}{pctPlain(targetOf(c.settings, b.id), 0)}</span>
+              <span className="num font-medium">{targetOf(c.settings, b.id) == null ? 'kein Ziel' : (isCap(c.settings, b.id) ? 'max ' : '') + pctPlain(targetOf(c.settings, b.id), 0)}</span>
             </span>
           ))}
         </div>

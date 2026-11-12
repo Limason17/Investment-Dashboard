@@ -92,7 +92,7 @@ export function Positions() {
             const s = ps?.buckets[b.id as HoldingBucket]
             const ret = s && s.twr.length ? s.twr[s.twr.length - 1] : null
             const n = c.rows.filter((r) => r.p.bucket === b.id).length
-            const over = isCap(c.settings, b.id) && !cashOff && w > tgt
+            const over = isCap(c.settings, b.id) && !cashOff && tgt != null && w > tgt
             return (
               <button key={b.id} type="button" onClick={() => setBucket(bucket === b.id ? 'alle' : b.id)} aria-pressed={bucket === b.id} className="group min-w-0 rounded-xl text-left outline-offset-4">
                 <div className="flex items-center gap-2 text-[12.5px] text-ink-2">
@@ -103,10 +103,10 @@ export function Positions() {
                 <div className="num mt-1 text-[19px] font-semibold leading-6 tracking-[-0.02em]">{usd(c.valuationComplete ? v : null)}</div>
                 <div className="num mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-muted">
                   <span className="text-ink-2">{pctPlain(c.valuationComplete ? w : null)}</span>
-                  <span>/ {isCap(c.settings, b.id) ? 'max ' : ''}{pctPlain(tgt, 0)}</span>
+                  {tgt != null && <span>/ {isCap(c.settings, b.id) ? 'max ' : ''}{pctPlain(tgt, 0)}</span>}
                   {over && <Chip tone="down">über Obergrenze</Chip>}
                 </div>
-                <Meter className="mt-2" value={w / 0.6} mark={tgt / 0.6} color={b.color} height={4} />
+                <Meter className="mt-2" value={w / 0.6} mark={tgt != null ? tgt / 0.6 : undefined} color={b.color} height={4} />
                 <div className={`mt-3 flex items-center gap-3 transition-opacity ${pending ? 'opacity-40' : ''}`}>
                   <Delta value={ret} digits={1} className="flex-none text-[12.5px] font-medium" />
                   <FluidSparkline className="min-w-0 flex-1" values={s?.twr ?? []} tone={sign(ret)} baseline={0} height={30} label={`${b.name}: ${pct(ret, 1)} ${RANGE_TEXT[range]}`} />
