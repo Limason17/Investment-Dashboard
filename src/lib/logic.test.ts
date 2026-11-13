@@ -176,15 +176,15 @@ describe('Wertverlauf gegen echte Zahlen', () => {
     expect(ps.twr.at(-1)).toBeCloseTo(0.2)
   })
 
-  it('Cash erst später erfasst: davor kein Cash im Wert, der Stand zählt als eingezahlt', () => {
+  it('Cash erst später erfasst: zählt von Anfang an mit, Gewinn nur aus Kursen', () => {
     const db = empty()
     db.meta.settings = { cash: 500, cashExcluded: false }
     db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 10, bucket: 'etf', cost: 1000 }
     db.transactions.k = { type: 'kauf', date: days[0], ticker: 'VTI', shares: 10, price: 100, cashDelta: -1000 }
     db.transactions.c = { type: 'korrektur', date: days[1], cashDelta: 500, cashStart: true }
     const ps = portfolioSeries(db, timeline(db), chart([100, 110, 120]))!
-    expect(ps.value).toEqual([1000, 1600, 1700])
-    expect(ps.invested).toEqual([1000, 1500, 1500])
+    expect(ps.value).toEqual([1500, 1600, 1700]) // Gesamtwert mit Cash, wie oben angezeigt
+    expect(ps.invested).toEqual([1500, 1500, 1500])
     expect(ps.gain).toBeCloseTo(200) // nur der Kursgewinn, nicht das Cash
   })
 

@@ -4,7 +4,7 @@ import { LimitTrack } from '@/components/charts/Small'
 import { TimeChart, type Marker, type RefLine, type VLine } from '@/components/charts/TimeChart'
 import { Sheet } from '@/components/Sheet'
 import { Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented } from '@/components/ui'
-import { bucketOf, HOLDING_BUCKETS } from '@/lib/buckets'
+import { bucketOf, catOf, HOLDING_BUCKETS } from '@/lib/buckets'
 import { quote, quoteLabel, withIds, wlState, wht } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE, refreshCharts, useChart } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
@@ -163,7 +163,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
   // Das Blatt wird je Titel neu aufgebaut (key in App), darum genügt der Startwert.
   const [sh, setSh] = useState(p ? String(p.shares) : '')
   const [cost, setCost] = useState(p?.cost != null ? String(p.cost) : '')
-  const [bucket, setBucket] = useState<string>(p?.bucket ?? 'aktien')
+  const [bucket, setBucket] = useState<string>(catOf(p?.bucket))
   const [status, setStatus] = useState(p?.status ?? '')
   const [note, setNote] = useState(p?.note ?? '')
 

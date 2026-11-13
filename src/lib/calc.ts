@@ -1,4 +1,4 @@
-import { applyBucketNames, BUCKETS } from './buckets'
+import { applyCategories, BUCKETS, catOf, HOLDING_BUCKETS } from './buckets'
 import { daysBetween, dfmt, dshort, pctPlain } from './format'
 import type { BucketId, DB, LiveResult, DepotEvent, Dividend, Position, Quote, Settings, Snapshot, ViewId, WatchItem, WithId } from './types'
 
@@ -82,7 +82,7 @@ export function quoteLabel(q: Quote | undefined, fallback?: string) {
 
 export function compute(db: DB): Calc {
   const settings = settingsOf(db)
-  applyBucketNames(settings.bucketNames)
+  applyCategories(settings)
   const rows: Row[] = []
   let sec = 0, prevSec = 0, costKnown = 0, valKnownCost = 0
   let lastDate: string | null = null
@@ -119,10 +119,11 @@ export function compute(db: DB): Calc {
   const dailyComplete = valuationComplete && rows.every((r) => r.q?.prev != null)
   const cash = settings.cashExcluded ? 0 : Number(settings.cash) || 0
   const total = sec + cash
-  const b = { etf: 0, aktien: 0, zukunft: 0, metalle: 0, cash } as Record<BucketId, number>
+  const b: Record<BucketId, number> = { cash }
+  for (const x of HOLDING_BUCKETS) b[x.id] = 0
   for (const r of rows) {
     r.w = total ? (r.val ?? 0) / total : 0
-    b[r.p.bucket || 'aktien'] += r.val ?? 0
+    b[catOf(r.p.bucket)] += r.val ?? 0
   }
   const pl = valuationComplete && costKnown ? valKnownCost - costKnown : null
   return {

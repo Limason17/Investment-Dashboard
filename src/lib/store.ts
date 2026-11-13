@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { DEFAULT_CATEGORIES } from './buckets'
 import { closeUpdates } from './closes'
 import { cloudBatch, cloudDeletePortfolio, cloudLoad, cloudPortfolios, cloudSavePortfolios, type Op as CloudOp } from './cloud'
 import { CLOUD, LEGAL_VERSION, QUOTES_URL } from './config'
@@ -70,7 +71,7 @@ export async function loadDb() {
     if (seq !== loadSeq) return
     set({ db, error: null })
     // Neues Portfolio: Cash erst zählen, wenn der Saldo eingetragen ist (Eintrag → Ein-/Auszahlung → Cash-Stand).
-    if (!db.meta.settings) await mutate([{ op: 'set', coll: 'meta', id: 'settings', data: { cash: 0, cashExcluded: true, withholding: 0.15, caps: [], targets: {}, ...(CLOUD ? { termsAccepted: LEGAL_VERSION } : {}) } }])
+    if (!db.meta.settings) await mutate([{ op: 'set', coll: 'meta', id: 'settings', data: { cash: 0, cashExcluded: true, withholding: 0.15, caps: [], targets: {}, categories: DEFAULT_CATEGORIES, ...(CLOUD ? { termsAccepted: LEGAL_VERSION } : {}) } }])
   } catch (e) {
     if (seq === loadSeq) set({ error: e instanceof Error ? e.message : String(e) })
   }

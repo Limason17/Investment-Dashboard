@@ -2,6 +2,7 @@
  * Storno: eine Buchung oder Dividende so entfernen, dass Bestand, Einstand, Topf und Cash
  * wieder dem Stand ohne sie entsprechen.
  */
+import { defaultCat } from './buckets'
 import { r2 } from './format'
 import type { Op } from './store'
 import type { DB, Dividend, Tx } from './types'
@@ -25,7 +26,7 @@ export function reverseTx(db: DB, id: string, x: Tx): Op[] {
     // Einstand des verkauften Teils = Erlös − realisierter Gewinn.
     const soldCost = x.realized != null ? x.cashDelta - x.realized : null
     if (p) ops.push({ op: 'merge', coll: 'positions', id: x.ticker!, data: { shares: +(p.shares + sh).toFixed(6), cost: p.cost != null && soldCost != null ? r2(p.cost + soldCost) : p.cost } })
-    else if (x.ticker) ops.push({ op: 'set', coll: 'positions', id: x.ticker, data: { ticker: x.ticker, name: x.ticker, shares: sh, bucket: 'aktien', cost: soldCost != null ? r2(soldCost) : null } })
+    else if (x.ticker) ops.push({ op: 'set', coll: 'positions', id: x.ticker, data: { ticker: x.ticker, name: x.ticker, shares: sh, bucket: defaultCat(), cost: soldCost != null ? r2(soldCost) : null } })
   }
   return [...ops, ...cashOp(db, -(x.cashDelta || 0))]
 }

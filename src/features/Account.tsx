@@ -1,7 +1,7 @@
 import { ClipboardPaste, Download, LogOut, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
-import { Segmented } from '@/components/ui'
+import { Segmented, Switch } from '@/components/ui'
 import { authMessage, checkVerified, cloudReplace, COLLECTIONS, deleteAccount, PASSWORD_MIN, resendVerification, resetPassword, signIn, signOut, signUp, useAccount } from '@/lib/cloud'
 import { detectKind, LIMITS, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
 import { BACKUP_KIND, downloadBackup } from '@/lib/backup'
@@ -133,12 +133,12 @@ export function AuthScreen({ brand }: { brand: ReactNode }) {
               </Field>
             )}
             {mode === 'register' && (
-              <label className="flex cursor-pointer items-start gap-2.5 text-[12.5px] leading-[1.5] text-ink-2">
-                <input type="checkbox" className="mt-0.5 size-4 flex-none accent-[var(--color-accent)]" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+              <div className="flex items-start gap-2.5 text-[12.5px] leading-[1.5] text-ink-2">
+                <Switch className="mt-0.5" checked={agree} onChange={setAgree} ariaLabel="Nutzungsbedingungen und Datenschutzerklärung akzeptieren" />
                 <span>
                   Ich akzeptiere die <button type="button" className="underline underline-offset-4" onClick={() => setLegal('nutzung')}>Nutzungsbedingungen</button> und habe die <button type="button" className="underline underline-offset-4" onClick={() => setLegal('datenschutz')}>Datenschutzerklärung</button> gelesen. Depot ist keine Anlageberatung.
                 </span>
-              </label>
+              </div>
             )}
             {err && <div role="alert" className="text-[12.5px] text-down">{err}</div>}
             {info && <div role="status" className="text-[12.5px] text-up">{info}</div>}

@@ -1,6 +1,6 @@
 import { ClipboardCopy, Download, FileUp } from 'lucide-react'
 import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Chip, Segmented } from '@/components/ui'
+import { Chip, Segmented, Switch } from '@/components/ui'
 import { COLUMNS, detectKind, EXAMPLES, LIMITS, parseImport, template, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
 import { planImport, type ItemState } from '@/lib/bulk-plan'
 import { downloadBackup } from '@/lib/backup'
@@ -292,10 +292,7 @@ export function ImportForm({ formId, initial, initialText, initialWay, setBusy, 
               {mode === 'parts' && (
                 <div className="ml-6 grid gap-1.5">
                   {AREAS.filter((a) => a.id !== 'rest').map((a) => (
-                    <label key={a.id} className="flex cursor-pointer items-center gap-2">
-                      <input type="checkbox" className="accent-[var(--color-accent)]" checked={parts.includes(a.id)} onChange={(e) => { setConfirmed(false); setParts((p) => (e.target.checked ? [...p, a.id] : p.filter((x) => x !== a.id))) }} />
-                      {a.label} <span className="text-muted">({a.count(db)})</span>
-                    </label>
+                    <Switch key={a.id} className="w-fit" checked={parts.includes(a.id)} onChange={(v) => { setConfirmed(false); setParts((p) => (v ? [...p, a.id] : p.filter((x) => x !== a.id))) }} label={<>{a.label} <span className="text-muted">({a.count(db)})</span></>} />
                   ))}
                 </div>
               )}
@@ -303,10 +300,7 @@ export function ImportForm({ formId, initial, initialText, initialWay, setBusy, 
                 <div className="mt-1 grid gap-2 rounded-lg border border-down/25 bg-down/[0.06] px-3 py-2.5">
                   <p><b className="text-ink">Achtung:</b> Vor dem Übernehmen wird gelöscht: {lost.map((a) => `${a.label} (${a.n})`).join(', ')}. Das lässt sich nicht rückgängig machen.</p>
                   <button type="button" className="btn btn-sm w-fit" onClick={() => downloadBackup(db, getPortfolio())}><Download />Vorher Sicherungskopie herunterladen</button>
-                  <label className="flex cursor-pointer items-center gap-2 font-medium text-ink">
-                    <input type="checkbox" className="accent-[var(--color-down)]" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
-                    Ja, diese Daten löschen und ersetzen
-                  </label>
+                  <Switch className="w-fit font-medium !text-ink" checked={confirmed} onChange={setConfirmed} label="Ja, diese Daten löschen und ersetzen" />
                 </div>
               )}
             </fieldset>

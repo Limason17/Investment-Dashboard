@@ -5,7 +5,8 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
-import { BUCKETS, defaultBucketName } from '@/lib/buckets'
+import { Switch } from '@/components/ui'
+import { catOf, categoriesOf, MAX_CATEGORIES, newCategoryId, PALETTE } from '@/lib/buckets'
 import { isCap, targetOf } from '@/lib/calc'
 import { useDepot } from '@/lib/context'
 import { parseNum, r2, today, uid } from '@/lib/format'
@@ -87,54 +88,74 @@ function EditSheet({ open, onClose, title, sub, save, remove, children }: {
 export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { db, c } = useDepot()
   const s = c.settings
-  const [targets, setTargets] = useState<Record<BucketId, string>>(() => Object.fromEntries(BUCKETS.map((b) => [b.id, targetOf(s, b.id) == null ? '' : String(Math.round(targetOf(s, b.id)! * 1000) / 10)])) as Record<BucketId, string>)
-  const [caps, setCaps] = useState<BucketId[]>(() => BUCKETS.filter((b) => isCap(s, b.id)).map((b) => b.id))
-  const [names, setNames] = useState<Record<BucketId, string>>(() => Object.fromEntries(BUCKETS.map((b) => [b.id, s.bucketNames?.[b.id] ?? ''])) as Record<BucketId, string>)
+  const pct = (id: BucketId) => (targetOf(s, id) == null ? '' : String(Math.round(targetOf(s, id)! * 1000) / 10))
+  // Eigene Kategorien: Name frei, bis zu zehn, Cash ist fest
+  const [cats, setCats] = useState(() => categoriesOf(s).map((x) => ({ ...x })))
+  const [targets, setTargets] = useState<Record<BucketId, string>>(() => Object.fromEntries([...categoriesOf(s).map((x) => x.id), 'cash'].map((id) => [id, pct(id)])))
+  const [caps, setCaps] = useState<BucketId[]>(() => [...categoriesOf(s).map((x) => x.id), 'cash'].filter((id) => isCap(s, id)))
   const [wht, setWht] = useState(String(Math.round((s.withholding ?? 0.15) * 1000) / 10))
   const [broker, setBroker] = useState(s.broker ?? '')
   const [fx, setFx] = useState<'' | 'CHF' | 'EUR'>(s.fx ?? '')
   const [rules, setRules] = useState(() => (s.rules ?? []).map((r) => ({ ...r })))
-  const sum = BUCKETS.reduce((t, b) => t + (parseNum(targets[b.id]) ?? 0), 0)
-  const filled = BUCKETS.some((b) => targets[b.id].trim() !== '')
+  const ids = [...cats.map((x) => x.id), 'cash']
+  const sum = ids.reduce((t, id) => t + (parseNum(targets[id] ?? '') ?? 0), 0)
+  const filled = ids.some((id) => (targets[id] ?? '').trim() !== '')
+  // Titel je Kategorie, damit beim Löschen klar ist, wohin sie wandern
+  const count = (id: string) => Object.values(db.positions).filter((p) => p.shares > 0 && catOf(p.bucket) === id).length
+  const color = (i: number) => PALETTE[i % PALETTE.length]
 
   const save = async () => {
+    const list = cats.map((x) => ({ id: x.id, name: x.name.trim().slice(0, 30) }))
+    if (!list.length) throw new Error('Mindestens eine Kategorie ist nötig.')
+    const empty = list.find((x) => !x.name)
+    if (empty) throw new Error('Jede Kategorie braucht einen Namen.')
     const tg: Partial<Record<BucketId, number>> = {}
-    for (const b of BUCKETS) {
-      if (!targets[b.id].trim()) continue
-      const v = parseNum(targets[b.id])
-      if (v == null || v < 0 || v > 100) throw new Error(`Zielanteil für ${b.name} muss zwischen 0 und 100 liegen.`)
-      tg[b.id] = r2(v)
+    for (const id of ids) {
+      if (!(targets[id] ?? '').trim()) continue
+      const v = parseNum(targets[id])
+      const name = list.find((x) => x.id === id)?.name ?? 'Cash'
+      if (v == null || v < 0 || v > 100) throw new Error(`Zielanteil für ${name} muss zwischen 0 und 100 liegen.`)
+      tg[id] = r2(v)
     }
     if (Object.keys(tg).length && Math.abs(sum - 100) > 0.05) throw new Error(`Die Zielanteile ergeben ${r2(sum)} %. Sie müssen zusammen 100 % ergeben.`)
     const w = parseNum(wht)
     if (w == null || w < 0 || w > 60) throw new Error('Quellensteuer muss zwischen 0 und 60 % liegen.')
     const clean = rules.map((r) => ({ tag: r.tag?.trim() || undefined, title: r.title.trim().slice(0, 120), detail: r.detail?.trim().slice(0, 400) || undefined })).filter((r) => r.title)
-    const bn = Object.fromEntries(BUCKETS.filter((b) => b.id !== 'cash' && names[b.id].trim()).map((b) => [b.id, names[b.id].trim().slice(0, 30)]))
-    await mutate([{ op: 'merge', coll: 'meta', id: 'settings', data: { targets: tg, caps, bucketNames: Object.keys(bn).length ? bn : undefined, withholding: w / 100, broker: broker.trim().slice(0, 40) || undefined, fx: fx || undefined, rules: clean } }])
+    // Titel aus gelöschten Kategorien wandern in die erste Kategorie
+    const keep = new Set(list.map((x) => x.id))
+    const moves: Op[] = Object.entries(db.positions).filter(([, p]) => !keep.has(catOf(p.bucket)) || !keep.has(p.bucket)).map(([t]) => ({ op: 'merge', coll: 'positions', id: t, data: { bucket: keep.has(catOf(db.positions[t].bucket)) ? catOf(db.positions[t].bucket) : list[0].id } }))
+    await mutate([...moves, { op: 'merge', coll: 'meta', id: 'settings', data: { categories: list, bucketNames: null, targets: tg, caps: caps.filter((id) => ids.includes(id)), withholding: w / 100, broker: broker.trim().slice(0, 40) || undefined, fx: fx || undefined, rules: clean } }])
     return 'Plan gespeichert.'
   }
 
   return (
     <EditSheet open={open} onClose={onClose} title="Plan und Einstellungen" sub="Kategorien, Zielanteile, Obergrenzen, Währung und Regeln" save={save}>
       <div className="grid gap-2">
-        <div className="text-[13px] font-semibold">Kategorien: Name, Zielanteil, Obergrenze</div>
-        {BUCKETS.map((b) => (
-          <div key={b.id} className="grid grid-cols-[minmax(0,1fr)_76px_auto] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_88px_auto] sm:gap-3">
-            <span className="flex min-w-0 items-center gap-2 text-[13px]">
-              <i className="swatch flex-none" style={{ background: b.color }} />
-              {b.id === 'cash' ? <span className="truncate">{b.name}</span> : <input aria-label={`Name für ${defaultBucketName(b.id)}`} className="input input-sm min-w-0" maxLength={30} placeholder={defaultBucketName(b.id)} value={names[b.id]} onChange={(e) => setNames((n) => ({ ...n, [b.id]: e.target.value }))} />}
-            </span>
-            <span className="relative">
-              <input aria-label={`Zielanteil ${b.name} in Prozent`} className="input input-sm num !pr-7 text-right" inputMode="decimal" value={targets[b.id]} onChange={(e) => setTargets((t) => ({ ...t, [b.id]: e.target.value }))} />
-              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[12px] text-muted">%</span>
-            </span>
-            <label className={`flex items-center gap-1.5 text-[12px] ${b.id === 'cash' ? 'invisible' : 'text-ink-2'}`} title="Zielanteil als harte Obergrenze: Warnung, sobald er überschritten ist">
-              <input type="checkbox" className="accent-[var(--color-down)]" checked={caps.includes(b.id)} onChange={(e) => setCaps((x) => (e.target.checked ? [...x, b.id] : x.filter((y) => y !== b.id)))} />
-              <span className="max-sm:hidden">Obergrenze</span><span className="sm:hidden">max</span>
-            </label>
-          </div>
-        ))}
-        <div className={`num text-right text-[12px] ${filled && Math.abs(sum - 100) > 0.05 ? 'text-down' : 'text-muted'}`}>{filled ? `Summe ${r2(sum)} %${Math.abs(sum - 100) > 0.05 ? ' (muss 100 % sein)' : ''}` : 'Leer lassen = kein Ziel'}</div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[13px] font-semibold">Kategorien</span>
+          <button type="button" className="btn btn-sm btn-ghost" disabled={cats.length >= MAX_CATEGORIES} onClick={() => setCats((x) => [...x, { id: newCategoryId(x.map((y) => y.id)), name: '' }])}><Plus />Kategorie</button>
+        </div>
+        <p className="text-[12px] leading-[1.5] text-muted">Teile dein Depot so ein, wie du denkst, z. B. nach Anlageart, Region oder Strategie. Zielanteil leer lassen = kein Ziel.</p>
+        {[...cats.map((x, i) => ({ ...x, i })), { id: 'cash', name: 'Cash', i: -1 }].map((x) => {
+          const n = x.id === 'cash' ? 0 : count(x.id)
+          return (
+            <div key={x.id} className="grid grid-cols-[minmax(0,1fr)_72px_58px_32px] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_84px_64px_32px] sm:gap-3">
+              <span className="flex min-w-0 items-center gap-2 text-[13px]">
+                <i className="swatch flex-none" style={{ background: x.id === 'cash' ? 'var(--color-cash)' : color(x.i) }} />
+                {x.id === 'cash' ? <span className="truncate">Cash</span> : <input aria-label="Name der Kategorie" className="input input-sm min-w-0" maxLength={30} placeholder="Name, z. B. ETFs" value={x.name} onChange={(e) => setCats((l) => l.map((y) => (y.id === x.id ? { ...y, name: e.target.value } : y)))} />}
+              </span>
+              <span className="relative">
+                <input aria-label={`Zielanteil ${x.name || 'neue Kategorie'} in Prozent`} className="input input-sm num !pr-7 text-right" inputMode="decimal" placeholder="–" value={targets[x.id] ?? ''} onChange={(e) => setTargets((t) => ({ ...t, [x.id]: e.target.value }))} />
+                <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[12px] text-muted">%</span>
+              </span>
+              {x.id === 'cash' ? <span /> : <Switch checked={caps.includes(x.id)} onChange={(v) => setCaps((l) => (v ? [...l, x.id] : l.filter((y) => y !== x.id)))} title="Zielanteil als harte Obergrenze: Warnung, sobald er überschritten ist" label={<span className="text-[12px]">max</span>} />}
+              {x.id === 'cash' ? <span className="w-8" /> : (
+                <button type="button" className="btn btn-ghost btn-icon btn-sm" disabled={cats.length <= 1} title={n ? `Löschen: ${n} Titel wandern zur ersten Kategorie` : 'Kategorie löschen'} aria-label="Kategorie löschen" onClick={() => setCats((l) => l.filter((y) => y.id !== x.id))}><Trash2 /></button>
+              )}
+            </div>
+          )
+        })}
+        <div className={`num text-right text-[12px] ${filled && Math.abs(sum - 100) > 0.05 ? 'text-down' : 'text-muted'}`}>{filled ? `Summe ${r2(sum)} %${Math.abs(sum - 100) > 0.05 ? ' (muss 100 % sein)' : ''}` : '«max»: Zielanteil gilt als Obergrenze'}</div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 border-t border-line pt-4">
@@ -251,7 +272,7 @@ export function EventSheet({ id, open, onClose }: { id: string | null; open: boo
           </select>
         )}</Field>
         <Field label="Ticker (optional)">{(id) => <input id={id} className="input uppercase" maxLength={12} value={ticker} onChange={(x) => setTicker(x.target.value)} />}</Field>
-        <label className="mt-6 flex items-center gap-2 text-[13px] text-ink-2"><input type="checkbox" className="accent-[var(--color-accent)]" checked={tentative} onChange={(x) => setTentative(x.target.checked)} />Datum unbestätigt</label>
+        <Switch className="mt-6 self-start text-[13px]" checked={tentative} onChange={setTentative} label="Datum unbestätigt" />
       </div>
       <Field label="Notiz">{(id) => <textarea id={id} className="input" maxLength={300} value={detail} onChange={(x) => setDetail(x.target.value)} />}</Field>
     </EditSheet>

@@ -1,7 +1,7 @@
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
 import { Delta, Segmented } from '@/components/ui'
-import { HOLDING_BUCKETS } from '@/lib/buckets'
+import { defaultCat, HOLDING_BUCKETS } from '@/lib/buckets'
 import { quote, wht } from '@/lib/calc'
 import { commit } from '@/lib/commit'
 import { getAccount } from '@/lib/cloud'
@@ -77,7 +77,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
   const [px, setPx] = useState(old?.price != null ? String(old.price) : '')
   const [fee, setFee] = useState(old?.fees != null ? String(old.fees) : '0')
   const [date, setDate] = useState(old?.date ?? today())
-  const [bucket, setBucket] = useState('aktien')
+  const [bucket, setBucket] = useState(defaultCat)
   const [pot, setPot] = useState(old?.pot ?? '')
   const [note, setNote] = useState(old?.note ?? '')
   const listId = useId()

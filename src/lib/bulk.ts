@@ -3,6 +3,7 @@
  * und den Transaktions-Export von Schwab. Reine Funktionen ohne Speichern; das Blatt
  * ImportForm zeigt die Vorschau und schreibt erst nach der Bestätigung.
  */
+import { HOLDING_BUCKETS } from './buckets'
 import type { HoldingBucket } from './types'
 
 export type ImportKind = 'bestand' | 'trades' | 'dividenden'
@@ -23,7 +24,7 @@ export const COLUMNS: Record<ImportKind, Col[]> = {
     { key: 'shares', label: 'Stück', required: true, example: '3', hint: 'Bruchteile erlaubt', aliases: ['stueck', 'anzahl', 'menge', 'shares', 'quantity', 'qty', 'qtyquantity'] },
     { key: 'cost', label: 'Einstand', example: '1077.00', hint: 'Einstand gesamt in USD, nicht je Stück; leer = unbekannt', aliases: ['einstand', 'kosten', 'cost', 'costbasis', 'einstandgesamt'] },
     { key: 'name', label: 'Name', example: 'Vanguard Total Stock Market ETF', hint: 'leer = Ticker', aliases: ['name', 'bezeichnung', 'description', 'beschreibung'] },
-    { key: 'bucket', label: 'Kategorie', example: 'etf', hint: 'etf, aktien, zukunft oder metalle; leer = aktien', aliases: ['baustein', 'bucket', 'kategorie'] },
+    { key: 'bucket', label: 'Kategorie', example: 'etf', hint: 'Name einer deiner Kategorien; leer = Standard', aliases: ['baustein', 'bucket', 'kategorie'] },
     { key: 'note', label: 'Notiz', example: '', hint: 'optional', aliases: ['notiz', 'note', 'bemerkung'] },
   ],
   trades: [
@@ -33,7 +34,7 @@ export const COLUMNS: Record<ImportKind, Col[]> = {
     { key: 'shares', label: 'Stück', required: true, example: '1', hint: 'Bruchteile erlaubt', aliases: ['stueck', 'anzahl', 'menge', 'shares', 'quantity', 'qty'] },
     { key: 'price', label: 'Preis', required: true, example: '359.00', hint: 'Preis je Stück in USD', aliases: ['preis', 'kurs', 'price', 'preisjestueck'] },
     { key: 'fees', label: 'Gebühren', example: '0', hint: 'in USD; leer = 0', aliases: ['gebuehren', 'gebuehr', 'fees', 'feescomm', 'kommission'] },
-    { key: 'bucket', label: 'Kategorie', example: 'etf', hint: 'nur für neue Titel; leer = aktien', aliases: ['baustein', 'bucket', 'kategorie'] },
+    { key: 'bucket', label: 'Kategorie', example: 'etf', hint: 'nur für neue Titel; leer = Standard', aliases: ['baustein', 'bucket', 'kategorie'] },
     { key: 'note', label: 'Notiz', example: '', hint: 'optional', aliases: ['notiz', 'note', 'bemerkung'] },
   ],
   dividenden: [
@@ -219,11 +220,14 @@ const BUCKET_WORDS: [HoldingBucket, string[]][] = [
   ['zukunft', ['zukunft', 'future']],
   ['metalle', ['metalle', 'metall', 'metallekrypto', 'krypto', 'crypto', 'gold']],
 ]
-/** Baustein aus dem Text; undefined = leer, null = unbekannt. */
+/** Kategorie aus dem Text (Name, Kurzname oder Kennung der eigenen Kategorien); undefined = leer, null = unbekannt. */
 function bucket(raw: string | undefined): HoldingBucket | null | undefined {
   const n = norm(raw ?? '')
   if (!n) return undefined
-  return BUCKET_WORDS.find(([, words]) => words.includes(n))?.[0] ?? null
+  const own = HOLDING_BUCKETS.find((b) => [b.id, b.name, b.short].some((x) => norm(x) === n))
+  if (own) return own.id
+  const legacy = BUCKET_WORDS.find(([, words]) => words.includes(n))?.[0]
+  return legacy && HOLDING_BUCKETS.some((b) => b.id === legacy) ? legacy : null
 }
 
 function tradeType(raw: string | undefined): 'kauf' | 'verkauf' | null {

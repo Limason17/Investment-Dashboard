@@ -4,7 +4,7 @@ import type { Tone } from '@/lib/calc'
 import { useMeasure } from '@/lib/useMeasure'
 
 /** Mini-Verlauf: Richtung über den Zeitraum bestimmt die Farbe, Endpunkt markiert. */
-export function Sparkline({ values, width = 88, height = 28, tone = 'flat', label, baseline, baselineColor = '#3a4050', split = true, baselineLabel, endLabel }: {
+export function Sparkline({ values, width = 88, height = 28, tone = 'flat', label, baseline, baselineColor = '#3a4050', split = true, baselineLabel, endLabel, hi: hov, onHover }: {
   values: number[]
   width?: number
   height?: number
@@ -19,6 +19,10 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
   baselineLabel?: string
   /** Text am Endpunkt, z. B. der aktuelle Kurs */
   endLabel?: string
+  /** Abgelesener Punkt (Maus oder Finger) */
+  hi?: number | null
+  /** Ablesen: liefert den Punkt unter Maus oder Finger, null beim Verlassen */
+  onHover?: (i: number | null) => void
 }) {
   const id = useId().replace(/:/g, '')
   if (values.length < 2 || width < 12) return <span className="inline-block text-faint" style={{ width, height, lineHeight: height + 'px' }}>–</span>
@@ -36,7 +40,17 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
   const end = cut != null ? (values[n - 1] >= base! ? UP : DOWN) : color
   const floor = cut != null ? y(base!) : height
   return (
-    <svg width={width} height={height} role="img" aria-label={label} className="block overflow-visible">
+    <svg
+      width={width}
+      height={height}
+      role="img"
+      aria-label={label}
+      className={`block overflow-visible ${onHover ? 'cursor-crosshair touch-pan-y' : ''}`}
+      onPointerMove={onHover ? (e) => { const r = e.currentTarget.getBoundingClientRect(); onHover(Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left - 1) / (width - 6)) * (n - 1))))) } : undefined}
+      onPointerDown={onHover ? (e) => { const r = e.currentTarget.getBoundingClientRect(); onHover(Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left - 1) / (width - 6)) * (n - 1))))) } : undefined}
+      onPointerLeave={onHover ? () => onHover(null) : undefined}
+      onPointerUp={onHover ? (e) => { if (e.pointerType !== 'mouse') onHover(null) } : undefined}
+    >
       <defs>
         {cut != null ? (
           <>
@@ -61,7 +75,14 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
       {!split && baseline != null && <line x1={x(0)} x2={x(n - 1)} y1={y(baseline)} y2={y(baseline)} stroke={baselineColor} strokeWidth="1" />}
       <path d={`${d}L${x(n - 1)},${floor}L${x(0)},${floor}Z`} fill={`url(#${id})`} />
       <path d={d} fill="none" stroke={cut != null ? `url(#${id}l)` : color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={x(n - 1)} cy={y(values[n - 1])} r="2.5" fill={end} stroke="var(--color-card)" strokeWidth="1.5" />
+      {hov == null || hov >= n ? (
+        <circle cx={x(n - 1)} cy={y(values[n - 1])} r="2.5" fill={end} stroke="var(--color-card)" strokeWidth="1.5" />
+      ) : (
+        <g pointerEvents="none">
+          <line x1={x(hov)} x2={x(hov)} y1={0} y2={height} stroke="rgb(255 255 255 / 0.28)" strokeWidth="1" />
+          <circle cx={x(hov)} cy={y(values[hov])} r="3.5" fill={cut != null ? (values[hov] >= base! ? UP : DOWN) : color} stroke="var(--color-card)" strokeWidth="1.5" />
+        </g>
+      )}
       {!split && baseline != null && baselineLabel && (
         <text x={x(0)} y={y(baseline) < 14 ? y(baseline) + 12 : y(baseline) - 5} fill={baselineColor} className="num text-[10.5px] font-medium" style={{ paintOrder: 'stroke', stroke: 'var(--color-card)', strokeWidth: 4, strokeLinejoin: 'round' }}>{baselineLabel}</text>
       )}

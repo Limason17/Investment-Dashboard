@@ -3,6 +3,7 @@
  * Prüft gegen den Bestand (Verkauf ohne Bestand), erkennt bereits erfasste Einträge
  * und rechnet Einstand, realisierten Gewinn und Cash wie die Einzeleingabe.
  */
+import { defaultCat } from './buckets'
 import type { ParseResult } from './bulk'
 import { quote, wht } from './calc'
 import { qty, r2, uid, usd } from './format'
@@ -57,7 +58,7 @@ export function planImport(db: DB, p: ParseResult): Plan {
     ops.push(
       old
         ? { op: 'merge', coll: 'positions', id: r.ticker, data: { shares: r.shares, ...(r.cost != null ? { cost: r2(r.cost) } : {}), ...(r.bucket ? { bucket: r.bucket } : {}), ...(r.name !== r.ticker ? { name: r.name } : {}), ...(r.note ? { note: r.note } : {}) } }
-        : { op: 'set', coll: 'positions', id: r.ticker, data: { ticker: r.ticker, name: r.name, shares: r.shares, bucket: r.bucket ?? 'aktien', cost: r.cost == null ? null : r2(r.cost), status: 'Massen-Import', note: r.note } },
+        : { op: 'set', coll: 'positions', id: r.ticker, data: { ticker: r.ticker, name: r.name, shares: r.shares, bucket: r.bucket ?? defaultCat(), cost: r.cost == null ? null : r2(r.cost), status: 'Massen-Import', note: r.note } },
     )
   }
 
@@ -80,7 +81,7 @@ export function planImport(db: DB, p: ParseResult): Plan {
       if (cur) {
         cur.shares = +(cur.shares + r.shares).toFixed(6)
         cur.cost = cur.cost != null ? r2(cur.cost + amt + r.fees) : null
-      } else pos.set(r.ticker, { shares: r.shares, cost: r2(amt + r.fees), isNew: true, name: r.ticker, bucket: r.bucket ?? 'aktien' })
+      } else pos.set(r.ticker, { shares: r.shares, cost: r2(amt + r.fees), isNew: true, name: r.ticker, bucket: r.bucket ?? defaultCat() })
       ops.push({ op: 'set', coll: 'transactions', id: uid(), data: { type: 'kauf', date: r.date, ticker: r.ticker, shares: r.shares, price: r.price, fees: r.fees, cashDelta: r2(cashD), pot: null, note: r.note, createdAt, by } })
       addCash(r.date, cashD)
       if (!quote(db, r.ticker)) priced.add(r.ticker)

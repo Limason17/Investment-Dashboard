@@ -34,6 +34,18 @@ export function Card({ title, sub, action, children, className, bodyClassName, f
 
 /* ------------------------------------------------------------------ Status: farbiger Punkt und Wort */
 type IconType = ComponentType<{ className?: string; strokeWidth?: number }>
+/* ------------------------------------------------------------------ Schalter (statt Checkbox) */
+export function Switch({ checked, onChange, label, title, className, ariaLabel }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; title?: string; className?: string; ariaLabel?: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} aria-label={ariaLabel} title={title} onClick={() => onChange(!checked)} className={clsx('inline-flex flex-none select-none items-center gap-2 rounded-full text-[12.5px] text-ink-2 outline-offset-2', className)}>
+      <span className={clsx('relative h-[18px] w-[30px] flex-none rounded-full border transition-colors duration-200', checked ? 'border-transparent bg-accent' : 'border-line-2 bg-white/[0.06]')}>
+        <span className={clsx('absolute top-1/2 size-3 -translate-y-1/2 rounded-full shadow-sm transition-[left,background-color] duration-200', checked ? 'left-[14px] bg-white' : 'left-[3px] bg-ink-2')} />
+      </span>
+      {label}
+    </button>
+  )
+}
+
 export function Chip({ tone = 'mute', children, className, title }: { tone?: Tone | 'down'; icon?: IconType | false; children: ReactNode; className?: string; title?: string }) {
   return (
     <span className={clsx('tag', `tag-${tone}`, className)} title={title}>

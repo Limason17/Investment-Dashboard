@@ -35,7 +35,7 @@ function Hero() {
   const ranges = usePortfolioRanges()
   const [stored, setRange] = useStored<RangeId>('depot.range', '1M')
   const range = ranges.includes(stored) ? stored : 'MAX'
-  const [mode, setMode] = useStored<'wert' | 'rendite'>('depot.mode', 'wert', ['wert', 'rendite'])
+  const [mode, setMode] = useStored<'wert' | 'rendite'>('depot.view', 'rendite', ['wert', 'rendite'])
   const [hover, setHover] = useState<number | null>(null)
   const [benchOn, setBenchOn] = useStored<'an' | 'aus'>('depot.bench', 'an', ['an', 'aus'])
   const [invOn, setInvOn] = useStored<'an' | 'aus'>('depot.inv', 'an', ['an', 'aus'])
@@ -159,7 +159,7 @@ function Hero() {
          </div>
           <div className="hidden flex-none flex-col items-end gap-2 sm:flex min-[1500px]:flex-row min-[1500px]:items-center">
             <Segmented label="Zeitraum" value={range} onChange={setRange} options={ranges.map((r) => ({ value: r, label: RANGE_LABEL[r], title: RANGE_TITLE[r] }))} />
-            <Segmented label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'wert', label: 'Wert', title: 'Wert in USD; der Ertrag bezieht sich auf das eingesetzte Kapital' }, { value: 'rendite', label: 'Rendite', title: 'Zeitgewichtet und im Vergleich zum Markt: Käufe, Verkäufe und Einzahlungen sind herausgerechnet' }]} />
+            <Segmented label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'rendite', label: 'Rendite', title: 'Zeitgewichtet und im Vergleich zum Markt: Käufe, Verkäufe und Einzahlungen sind herausgerechnet' }, { value: 'wert', label: 'Wert', title: 'Wert in USD; der Ertrag bezieht sich auf das eingesetzte Kapital' }]} />
           </div>
         </div>
 
@@ -215,7 +215,7 @@ function Hero() {
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pb-4 sm:px-6">
         {/* Handy: Umschalter links, damit der Plus-Knopf unten rechts ihn nicht verdeckt */}
-        <Segmented className="sm:hidden" label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'wert', label: 'Wert' }, { value: 'rendite', label: 'Rendite' }]} />
+        <Segmented className="sm:hidden" label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'rendite', label: 'Rendite' }, { value: 'wert', label: 'Wert' }]} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-2">
           <span className="inline-flex items-center"><i className="linekey" style={{ background: lineColor }} />{mode === 'rendite' ? 'Depot, zeitgewichtet' : valueLabel}</span>
           {ps?.bench && (

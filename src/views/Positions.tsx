@@ -1,13 +1,13 @@
 import { ArrowDown, ArrowUp, Download, Search, Upload, X } from 'lucide-react'
 import { Fragment, useMemo, useState } from 'react'
 import { FluidSparkline, Meter, Sparkline } from '@/components/charts/Small'
-import { Card, Chip, Delta, DemoTag, Empty, Segmented, Ticker } from '@/components/ui'
-import { HOLDING_BUCKETS } from '@/lib/buckets'
+import { Card, Chip, Delta, DemoTag, Empty, Segmented, Ticker, Switch } from '@/components/ui'
+import { HOLDING_BUCKETS, catOf } from '@/lib/buckets'
 import { isCap, targetOf, type Row } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
 import { exportCsv } from '@/lib/export'
-import { pct, pctPlain, qty, sign, usd } from '@/lib/format'
+import { pct, pctPlain, qty, sign, usd, dshort, hhmm } from '@/lib/format'
 import { rangeChange } from '@/lib/history'
 import { usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { HoldingBucket, RangeId } from '@/lib/types'
@@ -30,6 +30,7 @@ export function Positions() {
   const { chart, series: ps, pending } = usePortfolio(range)
   const [sort, setSort] = useState<{ k: SortKey; d: 1 | -1 }>({ k: 'val', d: -1 })
   const [bucket, setBucket] = useState<string>('alle')
+  const [hov, setHov] = useState<{ id: string; i: number } | null>(null)
   const [grouped, setGrouped] = useStored<'an' | 'aus'>('depot.pos.group', 'aus', ['an', 'aus'])
   const [q, setQ] = useState('')
   const cashOff = !!c.settings.cashExcluded
@@ -63,7 +64,7 @@ export function Positions() {
     k === 't' ? r.t : k === 'shares' ? r.p.shares : k === 'px' ? r.px : k === 'gl' ? (data[r.t]?.move.abs ?? null) : r.val
   const needle = q.trim().toLowerCase()
   const rows = c.rows
-    .filter((r) => (bucket === 'alle' || r.p.bucket === bucket) && (!needle || r.t.toLowerCase().includes(needle) || r.p.name.toLowerCase().includes(needle)))
+    .filter((r) => (bucket === 'alle' || catOf(r.p.bucket) === bucket) && (!needle || r.t.toLowerCase().includes(needle) || r.p.name.toLowerCase().includes(needle)))
     .sort((a, b) => {
       const va = value(a, sort.k), vb = value(b, sort.k)
       if (va == null) return 1
@@ -71,7 +72,7 @@ export function Positions() {
       return (va > vb ? 1 : va < vb ? -1 : 0) * sort.d
     })
   const groups = grouped === 'an'
-    ? HOLDING_BUCKETS.map((b) => ({ b, rs: rows.filter((r) => r.p.bucket === b.id) })).filter((g) => g.rs.length)
+    ? HOLDING_BUCKETS.map((b) => ({ b, rs: rows.filter((r) => catOf(r.p.bucket) === b.id) })).filter((g) => g.rs.length)
     : [{ b: null, rs: rows }]
   const share = (v: number | null) => pctPlain(c.valuationComplete && v != null && (cashOff ? c.sec : c.total) ? v / (cashOff ? c.sec : c.total) : null)
   const costDemo = c.rows.some((r) => r.p.costDemo)
@@ -135,10 +136,13 @@ export function Positions() {
             const tgt = targetOf(c.settings, b.id)
             const s = ps?.buckets[b.id as HoldingBucket]
             const ret = s && s.twr.length ? s.twr[s.twr.length - 1] : null
-            const n = c.rows.filter((r) => r.p.bucket === b.id).length
+            const n = c.rows.filter((r) => catOf(r.p.bucket) === b.id).length
+            const at = hov?.id === b.id && s && hov.i < s.twr.length ? hov.i : null
             const over = isCap(c.settings, b.id) && !cashOff && tgt != null && w > tgt
             return (
-              <button key={b.id} type="button" onClick={() => setBucket(bucket === b.id ? 'alle' : b.id)} aria-pressed={bucket === b.id} title={bucket === b.id ? 'Filter aufheben' : `Nur ${b.name} zeigen`} className={`group min-w-0 rounded-xl text-left outline-offset-4 transition-opacity ${bucket !== 'alle' && bucket !== b.id ? 'opacity-45' : ''}`}>
+              <div key={b.id} className={`min-w-0 transition-opacity ${bucket !== 'alle' && bucket !== b.id ? 'opacity-45' : ''}`}>
+              {/* Oben: antippen filtert die Liste. Unten: Verlauf zum Ablesen. */}
+              <button type="button" onClick={() => setBucket(bucket === b.id ? 'alle' : b.id)} aria-pressed={bucket === b.id} title={bucket === b.id ? 'Filter aufheben' : `Nur ${b.name} zeigen`} className="group -m-1.5 block w-[calc(100%+12px)] rounded-xl p-1.5 text-left outline-offset-2 transition-colors hover:bg-white/[0.03] aria-pressed:bg-white/[0.05]">
                 <div className="flex items-center gap-2 text-[12.5px] text-ink-2">
                   <i className="swatch" style={{ background: b.color }} />
                   <span className="truncate">{b.name}</span>
@@ -151,11 +155,15 @@ export function Positions() {
                   {over && <Chip tone="down">über Obergrenze</Chip>}
                 </div>
                 <Meter className="mt-2" value={w / 0.6} mark={tgt != null ? tgt / 0.6 : undefined} color={b.color} height={4} />
-                <div className={`mt-3 flex items-center gap-3 transition-opacity ${pending ? 'opacity-40' : ''}`}>
-                  <Delta value={ret} digits={1} className="flex-none text-[12.5px] font-medium" />
-                  <FluidSparkline className="min-w-0 flex-1" values={s?.twr ?? []} tone={sign(ret)} baseline={0} height={30} label={`${b.name}: ${pct(ret, 1)} ${RANGE_TEXT[range]}`} />
-                </div>
               </button>
+                <div className={`mt-3 flex items-center gap-3 transition-opacity ${pending ? 'opacity-40' : ''}`}>
+                  <span className="w-[62px] flex-none leading-tight">
+                    <Delta value={at != null ? s!.twr[at] : ret} digits={1} className="text-[12.5px] font-medium" />
+                    <span className="block text-[10.5px] text-muted">{at != null && ps ? (ps.kind === 'intraday' ? hhmm(ps.t[at]) : dshort(ps.d[at])) : RANGE_LABEL[range]}</span>
+                  </span>
+                  <FluidSparkline className="min-w-0 flex-1" values={s?.twr ?? []} tone={sign(ret)} baseline={0} height={34} hi={at} onHover={(i) => setHov(i == null ? null : { id: b.id, i })} label={`${b.name}: ${pct(ret, 1)} ${RANGE_TEXT[range]}`} />
+                </div>
+              </div>
             )
           })}
         </div>
@@ -179,10 +187,7 @@ export function Positions() {
               {bucketName} <X className="size-3" />
             </button>
           )}
-          <label className="flex cursor-pointer select-none items-center gap-2 text-[12.5px] text-ink-2">
-            <input type="checkbox" className="size-4 accent-[var(--color-accent)]" checked={grouped === 'an'} onChange={(e) => setGrouped(e.target.checked ? 'an' : 'aus')} />
-            Nach Kategorie
-          </label>
+          <Switch checked={grouped === 'an'} onChange={(v) => setGrouped(v ? 'an' : 'aus')} label="Nach Kategorie" />
           <label className="ml-auto flex items-center gap-2 text-[12px] text-muted md:hidden">
             Sortiert nach
             <select className="input input-sm !w-auto" value={sort.k} onChange={(e) => setSort({ k: e.target.value as SortKey, d: e.target.value === 't' ? 1 : -1 })}>

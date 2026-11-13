@@ -1,5 +1,7 @@
-export type BucketId = 'etf' | 'aktien' | 'zukunft' | 'metalle' | 'cash'
-export type HoldingBucket = Exclude<BucketId, 'cash'>
+/** Kennung einer Kategorie; jedes Depot legt seine Kategorien selbst fest ('cash' ist fest). */
+export type BucketId = string
+export type HoldingBucket = string
+export interface Category { id: string; name: string }
 
 export interface Position {
   ticker: string
@@ -122,8 +124,10 @@ export interface Settings {
   targets?: Partial<Record<BucketId, number>>
   /** Bausteine, deren Zielanteil eine harte Obergrenze ist (ohne Angabe: ETF-Kern) */
   caps?: BucketId[]
-  /** Eigene Namen der Bausteine */
+  /** Eigene Namen der alten, festen Kategorien (ältere Depots) */
   bucketNames?: Partial<Record<BucketId, string>>
+  /** Eigene Kategorien in ihrer Reihenfolge; ohne Angabe die alten festen Kategorien */
+  categories?: Category[]
   /** Stand der akzeptierten Nutzungsbedingungen (bei der Registrierung) */
   termsAccepted?: string
   /** Einführung gesehen */
