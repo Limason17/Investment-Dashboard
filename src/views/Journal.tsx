@@ -4,11 +4,12 @@ import { MonthBars, type MonthPair } from '@/components/charts/MonthBars'
 import { Card, Chip, Delta, DemoTag, Empty, Segmented, Stat } from '@/components/ui'
 import { withIds, yearStats } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
-import { addMonths, dfmt, int, qty, usd, weekday } from '@/lib/format'
+import { addMonths, dfmt, int, pct, qty, sUsd, usd, weekday } from '@/lib/format'
 import { TX_LABEL } from '@/lib/labels'
 import { reverseTx } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
+import type { Tx } from '@/lib/types'
 
 
 const RECENT = 12
@@ -125,8 +126,8 @@ export function Journal() {
                 </div>
                 <div className="flex items-start gap-0.5">
                   <div className="pt-0.5 text-right leading-tight">
-                    <Delta value={x.cashDelta} kind="usd" icon={false} className="text-[13.5px] font-medium" />
-                    {x.type === 'verkauf' && x.realized != null && <div className="whitespace-nowrap text-[11.5px] text-muted">realisiert <Delta value={x.realized} kind="usd" icon={false} /></div>}
+                    <span className="num text-[13.5px] font-medium text-ink">{sUsd(x.cashDelta)}</span>
+                    {x.type === 'verkauf' && x.realized != null && <Result tx={x} />}
                   </div>
                   <span className="flex">{(x.type === 'kauf' || x.type === 'verkauf') && <button type="button" className="btn btn-ghost btn-sm" aria-label="Buchung bearbeiten" title="Buchung bearbeiten" onClick={() => nav.openEntry(x.type as 'kauf' | 'verkauf', { fromId: x.id })}><Pencil /></button>}<DeleteButton onConfirm={() => del(x.id)} /></span>
                 </div>
@@ -147,9 +148,9 @@ export function Journal() {
                     <td className="r num text-ink-2">{x.shares != null ? qty(x.shares) : ''}</td>
                     <td className="r num text-ink-2">{x.price != null ? usd(x.price) : ''}</td>
                     <td className="r leading-tight">
-                      <Delta value={x.cashDelta} kind="usd" icon={false} className="font-medium" />
+                      <span className="num font-medium text-ink">{sUsd(x.cashDelta)}</span>
                       {/* Ein realisiertes Ergebnis gibt es nur bei Verkäufen. */}
-                      {x.type === 'verkauf' && x.realized != null && <div className="whitespace-nowrap text-[11.5px] text-muted">{x.costMethod ? 'realisiert (' + x.costMethod + ')' : 'realisiert'} <Delta value={x.realized} kind="usd" icon={false} /></div>}
+                      {x.type === 'verkauf' && x.realized != null && <Result tx={x} />}
                     </td>
                     <td>
                       <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
@@ -199,6 +200,18 @@ export function Journal() {
           </ol>
         )}
       </Card>
+    </div>
+  )
+}
+
+/** Ergebnis eines Verkaufs: Gewinn oder Verlust gegenüber dem Einstand, in USD und Prozent */
+function Result({ tx }: { tx: Tx }) {
+  const r = tx.realized ?? 0
+  const cost = (tx.cashDelta ?? 0) - r
+  const tone = r > 0 ? 'text-up' : r < 0 ? 'text-down' : 'text-muted'
+  return (
+    <div className={`num mt-0.5 whitespace-nowrap text-[11.5px] font-medium ${tone}`} title={`Erlös minus Einstand${tx.costMethod ? ' (' + tx.costMethod + ')' : ''}`}>
+      {r >= 0 ? 'Gewinn' : 'Verlust'} {sUsd(r)}{cost > 0 ? ` · ${pct(r / cost, 1)}` : ''}
     </div>
   )
 }
