@@ -1,8 +1,8 @@
 import { ClipboardPaste, Download, LogOut, RotateCcw, Trash2, Upload } from 'lucide-react'
-import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
 import { Segmented } from '@/components/ui'
-import { authMessage, cloudReplace, COLLECTIONS, deleteAccount, PASSWORD_MIN, resetPassword, signIn, signOut, signUp, useAccount } from '@/lib/cloud'
+import { authMessage, checkVerified, cloudReplace, COLLECTIONS, deleteAccount, PASSWORD_MIN, resendVerification, resetPassword, signIn, signOut, signUp, useAccount } from '@/lib/cloud'
 import { detectKind, LIMITS, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
 import { BACKUP_KIND, downloadBackup } from '@/lib/backup'
 import { CLOUD } from '@/lib/config'
@@ -157,6 +157,57 @@ export function AuthScreen({ brand }: { brand: ReactNode }) {
   )
 }
 
+/* ------------------------------------------------------------------ E-Mail bestätigen */
+
+/** Neues Konto: erst nach bestätigter E-Mail-Adresse geht es weiter. Prüft beim Zurückkehren ins Fenster selbst. */
+export function VerifyScreen({ brand }: { brand: ReactNode }) {
+  const { user } = useAccount()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [info, setInfo] = useState('')
+  const [sent, setSent] = useState(false)
+
+  useEffect(() => {
+    const again = () => { if (document.visibilityState === 'visible') void checkVerified().catch(() => {}) }
+    document.addEventListener('visibilitychange', again)
+    window.addEventListener('focus', again)
+    const t = window.setInterval(again, 15000)
+    return () => { document.removeEventListener('visibilitychange', again); window.removeEventListener('focus', again); window.clearInterval(t) }
+  }, [])
+
+  const check = async () => {
+    setBusy(true); setErr(''); setInfo('')
+    try {
+      if (!(await checkVerified())) setErr('Noch nicht bestätigt. Öffne den Link in der E-Mail und tippe dann noch einmal hier.')
+    } catch (x) { setErr(authMessage(x)) } finally { setBusy(false) }
+  }
+  const resend = async () => {
+    setErr(''); setInfo('')
+    try { await resendVerification(); setSent(true); setInfo('Neue E-Mail gesendet. Schau auch im Spam-Ordner nach.') } catch (x) { setErr(authMessage(x)) }
+  }
+
+  return (
+    <div className="grid min-h-dvh place-items-center px-4 py-10">
+      <div className="w-full max-w-[380px]">
+        <div className="mb-7 flex justify-center">{brand}</div>
+        <div className="card p-5 sm:p-6">
+          <h1 className="text-[18px] font-semibold tracking-[-0.02em]">E-Mail bestätigen</h1>
+          <p className="mt-1.5 text-[13px] leading-[1.55] text-ink-2">
+            Wir haben einen Link an <b className="font-medium text-ink">{user?.email}</b> gesendet. Öffne ihn, dann geht es hier weiter. So stellen wir sicher, dass die Adresse dir gehört und du dein Passwort zurücksetzen kannst.
+          </p>
+          {err && <div role="alert" className="mt-3 text-[12.5px] text-down">{err}</div>}
+          {info && <div role="status" className="mt-3 text-[12.5px] text-up">{info}</div>}
+          <button type="button" className="btn btn-primary mt-4 w-full" disabled={busy} onClick={check}>{busy ? 'Bitte warten …' : 'Ich habe bestätigt'}</button>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[12.5px]">
+            <button type="button" className="text-muted underline decoration-line-2 underline-offset-4 hover:text-ink disabled:opacity-50" disabled={sent} onClick={resend}>E-Mail erneut senden</button>
+            <button type="button" className="text-muted underline decoration-line-2 underline-offset-4 hover:text-ink" onClick={() => void signOut()}>Andere Adresse verwenden</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------------ Konto-Blatt */
 
 export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: boolean; onClose: () => void; onPortfolios: () => void; onTour: () => void }) {
@@ -229,9 +280,6 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
   return (
     <Sheet open={open} onClose={onClose} title={CLOUD ? 'Konto und Daten' : 'Daten'} sub={CLOUD ? user?.email : 'Positionen hochladen und Daten sichern'}>
       <div className="grid gap-5">
-        {CLOUD && user && !user.verified && (
-          <p className="rounded-xl border border-warn/25 bg-warn/[0.07] px-3.5 py-2.5 text-[12.5px] text-ink-2">Bestätige deine E-Mail-Adresse über den Link in der Willkommens-Mail.</p>
-        )}
 
         <section className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
           <div className="min-w-0">

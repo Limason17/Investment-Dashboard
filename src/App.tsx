@@ -3,7 +3,7 @@ import { Briefcase, CalendarRange, CircleUser, Coins, LayoutDashboard, NotebookP
 import { AnimatePresence, motion, MotionConfig } from 'motion/react'
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { Toaster } from '@/components/Sheet'
-import { AccountSheet, AuthScreen } from '@/features/Account'
+import { AccountSheet, AuthScreen, VerifyScreen } from '@/features/Account'
 import { CommandPalette } from '@/features/CommandPalette'
 import { useAccount } from '@/lib/cloud'
 import { CLOUD } from '@/lib/config'
@@ -179,11 +179,12 @@ function TabBar({ view, goto }: { view: ViewId; goto: (v: ViewId) => void }) {
 export default function App() {
   const acc = useAccount()
   useEffect(() => {
-    if (CLOUD && acc.status === 'in') void initStore()
-  }, [acc.status])
+    if (CLOUD && acc.status === 'in' && acc.user?.verified) void initStore()
+  }, [acc.status, acc.user?.verified])
   if (!CLOUD) return <Dashboard />
   if (acc.status === 'loading') return <div className="grid min-h-dvh place-items-center"><Brand /></div>
   if (acc.status === 'out') return <AuthScreen brand={<Brand />} />
+  if (acc.user && !acc.user.verified) return <VerifyScreen brand={<Brand />} />
   return <Dashboard />
 }
 

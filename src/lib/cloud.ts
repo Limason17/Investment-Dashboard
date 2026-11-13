@@ -102,6 +102,22 @@ export async function resetPassword(email: string) {
   const x = await load()
   await x.a.sendPasswordResetEmail(x.auth, email.trim())
 }
+/** Bestätigungs-Mail erneut senden */
+export async function resendVerification() {
+  const x = await load()
+  const u = x.auth.currentUser
+  if (u) await x.a.sendEmailVerification(u)
+}
+/** Holt den Stand der E-Mail-Bestätigung neu; nach der Bestätigung auch ein neues Token für die Datenbankregeln. */
+export async function checkVerified(): Promise<boolean> {
+  const x = await load()
+  const u = x.auth.currentUser
+  if (!u) return false
+  await u.reload()
+  if (u.emailVerified) await u.getIdToken(true)
+  setAccount({ status: 'in', user: toAccount(u) })
+  return u.emailVerified
+}
 export async function signOut() {
   const x = await load()
   await x.a.signOut(x.auth)

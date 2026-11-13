@@ -10,23 +10,27 @@ service cloud.firestore {
     function isOwner(uid) {
       return request.auth != null && request.auth.uid == uid;
     }
+    // Schreiben erst mit bestätigter E-Mail-Adresse (Löschen bleibt immer möglich)
+    function canWrite(uid) {
+      return isOwner(uid) && request.auth.token.email_verified == true;
+    }
     function validColl(coll) {
       return coll in ['positions', 'prices', 'watchlist', 'pots', 'events', 'log', 'transactions', 'dividends', 'snapshots', 'meta', 'market'];
     }
 
     match /depots/{uid} {
       allow read, delete: if isOwner(uid);
-      allow create, update: if isOwner(uid) && request.resource.data.keys().hasOnly(['portfolios'])
+      allow create, update: if canWrite(uid) && request.resource.data.keys().hasOnly(['portfolios'])
         && request.resource.data.portfolios is map && request.resource.data.portfolios.size() <= 20;
 
       match /data/{coll} {
         allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid) && validColl(coll) && request.resource.data.size() <= 20000;
+        allow create, update: if canWrite(uid) && validColl(coll) && request.resource.data.size() <= 20000;
       }
 
       match /portfolios/{pid}/data/{coll} {
         allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid) && validColl(coll) && pid.matches('^[a-z0-9][a-z0-9-]{0,39}$') && request.resource.data.size() <= 20000;
+        allow create, update: if canWrite(uid) && validColl(coll) && pid.matches('^[a-z0-9][a-z0-9-]{0,39}$') && request.resource.data.size() <= 20000;
       }
     }
 
