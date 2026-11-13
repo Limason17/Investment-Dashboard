@@ -255,7 +255,8 @@ export function liveQuotes(src: QuoteSource, env: Record<string, string | undefi
 
   async function refresh(): Promise<LiveResult> {
     const { held, watch } = src.tickers()
-    void refreshDividends([...held].sort())
+    // Dividendenraten parallel zu den Kursen; fehlen sie noch (z. B. neuer Kurs-Dienst), wird darauf gewartet.
+    const divJob = refreshDividends([...held].sort())
     const tickers = [...new Set([...held, ...watch])].sort()
     const quotes: Record<string, LiveQuote> = {}
     const failures: string[] = []
@@ -295,6 +296,7 @@ export function liveQuotes(src: QuoteSource, env: Record<string, string | undefi
         }
       }
     }
+    if (held.length && !Object.keys(div).length) await divJob.catch(() => {})
     const res: LiveResult = { at: new Date().toISOString(), session, overnight, quotes, failures }
     try {
       src.onResult?.(res)

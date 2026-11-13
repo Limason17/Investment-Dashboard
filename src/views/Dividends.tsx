@@ -31,7 +31,7 @@ export function Dividends() {
   const months: DivMonth[] = useMemo(() => {
     const first = now.slice(0, 8) + '01'
     const list: DivMonth[] = []
-    for (let i = -5; i <= 6; i++) list.push({ key: addMonths(first, i).slice(0, 7), received: 0, expected: 0, items: [] })
+    for (let i = -11; i <= 6; i++) list.push({ key: addMonths(first, i).slice(0, 7), received: 0, expected: 0, items: [] })
     for (const d of all) {
       const m = list.find((x) => x.key === (d.payDate || d.exDate || '').slice(0, 7))
       if (!m) continue

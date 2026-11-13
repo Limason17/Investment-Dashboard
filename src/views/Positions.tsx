@@ -77,7 +77,9 @@ export function Positions() {
   const share = (v: number | null) => pctPlain(c.valuationComplete && v != null && (cashOff ? c.sec : c.total) ? v / (cashOff ? c.sec : c.total) : null)
   const costDemo = c.rows.some((r) => r.p.costDemo)
   const showCash = bucket === 'alle' && !needle && !cashOff
-  const glTitle = range === 'MAX' ? 'seit Kauf' : RANGE_TEXT[range]
+  // Vor Börsenbeginn zeigt «1T» den letzten Handelstag, nicht heute
+  const rangeText = range === '1T' && !c.live ? 'letzter Handelstag' : RANGE_TEXT[range]
+  const glTitle = range === 'MAX' ? 'seit Kauf' : rangeText
   const onSort = (k: SortKey) => setSort((s) => (s.k === k ? { k, d: s.d === 1 ? -1 : 1 } : { k, d: k === 't' ? 1 : -1 }))
   const rangeSwitch = <Segmented label="Zeitraum" value={range} onChange={setRange} options={ranges.map((r) => ({ value: r, label: RANGE_LABEL[r], title: RANGE_TITLE[r] }))} />
   const bucketName = HOLDING_BUCKETS.find((b) => b.id === bucket)?.name
@@ -121,7 +123,7 @@ export function Positions() {
       <Card
         className="col-span-12"
         title="Kategorien"
-        sub={<span className="max-sm:hidden">Gewicht gegen Plan · Rendite {RANGE_TEXT[range]}, Käufe und Verkäufe herausgerechnet</span>}
+        sub={<span className="max-sm:hidden">Gewicht gegen Plan · Rendite {rangeText}, Käufe und Verkäufe herausgerechnet</span>}
         action={rangeSwitch}
       >
         {c.sec > 0 && (
@@ -161,7 +163,7 @@ export function Positions() {
                     <Delta value={at != null ? s!.twr[at] : ret} digits={1} className="text-[12.5px] font-medium" />
                     <span className="block text-[10.5px] text-muted">{at != null && ps ? (ps.kind === 'intraday' ? hhmm(ps.t[at]) : dshort(ps.d[at])) : RANGE_LABEL[range]}</span>
                   </span>
-                  <FluidSparkline className="min-w-0 flex-1" values={s?.twr ?? []} tone={sign(ret)} baseline={0} height={34} hi={at} onHover={(i) => setHov(i == null ? null : { id: b.id, i })} label={`${b.name}: ${pct(ret, 1)} ${RANGE_TEXT[range]}`} />
+                  <FluidSparkline className="min-w-0 flex-1" values={s?.twr ?? []} tone={sign(ret)} baseline={0} height={34} hi={at} onHover={(i) => setHov(i == null ? null : { id: b.id, i })} label={`${b.name}: ${pct(ret, 1)} ${rangeText}`} />
                 </div>
               </div>
             )
@@ -202,7 +204,7 @@ export function Positions() {
             <thead>
               <tr>
                 {th('t', 'Titel')}
-                {th(null, `Verlauf ${RANGE_LABEL[range]}`, false, `Kursverlauf, ${RANGE_TEXT[range]}`)}
+                {th(null, `Verlauf ${RANGE_LABEL[range]}`, false, `Kursverlauf, ${rangeText}`)}
                 {th('px', 'Kurs', true)}
                 {th('gl', `Gewinn/Verlust ${RANGE_LABEL[range]}`, true, `In USD und Prozent, ${glTitle}. Erst im Zeitraum gekaufte Titel: seit Kauf.`)}
                 {th('shares', 'Stück · Ø Einstand', true, costDemo ? 'Einstand: Testwerte' : undefined, 'max-lg:hidden')}

@@ -57,7 +57,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-[12.5px] text-muted">
-          {view && chart ? <><Delta value={view.chg} digits={1} className="font-medium" /> {RANGE_TEXT[chart.range]}</> : <span>Kursverlauf</span>}
+          {view && chart ? <><Delta value={view.chg} digits={1} className="font-medium" /> {chart.range === '1T' && !c.live ? 'letzter Handelstag' : RANGE_TEXT[chart.range]}</> : <span>Kursverlauf</span>}
         </div>
         <Segmented className="max-sm:flex max-sm:w-full [&>button]:max-sm:flex-1" label="Zeitraum" value={range} onChange={setRange} options={RANGES.map((r) => ({ value: r, label: RANGE_LABEL[r], title: RANGE_TITLE[r] }))} />
       </div>
