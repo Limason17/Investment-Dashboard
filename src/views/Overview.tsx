@@ -77,8 +77,8 @@ function Hero() {
     const s: TimeSeries[] = [mode === 'rendite'
       ? { key: 'twr', label: 'Depot', values: ps.twr.map((v) => v * 100), color: lineColor, area: true, glow: true }
       : { key: 'total', label: valueLabel, values: ps.value, color: lineColor, area: true, glow: true }]
-    if (showInv) s.push({ key: 'inv', label: investedLabel, values: ps.invested, color: 'var(--color-ref)', kind: 'step', width: 1.5, opacity: 0.65 })
     if (showBench && benchValues) s.push({ key: 'bench', label: BENCH, values: benchValues, color: 'var(--color-etf)', width: 1.5, opacity: 0.5 })
+    if (showInv) s.push({ key: 'inv', label: investedLabel, values: ps.invested, color: 'var(--color-ref)', kind: 'step', width: 1.5, opacity: 0.65 })
     return s
   }, [ps, mode, valueLabel, lineColor, showBench, benchValues, showInv, investedLabel])
   const vlines: VLine[] = useMemo(() => {
@@ -216,14 +216,14 @@ function Hero() {
         <Segmented className="sm:hidden" label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'wert', label: 'Wert' }, { value: 'rendite', label: 'Rendite' }]} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-2">
           <span className="inline-flex items-center"><i className="linekey" style={{ background: lineColor }} />{mode === 'rendite' ? 'Depot, zeitgewichtet' : valueLabel}</span>
-          {mode === 'wert' && ps && (
-            <button type="button" aria-pressed={showInv} onClick={() => setInvOn(showInv ? 'aus' : 'an')} title={showInv ? `${investedLabel} ausblenden` : `${investedLabel} einblenden`} className={clsx('inline-flex items-center rounded-md px-1.5 py-1 transition-opacity hover:bg-white/[0.05]', !showInv && 'opacity-45 line-through decoration-white/40')}>
-              <i className="linekey opacity-70" style={{ background: 'var(--color-ref)' }} />{investedLabel}
-            </button>
-          )}
           {ps?.bench && (
             <button type="button" aria-pressed={showBench} onClick={() => setBenchOn(showBench ? 'aus' : 'an')} title={showBench ? `${BENCH} ausblenden` : `${BENCH} einblenden`} className={clsx('inline-flex items-center rounded-md px-1.5 py-1 transition-opacity hover:bg-white/[0.05]', !showBench && 'opacity-45 line-through decoration-white/40')}>
               <i className="linekey opacity-60" style={{ background: 'var(--color-etf)' }} />{benchLabel}
+            </button>
+          )}
+          {mode === 'wert' && ps && (
+            <button type="button" aria-pressed={showInv} onClick={() => setInvOn(showInv ? 'aus' : 'an')} title={showInv ? `${investedLabel} ausblenden` : `${investedLabel} einblenden`} className={clsx('inline-flex items-center rounded-md px-1.5 py-1 transition-opacity hover:bg-white/[0.05]', !showInv && 'opacity-45 line-through decoration-white/40')}>
+              <i className="linekey opacity-70" style={{ background: 'var(--color-ref)' }} />{investedLabel}
             </button>
           )}
         </div>
@@ -272,44 +272,35 @@ function PeriodTile({ range, active, onSelect }: { range: RangeId; active: boole
 
 /* ------------------------------------------------------------------ Kennzahlen: eine ruhige Zeile */
 function KeyFigures() {
-  const { db, c, now } = useDepot()
-  const nav = useNav()
-  const year = now.slice(0, 4)
-  const ys = useMemo(() => yearStats(db, year), [db, year])
+  const { db, c } = useDepot()
+  // Seit Beginn: alle Verkäufe und alle erhaltenen Dividenden
+  const all = useMemo(() => yearStats(db, ''), [db])
   const div = useMemo(() => divAnnual(db), [db])
   const cashOff = !!c.settings.cashExcluded
   return (
-    <section className={clsx('card grid grid-cols-2 overflow-hidden [&>*]:border-line max-lg:[&>*:nth-child(even)]:border-l max-lg:[&>*:nth-child(n+3)]:border-t lg:[&>*+*]:border-l', cashOff ? 'lg:grid-cols-3' : 'lg:grid-cols-4')}>
+    <section className={clsx('card grid overflow-hidden [&>*]:border-line [&>*+*]:border-l', cashOff ? 'grid-cols-2' : 'grid-cols-3')}>
+      {!cashOff && <Figure label="Cash" value={usd(c.cash)} sub={<span>{c.total ? pctPlain(c.cash / c.total) : '–'} vom Depot</span>} />}
       <Figure
-        label="Seit Kauf"
-        onClick={() => nav.goto('positionen')}
-        value={c.pl != null ? <Delta value={c.pl} kind="usd" icon={false} /> : <span className="text-muted">offen</span>}
-        sub={c.pl != null ? <><Delta value={c.plPct} digits={1} /> <span className="max-sm:hidden">auf {usd(c.costKnown)}</span></> : <span>Einstand fehlt</span>}
-      />
-      {!cashOff && <Figure label="Cash" onClick={() => nav.goto('plan')} value={usd(c.cash)} sub={<span>{c.total ? pctPlain(c.cash / c.total) : '–'} vom Depot</span>} />}
-      <Figure
-        label={`Realisiert ${year}`}
-        onClick={() => nav.goto('journal')}
-        value={ys.sales ? <Delta value={ys.realized} kind="usd" icon={false} /> : <span className="text-muted">–</span>}
-        sub={<span>{ys.sales} {ys.sales === 1 ? 'Verkauf' : 'Verkäufe'}{ys.fifo ? ', FIFO' : ''}</span>}
+        label="Realisiert"
+        value={all.sales ? <Delta value={all.realized} kind="usd" icon={false} /> : <span className="text-muted">–</span>}
+        sub={<span>seit Beginn · {all.sales} {all.sales === 1 ? 'Verkauf' : 'Verkäufe'}</span>}
       />
       <Figure
-        label={`Dividenden ${year}`}
-        onClick={() => nav.goto('dividenden')}
-        value={ys.divCount ? usd(ys.divNet) : <span className="text-muted">–</span>}
-        sub={<span>netto{div.per.length ? ` · ${usd(div.net)} p. a. erwartet` : `, ${ys.divCount} ${ys.divCount === 1 ? 'Zahlung' : 'Zahlungen'}`}</span>}
+        label="Dividenden"
+        value={all.divCount ? usd(all.divNet) : <span className="text-muted">–</span>}
+        sub={<span>netto seit Beginn{div.per.length ? <span className="max-sm:hidden"> · {usd(div.net)} p. a. erwartet</span> : null}</span>}
       />
     </section>
   )
 }
 
-function Figure({ label, value, sub, onClick }: { label: string; value: ReactNode; sub: ReactNode; onClick: () => void }) {
+function Figure({ label, value, sub }: { label: string; value: ReactNode; sub: ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className="flex min-w-0 flex-col items-stretch justify-start px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03] sm:px-6">
+    <div className="flex min-w-0 flex-col px-4 py-3.5 sm:px-6">
       <span className="label block truncate">{label}</span>
       <span className="num mt-1 block truncate text-[17px] font-semibold leading-6 tracking-[-0.02em] sm:text-[19px]">{value}</span>
-      <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-muted">{sub}</span>
-    </button>
+      <span className="mt-0.5 block text-[12px] leading-[1.4] text-muted">{sub}</span>
+    </div>
   )
 }
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { date, detectKind, num, parseImport, template, templateFile } from './bulk'
 import { planImport } from './bulk-plan'
 import { closeUpdates } from './closes'
-import { timeline } from './history'
+import { portfolioSeries, timeline } from './history'
 import { aggregate, newPortfolioId, portfolioList } from './portfolios'
 import { applyOps, reverseDividend, reverseTx } from './reverse'
 import type { DB, Tx } from './types'
@@ -157,6 +157,48 @@ describe('Wertverlauf', () => {
     db.transactions.c = { type: 'korrektur', date: '2025-06-01', cashDelta: 2500, cashStart: true }
     db.transactions.e = { type: 'einzahlung', date: '2025-07-01', cashDelta: 500 }
     expect(timeline(db).external).toEqual([{ date: '2025-07-01', amount: 500 }])
+  })
+})
+
+describe('Wertverlauf gegen echte Zahlen', () => {
+  const days = ['2025-01-02', '2025-01-03', '2025-01-06']
+  const chart = (closes: number[]) => ({ range: 'MAX' as const, kind: 'daily' as const, interval: '1d', at: '', t: days.map((d) => Date.parse(d + 'T21:00:00Z')), d: days, series: { VTI: closes }, prev: { VTI: closes[0] }, failures: [] })
+
+  it('ohne Cash: Wert = Stück × Kurs, eingesetzt = Käufe', () => {
+    const db = empty()
+    db.meta.settings = { cash: 0, cashExcluded: true }
+    db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 10, bucket: 'etf', cost: 1000 }
+    db.transactions.k = { type: 'kauf', date: days[0], ticker: 'VTI', shares: 10, price: 100, cashDelta: -1000 }
+    const ps = portfolioSeries(db, timeline(db), chart([100, 110, 120]))!
+    expect(ps.value).toEqual([1000, 1100, 1200])
+    expect(ps.invested).toEqual([1000, 1000, 1000])
+    expect(ps.gain).toBeCloseTo(200)
+    expect(ps.twr.at(-1)).toBeCloseTo(0.2)
+  })
+
+  it('Cash erst später erfasst: davor kein Cash im Wert, der Stand zählt als eingezahlt', () => {
+    const db = empty()
+    db.meta.settings = { cash: 500, cashExcluded: false }
+    db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 10, bucket: 'etf', cost: 1000 }
+    db.transactions.k = { type: 'kauf', date: days[0], ticker: 'VTI', shares: 10, price: 100, cashDelta: -1000 }
+    db.transactions.c = { type: 'korrektur', date: days[1], cashDelta: 500, cashStart: true }
+    const ps = portfolioSeries(db, timeline(db), chart([100, 110, 120]))!
+    expect(ps.value).toEqual([1000, 1600, 1700])
+    expect(ps.invested).toEqual([1000, 1500, 1500])
+    expect(ps.gain).toBeCloseTo(200) // nur der Kursgewinn, nicht das Cash
+  })
+
+  it('Verkauf mit Cash: Erlös bleibt im Depot, kein Zu- oder Abfluss', () => {
+    const db = empty()
+    db.meta.settings = { cash: 1100, cashExcluded: false }
+    db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 0, bucket: 'etf', cost: 0 }
+    db.transactions.e = { type: 'einzahlung', date: days[0], cashDelta: 1000 }
+    db.transactions.k = { type: 'kauf', date: days[0], ticker: 'VTI', shares: 10, price: 100, cashDelta: -1000 }
+    db.transactions.v = { type: 'verkauf', date: days[2], ticker: 'VTI', shares: 10, price: 110, cashDelta: 1100 }
+    const ps = portfolioSeries(db, timeline(db), chart([100, 105, 110]))!
+    expect(ps.value).toEqual([1000, 1050, 1100])
+    expect(ps.invested).toEqual([1000, 1000, 1000])
+    expect(ps.gain).toBeCloseTo(100)
   })
 })
 
