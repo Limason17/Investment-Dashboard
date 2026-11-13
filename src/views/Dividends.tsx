@@ -18,8 +18,10 @@ export function Dividends() {
       .catch((e) => toast('Nicht entfernt: ' + e.message))
   const a = useMemo(() => divAnnual(db), [db])
   const all = useMemo(() => dividendsList(db).sort((x, y) => ((y.payDate || y.exDate || '') > (x.payDate || x.exDate || '') ? 1 : -1)), [db])
-  const year = now.slice(0, 4)
   const received = all.filter((d) => d.status === 'erhalten')
+  // Laufendes Jahr; ohne Zahlung darin das letzte Jahr mit Zahlungen (z. B. nach dem Hochladen älterer Dividenden)
+  const paidYears = received.map((d) => (d.payDate || '').slice(0, 4)).filter(Boolean).sort()
+  const year = !paidYears.length || paidYears.includes(now.slice(0, 4)) ? now.slice(0, 4) : paidYears[paidYears.length - 1]
   const recYear = received.filter((d) => (d.payDate || '').startsWith(year)).reduce((s, d) => s + (d.net || 0), 0)
   const recYearCount = received.filter((d) => (d.payDate || '').startsWith(year)).length
   const expected = all.filter((d) => d.status === 'erwartet')
