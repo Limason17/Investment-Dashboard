@@ -163,7 +163,9 @@ function parseChart(r: any): YahooQuote {
   return {
     bars,
     price: round(price),
-    ref: typeof m.chartPreviousClose === 'number' ? m.chartPreviousClose : null,
+    // Vergleichskurs: Im Pre-Market ist der letzte reguläre Schluss (gestern) die Basis. chartPreviousClose wäre dann
+    // der Schluss von vorgestern, weil Yahoo den Tag erst mit der regulären Sitzung wechselt.
+    ref: regT < periods.pre[0] ? m.regularMarketPrice : typeof m.chartPreviousClose === 'number' ? m.chartPreviousClose : null,
     regular: m.regularMarketPrice,
     regularDate,
     regularPrev: typeof m.chartPreviousClose === 'number' && regularDone ? m.chartPreviousClose : null,
