@@ -161,9 +161,9 @@ export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => voi
       <div className="grid grid-cols-2 gap-3 border-t border-line pt-4">
         <Field label="Quellensteuer (%)" hint="Für Dividenden ohne angegebene Steuer">{(id) => <input id={id} className="input num" inputMode="decimal" value={wht} onChange={(e) => setWht(e.target.value)} />}</Field>
         <Field label="Broker" hint="Nur für Hinweise, z. B. Schwab">{(id) => <input id={id} className="input" maxLength={40} value={broker} onChange={(e) => setBroker(e.target.value)} />}</Field>
-        <Field label="Zweite Währung" hint="Gesamtwert zusätzlich umgerechnet">{(id) => (
+        <Field label="Anzeigewährung" hint="Alle Beträge zum aktuellen Kurs umgerechnet; Eingaben bleiben in USD">{(id) => (
           <select id={id} className="input" value={fx} onChange={(e) => setFx(e.target.value as typeof fx)}>
-            <option value="">keine</option>
+            <option value="">USD</option>
             <option value="CHF">CHF</option>
             <option value="EUR">EUR</option>
           </select>

@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import { useState } from 'react'
 import { BUCKETS } from '@/lib/buckets'
 import { isCap, targetOf, type Calc } from '@/lib/calc'
-import { pctPlain, usd } from '@/lib/format'
+import { pctPlain, usd, cur } from '@/lib/format'
 import { Empty } from '../ui'
 import { Meter } from './Small'
 
@@ -103,7 +103,7 @@ export function Allocation({ c }: { c: Calc }) {
           <div>
             <div className="text-[11.5px] text-muted">{focus ? focus.b.name : noCash ? 'Wertpapiere' : 'Gesamtwert'}</div>
             <div className="num mt-0.5 text-[22px] font-semibold leading-7 tracking-[-0.02em]">{focus ? pctPlain(focus.w) : usd(total)}</div>
-            <div className="num text-[11.5px] text-muted">{focus ? `${usd(focus.v)} USD` : 'USD'}</div>
+            <div className="num text-[11.5px] text-muted">{focus ? `${usd(focus.v)} ${cur()}` : cur()}</div>
           </div>
         </div>
       </div>
@@ -130,7 +130,7 @@ export function Allocation({ c }: { c: Calc }) {
                   <span className="flex min-w-0 items-center gap-2">
                     <i className="swatch" style={{ background: r.b.color }} />
                     <span className="truncate text-[13.5px] font-medium">{r.b.name}</span>
-                    <span className="num truncate text-[12px] text-muted max-[380px]:hidden">{usd(r.v)} USD</span>
+                    <span className="num truncate text-[12px] text-muted max-[380px]:hidden">{usd(r.v)} {cur()}</span>
                   </span>
                   <span className="num text-[15px] font-semibold tracking-[-0.01em]">{pctPlain(r.w)}</span>
                 </div>

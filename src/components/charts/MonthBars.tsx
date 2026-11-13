@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { MONTHS } from '@/lib/format'
+import { MONTHS, cur } from '@/lib/format'
 
 export interface MonthPair {
   key: string // JJJJ-MM
@@ -33,7 +33,7 @@ export function MonthBars({ months, labels, colors, format, current, height = 16
         {labels.map((l, i) => (
           <div key={l} className="min-w-0">
             <div className="flex items-center gap-2 text-[12px] text-muted"><i className="swatch" style={{ background: colors[i] }} />{l}</div>
-            <div className="num mt-0.5 text-[17px] font-semibold tracking-[-0.02em]">{format(sums[i])} <span className="text-[12px] font-normal text-muted">USD</span></div>
+            <div className="num mt-0.5 text-[17px] font-semibold tracking-[-0.02em]">{format(sums[i])} <span className="text-[12px] font-normal text-muted">{cur()}</span></div>
           </div>
         ))}
       </div>

@@ -1,5 +1,5 @@
 import { applyCategories, BUCKETS, catOf, HOLDING_BUCKETS } from './buckets'
-import { addMonths, daysBetween, dfmt, dshort, pctPlain, r2 } from './format'
+import { addMonths, daysBetween, dfmt, dshort, pctPlain, r2, setDisplayCurrency } from './format'
 import type { BucketId, DB, LiveResult, DepotEvent, Dividend, Position, Quote, Settings, Snapshot, ViewId, WatchItem, WithId } from './types'
 
 export interface Row {
@@ -65,7 +65,7 @@ export function withLive(db: DB, live: LiveResult | null): DB {
     quotes[t] = { ...quotes[t], close: l.price, prev: l.ref, date, source: l.source, session: l.session, time: l.time }
     // Dividendenrate aus den Ausschüttungen der letzten 12 Monate; eine von Hand gepflegte Rate in prices.json bleibt bestehen.
     const dv = live.div?.[t]
-    if (dv && !(db.prices[t]?.divAnnual ?? 0)) quotes[t] = { ...quotes[t], divAnnual: dv.annual, divFreq: dv.freq, divMonths: dv.months, divLast: dv.last }
+    if (dv && !(db.prices[t]?.divAnnual ?? 0)) quotes[t] = { ...quotes[t], divAnnual: dv.annual, divFreq: dv.freq, divMonths: dv.months, divLast: dv.last, divByMonth: dv.byMonth }
   }
   return { ...db, market: { ...db.market, latest: { ...db.market.latest, quotes, refreshedAt: live.at, by: 'Live', status: live.failures.length ? 'teilweise' : 'ok', failures: live.failures } } }
 }
@@ -83,6 +83,9 @@ export function quoteLabel(q: Quote | undefined, fallback?: string) {
 export function compute(db: DB): Calc {
   const settings = settingsOf(db)
   applyCategories(settings)
+  // Anzeigewährung: ohne Kurs bleibt USD
+  const fx = fxOf(db)
+  setDisplayCurrency(fx?.code ?? 'USD', fx?.rate ?? 1)
   const rows: Row[] = []
   let sec = 0, prevSec = 0, costKnown = 0, valKnownCost = 0
   let lastDate: string | null = null
@@ -171,8 +174,8 @@ export function divAnnual(db: DB) {
 }
 
 /**
- * Geschätzte Ausschüttungen der nächsten Monate: gleiche Monate wie in den letzten 12 Monaten, letzter Betrag je
- * Stück mal heutiger Bestand, nach Quellensteuer. Monate mit erfasster (erwarteter oder erhaltener) Zahlung desselben
+ * Geschätzte Ausschüttungen der nächsten Monate: gleiche Monate wie in den letzten 12 Monaten, Betrag je Stück aus
+ * demselben Monat (sonst der letzte) mal heutiger Bestand, nach Quellensteuer. Monate mit erfasster (erwarteter oder erhaltener) Zahlung desselben
  * Titels werden übersprungen, damit nichts doppelt zählt.
  */
 export function projectedDividends(db: DB, now: string, ahead = 6): Dividend[] {
@@ -190,8 +193,9 @@ export function projectedDividends(db: DB, now: string, ahead = 6): Dividend[] {
       if (!q.divMonths.includes(+k.slice(5)) || booked.has(t + '|' + k)) continue
       // Laufender Monat: nur, wenn die Zahlung nach üblicher Lage (Mitte Monat) noch aussteht
       if (k === now.slice(0, 7) && now.slice(8) > '20') continue
-      const gross = r2(p.shares * per)
-      out.push({ ticker: t, exDate: null, payDate: k + '-15', perShare: per, shares: p.shares, gross, tax: r2(gross * w), net: r2(gross * (1 - w)), status: 'erwartet', payDateEstimated: true, estimate: true, source: 'Schätzung' })
+      // Gleicher Monat wie vor einem Jahr, sonst die letzte Ausschüttung
+      const gross = r2(p.shares * (q.divByMonth?.[+k.slice(5)] ?? per))
+      out.push({ ticker: t, exDate: null, payDate: k + '-15', perShare: q.divByMonth?.[+k.slice(5)] ?? per, shares: p.shares, gross, tax: r2(gross * w), net: r2(gross * (1 - w)), status: 'erwartet', payDateEstimated: true, estimate: true, source: 'Schätzung' })
     }
   }
   return out

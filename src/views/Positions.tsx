@@ -7,7 +7,7 @@ import { isCap, targetOf, type Row } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
 import { exportCsv } from '@/lib/export'
-import { pct, pctPlain, qty, sign, usd, dshort, hhmm } from '@/lib/format'
+import { pct, pctPlain, qty, sign, usd, dshort, hhmm, cur } from '@/lib/format'
 import { rangeChange } from '@/lib/history'
 import { usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { HoldingBucket, RangeId } from '@/lib/types'
@@ -175,7 +175,7 @@ export function Positions() {
       <Card
         className="col-span-12"
         title="Alle Positionen"
-        sub={`${c.rows.length} Titel · ${c.valuationComplete ? usd(c.sec) + ' USD' : 'Marktwert offen'}`}
+        sub={`${c.rows.length} Titel · ${c.valuationComplete ? usd(c.sec) + ' ' + cur() : 'Marktwert offen'}`}
         flush
         action={<div className="flex gap-1"><button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'trades' })}><Upload /> Hochladen</button><button type="button" className="btn btn-ghost btn-sm" onClick={() => exportCsv(c)}><Download /> CSV</button></div>}
       >
@@ -206,7 +206,7 @@ export function Positions() {
                 {th('t', 'Titel')}
                 {th(null, `Verlauf ${RANGE_LABEL[range]}`, false, `Kursverlauf, ${rangeText}`)}
                 {th('px', 'Kurs', true)}
-                {th('gl', `G/V ${RANGE_LABEL[range]} USD`, true, `Gewinn oder Verlust in USD, ${glTitle}. Erst im Zeitraum gekaufte Titel: seit Kauf.`)}
+                {th('gl', `G/V ${RANGE_LABEL[range]} ${cur()}`, true, `Gewinn oder Verlust in ${cur()}, ${glTitle}. Erst im Zeitraum gekaufte Titel: seit Kauf.`)}
                 {th('glp', `G/V ${RANGE_LABEL[range]} %`, true, `Gewinn oder Verlust in Prozent, ${glTitle}`)}
                 {th('shares', 'Stück · Ø Einstand', true, costDemo ? 'Einstand: Testwerte' : undefined, 'max-lg:hidden')}
                 {th('val', 'Wert', true)}

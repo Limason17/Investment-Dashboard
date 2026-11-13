@@ -9,7 +9,7 @@ import { Card, Chip, Delta, DemoTag, Empty, Segmented } from '@/components/ui'
 import { alerts, capChecks, divAnnual, eventsSorted, fxOf, watchRows, yearStats } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TITLE, refreshCharts } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { dlong, hhmm, int, pct, pctPlain, sign, sUsd, usd } from '@/lib/format'
+import { dlong, hhmm, int, pct, pctPlain, sign, sUsd, usd, cur, usdRaw } from '@/lib/format'
 import { BENCH, useMedia, usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { RangeId } from '@/lib/types'
 
@@ -131,8 +131,8 @@ function Hero() {
           <span className={`text-[40px] font-semibold leading-[1.05] tracking-[-0.04em] sm:text-[52px] ${hi != null ? 'tabular-nums' : ''}`}>
             {c.valuationComplete ? usd(hi != null && ps ? ps.value[hi] : shown) : '–'}
           </span>
-          <span className="text-[14px] font-medium text-muted sm:text-[15px]">USD</span>
-          {fx && c.valuationComplete && <span className="num text-[13px] text-muted sm:text-[14px]" title={`Kurs 1 USD = ${fx.rate.toFixed(4)} ${fx.code}`}>≈ {usd((hi != null && ps ? ps.value[hi] : shown) * fx.rate)} {fx.code}</span>}
+          <span className="text-[14px] font-medium text-muted sm:text-[15px]">{cur()}</span>
+          {fx && c.valuationComplete && <span className="num text-[13px] text-muted sm:text-[14px]" title={`Kurs 1 USD = ${fx.rate.toFixed(4)} ${fx.code}`}>≈ {usdRaw(hi != null && ps ? ps.value[hi] : shown)} USD</span>}
         </div>
         <div className="mt-2.5 flex min-h-6 flex-wrap items-center gap-x-3 gap-y-1.5 text-[13px]">
           {!c.valuationComplete ? (
@@ -263,7 +263,7 @@ function PeriodTile({ range, active, onSelect }: { range: RangeId; active: boole
           <span className={clsx('num mt-1 block text-[17px] font-semibold leading-6 tracking-[-0.02em] sm:text-[19px]', !ps && pending && 'animate-pulse')}>
             <Delta value={c.valuationComplete ? ret : null} digits={2} icon={false} />
           </span>
-          <span className="mt-0.5 block truncate text-[12px] text-muted"><Delta value={c.valuationComplete ? gain : null} kind="usd" icon={false} className="!text-muted" /> USD</span>
+          <span className="mt-0.5 block truncate text-[12px] text-muted"><Delta value={c.valuationComplete ? gain : null} kind="usd" icon={false} className="!text-muted" /> {cur()}</span>
         </span>
         {/* Mini-Verlauf nur, wenn die Kachel breit genug ist: lieber keiner als ein gequetschter */}
         {spark.length > 1 && <FluidSparkline className="hidden w-12 flex-none @[138px]:block @[190px]:w-20" height={34} values={spark} tone={sign(ret)} baseline={0} label={`Ertrag im Verlauf, ${label}`} />}

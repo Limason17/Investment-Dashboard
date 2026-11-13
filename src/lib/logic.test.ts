@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { date, detectKind, num, parseImport, template, templateFile } from './bulk'
 import { planImport } from './bulk-plan'
 import { projectedDividends } from './calc'
+import { cur, setDisplayCurrency, sUsd, usd, usdRaw } from './format'
 import { closeUpdates } from './closes'
 import { portfolioSeries, timeline } from './history'
 import { aggregate, newPortfolioId, portfolioList } from './portfolios'
@@ -128,6 +129,22 @@ describe('Dividenden-Schätzung', () => {
     expect(all[0]).toMatchObject({ gross: 10, tax: 1.5, net: 8.5, estimate: true })
     db.dividends.x = { ticker: 'VTI', exDate: null, payDate: '2026-12-29', perShare: 1, shares: 10, gross: 10, tax: 1.5, net: 8.5, status: 'erwartet' }
     expect(projectedDividends(db, '2026-11-13').map((d) => d.payDate.slice(0, 7))).toEqual(['2027-03'])
+  })
+
+  it('nimmt den Betrag aus demselben Monat des Vorjahres, wenn bekannt', () => {
+    const db = empty()
+    db.positions.VXUS = { ticker: 'VXUS', name: 'VXUS', shares: 10, bucket: 'etf', cost: 600 }
+    db.prices.VXUS = { close: 80, prev: 80, date: '2026-11-12', divMonths: [3, 12], divLast: 0.2, divByMonth: { 3: 0.2, 12: 0.9 } }
+    expect(projectedDividends(db, '2026-11-13').map((d) => d.gross)).toEqual([9, 2])
+  })
+})
+
+describe('Anzeigewährung', () => {
+  it('rechnet Anzeigen um, Eingaben nicht', () => {
+    setDisplayCurrency('CHF', 0.8)
+    expect([cur(), usd(100), sUsd(-50), usdRaw(100)]).toEqual(['CHF', '80.00', '−40.00', '100.00'])
+    setDisplayCurrency('USD', 1)
+    expect(usd(100)).toBe('100.00')
   })
 })
 

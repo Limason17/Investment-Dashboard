@@ -8,7 +8,7 @@ import { bucketOf, catOf, HOLDING_BUCKETS } from '@/lib/buckets'
 import { quote, quoteLabel, withIds, wlState, wht } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE, refreshCharts, useChart } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { dfmt, parseNum, pct, pctPlain, qty, usd } from '@/lib/format'
+import { dfmt, parseNum, pct, pctPlain, qty, usd, cur } from '@/lib/format'
 import { withNow } from '@/lib/history'
 import { useStored } from '@/lib/hooks'
 import { TX_LABEL } from '@/lib/labels'
@@ -210,7 +210,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
             </div>
             <div className="text-right">
               <div className="label">Wert</div>
-              <div className="num mt-0.5 text-[20px] font-semibold leading-9 tracking-[-0.02em]">{usd(r?.val)} <span className="text-[12px] font-medium text-muted">USD</span></div>
+              <div className="num mt-0.5 text-[20px] font-semibold leading-9 tracking-[-0.02em]">{usd(r?.val)} <span className="text-[12px] font-medium text-muted">{cur()}</span></div>
             </div>
           </div>
 

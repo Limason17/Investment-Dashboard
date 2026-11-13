@@ -50,6 +50,8 @@ export interface DivRate {
   months?: number[]
   /** letzte Ausschüttung je Stück */
   last?: number
+  /** Betrag je Stück nach Monat (letzte 12 Monate), für Titel mit unterschiedlichen Ausschüttungen */
+  byMonth?: Record<number, number>
 }
 
 const UA = { 'User-Agent': 'Mozilla/5.0 (depot-dashboard lokal)' }
@@ -252,6 +254,7 @@ export function liveQuotes(src: QuoteSource, env: Record<string, string | undefi
           freq: n >= 11 ? 'monatlich' : n >= 3 ? 'quartalsweise' : n === 2 ? 'halbjährlich' : 'jährlich',
           months: [...new Set(r.value.map((x) => x.month))].sort((a, b) => a - b),
           last: r.value[n - 1].amount,
+          byMonth: Object.fromEntries(r.value.map((x) => [x.month, x.amount])),
         }
       })
       if (ok) divState = { key, at: Date.now(), busy: true }

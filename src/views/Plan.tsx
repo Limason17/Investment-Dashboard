@@ -8,7 +8,7 @@ import { EventSheet, PlanSheet, PotSheet } from '@/features/EditSheets'
 import { BUCKETS } from '@/lib/buckets'
 import { eventsSorted, isCap, targetOf } from '@/lib/calc'
 import { useDepot } from '@/lib/context'
-import { pctPlain, usd } from '@/lib/format'
+import { pctPlain, usd, cur } from '@/lib/format'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DepotEvent, WithId } from '@/lib/types'
@@ -40,7 +40,7 @@ export function Plan() {
       <Card title="Allokation" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(true)}><Pencil /> Ziele</button>} sub={c.settings.cashExcluded ? 'Ist gegen Plan, in % der Wertpapiere' : 'Ist gegen Plan, in % vom Gesamtwert'}>
         <Allocation c={c} />
       </Card>
-      <Card title="Cash-Töpfe" sub={pots.length ? `${usd(budget - used)} von ${usd(budget)} USD frei` : undefined} action={<button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button>}>
+      <Card title="Cash-Töpfe" sub={pots.length ? `${usd(budget - used)} von ${usd(budget)} ${cur()} frei` : undefined} action={<button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button>}>
         {pots.length === 0 ? (
           <Empty>Keine Töpfe. Ein Topf ist ein Budget für geplante Käufe; Käufe daraus zählen automatisch.</Empty>
         ) : (
@@ -49,7 +49,7 @@ export function Plan() {
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <div className="label">Frei in Töpfen</div>
-                  <div className="mt-1 text-[26px] font-semibold leading-8 tracking-[-0.03em]">{usd(budget - used)} <span className="text-[13px] font-medium text-muted">USD</span></div>
+                  <div className="mt-1 text-[26px] font-semibold leading-8 tracking-[-0.03em]">{usd(budget - used)} <span className="text-[13px] font-medium text-muted">{cur()}</span></div>
                 </div>
                 <div className="text-right text-[12.5px] text-muted">
                   <div><span className="num text-ink-2">{usd(used)}</span> eingesetzt von <span className="num text-ink-2">{usd(budget)}</span></div>

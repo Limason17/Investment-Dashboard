@@ -2,7 +2,7 @@ import { scaleLinear } from 'd3-scale'
 import { area as d3area, curveMonotoneX, curveStepAfter, line as d3line } from 'd3-shape'
 import { motion, useReducedMotion } from 'motion/react'
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
-import { axisFormatter, dfmt, dlong, dshort, hhmm, MONTHS, usd, weekday } from '@/lib/format'
+import { axisFormatter, dfmt, dlong, dshort, hhmm, MONTHS, usd, weekday, curRate, usdRaw } from '@/lib/format'
 import { useMeasure } from '@/lib/useMeasure'
 import { Empty } from '../ui'
 
@@ -104,7 +104,9 @@ function timeTicks(t: number[], d: string[], kind: 'intraday' | 'daily', iw: num
  * Zeitreihe als Linie: 2px, Fläche als dünner Schleier, Fadenkreuz rastet auf den Punkt,
  * ein Tooltip für alle Reihen. Pfeiltasten bewegen das Fadenkreuz; auf dem Handy liest der Finger ab.
  */
-export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [], markers = [], vlines = [], baseline, split, signs, format = usd, tickFormat, onHover, tooltipExtra, ariaLabel, animateKey, pending, live, empty }: {
+const NO_REFS: RefLine[] = []
+
+export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260, refs: refsIn = NO_REFS, markers = [], vlines = [], baseline: baselineIn, split: splitIn, signs, format: formatIn = usd, tickFormat, onHover, tooltipExtra, ariaLabel, animateKey, pending, live, empty }: {
   /** Zeitpunkt je Punkt, Millisekunden */
   t: number[]
   /** Handelstag je Punkt, JJJJ-MM-TT */
@@ -133,6 +135,13 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
   live?: boolean
   empty?: ReactNode
 }) {
+  // Geldbeträge (Standardformat) in der Anzeigewährung zeichnen; Prozent-Charts bleiben unverändert
+  const k = formatIn === usd ? curRate() : 1
+  const series = useMemo(() => (k === 1 ? seriesIn : seriesIn.map((s) => ({ ...s, values: s.values.map((v) => v * k) }))), [seriesIn, k])
+  const refs = useMemo(() => (k === 1 ? refsIn : refsIn.map((r) => ({ ...r, y: r.y * k }))), [refsIn, k])
+  const baseline = baselineIn != null ? baselineIn * k : undefined
+  const split = typeof splitIn === 'number' ? splitIn * k : splitIn
+  const format = k === 1 ? formatIn : usdRaw
   const [ref, W] = useMeasure<HTMLDivElement>()
   const [hi, setHi] = useState<number | null>(null)
   const tipRef = useRef<HTMLDivElement>(null)

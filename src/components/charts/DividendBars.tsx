@@ -1,7 +1,7 @@
 import { scaleLinear } from 'd3-scale'
 import { motion, useReducedMotion } from 'motion/react'
 import { useState, type KeyboardEvent } from 'react'
-import { axisFormatter, MONTHS, usd } from '@/lib/format'
+import { axisFormatter, MONTHS, usd, curRate } from '@/lib/format'
 import type { Dividend } from '@/lib/types'
 import { useMeasure } from '@/lib/useMeasure'
 
@@ -30,8 +30,10 @@ export function DividendBars({ months, current, height = 236 }: { months: DivMon
   const iw = Math.max(10, W - L - R), ih = height - T - B
   const band = iw / months.length
   const bw = Math.min(22, Math.max(6, band - 12))
-  const max = Math.max(1, ...months.map((m) => m.received + m.expected))
+  const k = curRate()
+  const max = Math.max(1, ...months.map((m) => (m.received + m.expected) * k))
   const y = scaleLinear().domain([0, max]).range([T + ih, T]).nice(4)
+  const yv = (v: number) => y(v * k)
   const ticks = y.ticks(4)
   const fmt = axisFormatter(ticks)
   const peak = months.reduce((best, m, i) => (m.received + m.expected > months[best].received + months[best].expected ? i : best), 0)
@@ -59,7 +61,7 @@ export function DividendBars({ months, current, height = 236 }: { months: DivMon
           ))}
           {months.map((m, i) => {
             const cx = L + (i + 0.5) * band
-            const yr = y(m.received), ye = y(m.received + m.expected)
+            const yr = yv(m.received), ye = yv(m.received + m.expected)
             const gap = m.received > 0 && m.expected > 0 ? 2 : 0
             const total = m.received + m.expected
             return (

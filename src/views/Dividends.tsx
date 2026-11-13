@@ -4,7 +4,7 @@ import { DIV_EXPECTED, DIV_RECEIVED, DividendBars, type DivMonth } from '@/compo
 import { Card, Chip, ConfirmDelete, DemoTag, Empty, Stat } from '@/components/ui'
 import { divAnnual, dividendsList, projectedDividends, wht } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
-import { addMonths, dfmt, pctPlain, qty, usd } from '@/lib/format'
+import { addMonths, dfmt, pctPlain, qty, usd, cur } from '@/lib/format'
 import { reverseDividend } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -49,7 +49,7 @@ export function Dividends() {
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
       <section className="card col-span-12 grid grid-cols-2 divide-line lg:grid-cols-5 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l">
-        <Stat label="Jahresprognose netto" value={<>{usd(a.per.length ? a.net : null)} <span className="text-[13px] font-medium text-muted">USD</span></>} sub={<span>{usd(a.per.length ? a.gross : null)} brutto, {pctPlain(w, 0)} Steuer</span>} />
+        <Stat label="Jahresprognose netto" value={<>{usd(a.per.length ? a.net : null)} <span className="text-[13px] font-medium text-muted">{cur()}</span></>} sub={<span>{usd(a.per.length ? a.gross : null)} brutto, {pctPlain(w, 0)} Steuer</span>} />
         <Stat label="Rendite auf Wertpapiere" value={pctPlain(c.valuationComplete && a.per.length && c.sec ? a.gross / c.sec : null, 2)} sub={<span>brutto, laufende Raten</span>} />
         <Stat label={<>Erhalten {year} {hasDemo && <DemoTag />}</>} value={usd(recYear)} sub={<span>{recYearCount} {recYearCount === 1 ? 'Zahlung' : 'Zahlungen'}, netto</span>} />
         <Stat label="Erwartet, 6 Monate" value={expected.length || projected.length ? usd(expSum) : '–'} sub={<span>{expected.length || projected.length ? [expected.length ? `${expected.length} erfasst` : '', projected.length ? `${projected.length} geschätzt` : ''].filter(Boolean).join(', ') + ', netto' : 'keine Zahlung in Sicht'}</span>} />
@@ -57,7 +57,7 @@ export function Dividends() {
       </section>
 
       <div className="col-span-12 grid content-start gap-3 sm:gap-4 xl:col-span-7">
-      <Card title="Dividenden nach Monat" sub="netto nach Quellensteuer, in USD">
+      <Card title="Dividenden nach Monat" sub={`netto nach Quellensteuer, in ${cur()}`}>
         {all.length === 0 ? (
           <Empty title="Noch keine Dividenden erfasst">Erhaltene Beträge trägst du mit «Eintrag» ein, viele auf einmal mit «Hochladen».</Empty>
         ) : (

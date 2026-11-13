@@ -1,13 +1,13 @@
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
-import { Delta, Segmented } from '@/components/ui'
+import { Segmented } from '@/components/ui'
 import { defaultCat, HOLDING_BUCKETS } from '@/lib/buckets'
 import { quote, wht } from '@/lib/calc'
 import { commit } from '@/lib/commit'
 import { getAccount } from '@/lib/cloud'
 import { CLOUD } from '@/lib/config'
 import { useDepot, type EntryType } from '@/lib/context'
-import { dfmt, parseNum, pctPlain, qty, r2, today, uid, usd } from '@/lib/format'
+import { dfmt, parseNum, pctPlain, qty, r2, today, uid, sUsdRaw as sUsd, usdRaw as usd } from '@/lib/format'
 import type { ImportKind } from '@/lib/bulk'
 import { ImportForm } from './ImportForm'
 import { applyOps, reverseTx } from '@/lib/reverse'
@@ -161,7 +161,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
         ) : (
           <>
             Erlös <b className="num">{usd(amt - nFee)} USD</b>{cashOff(db) ? '' : ' ins Cash'}. Bestand danach: {qty(have - nSh!)} {t}.
-            {avg != null && <><br />Realisiert: <Delta value={amt - nFee - avg * nSh!} kind="usd" icon={false} className="font-semibold" /> USD gegen Ø-Einstand {usd(avg)}.</>}
+            {avg != null && <><br />Realisiert: <b className={`num font-semibold ${amt - nFee - avg * nSh! >= 0 ? 'text-up' : 'text-down'}`}>{sUsd(amt - nFee - avg * nSh!)}</b> USD gegen Ø-Einstand {usd(avg)}.</>}
             {nSh! > have + 1e-9 && <><br /><span className="font-medium text-down">Mehr als im Bestand.</span></>}
           </>
         )}

@@ -14,7 +14,7 @@ import { refreshCharts } from '@/lib/charts'
 import { DepotContext, NavContext, type EntryType, type Nav } from '@/lib/context'
 import type { ImportKind } from '@/lib/bulk'
 import { exportCsv } from '@/lib/export'
-import { daysBetween, dfmt, today, weekday } from '@/lib/format'
+import { daysBetween, dfmt, today, weekday, cur } from '@/lib/format'
 import { initStore, loadDb, mutate, refreshAll, useStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import { PortfoliosSheet, PortfolioSwitcher } from '@/features/Portfolios'
@@ -73,7 +73,7 @@ function Brand({ compact }: { compact?: boolean }) {
       </div>
       <div className="leading-tight">
         <div className="text-[14.5px] font-semibold tracking-[-0.015em]">{CLOUD ? 'Depot' : 'Depot Liam'}</div>
-        {!compact && <div className="text-[11.5px] text-muted">{CLOUD ? 'Portfolio · USD' : 'Schwab · USD'}</div>}
+        {!compact && <div className="text-[11.5px] text-muted">{CLOUD ? 'Portfolio · ' + cur() : 'Schwab · ' + cur()}</div>}
       </div>
     </div>
   )

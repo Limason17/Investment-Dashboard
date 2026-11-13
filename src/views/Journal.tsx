@@ -4,7 +4,7 @@ import { MonthBars, type MonthPair } from '@/components/charts/MonthBars'
 import { Card, Chip, Delta, DemoTag, Empty, Segmented, Stat } from '@/components/ui'
 import { withIds, yearStats } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
-import { addMonths, dfmt, int, pct, qty, sUsd, usd, weekday } from '@/lib/format'
+import { addMonths, dfmt, pct, qty, sUsd, usd, weekday, cur, cur0 } from '@/lib/format'
 import { TX_LABEL } from '@/lib/labels'
 import { reverseTx } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
@@ -92,8 +92,8 @@ export function Journal() {
       </section>
 
       {stats.any && (
-        <Card className="col-span-12" title="Käufe und Verkäufe" sub={`je Monat, letzte ${stats.months.length} Monate, in USD`}>
-          <MonthBars months={stats.months} labels={['Käufe', 'Verkäufe']} colors={['var(--color-accent)', 'var(--color-ref)']} format={int} current={now.slice(0, 7)} />
+        <Card className="col-span-12" title="Käufe und Verkäufe" sub={`je Monat, letzte ${stats.months.length} Monate, in ${cur()}`}>
+          <MonthBars months={stats.months} labels={['Käufe', 'Verkäufe']} colors={['var(--color-accent)', 'var(--color-ref)']} format={cur0} current={now.slice(0, 7)} />
         </Card>
       )}
 

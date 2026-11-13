@@ -27,6 +27,7 @@ export interface Quote {
   /** Monate der Ausschüttungen (1–12) und letzter Betrag je Stück, für die Schätzung */
   divMonths?: number[]
   divLast?: number
+  divByMonth?: Record<number, number>
   demo?: boolean
 }
 
@@ -227,5 +228,5 @@ export interface LiveResult {
   quotes: Record<string, LiveQuote>
   failures: string[]
   /** Dividendenrate je gehaltenem Titel: Ausschüttungen der letzten 12 Monate je Stück */
-  div?: Record<string, { annual: number; freq: string; months?: number[]; last?: number }>
+  div?: Record<string, { annual: number; freq: string; months?: number[]; last?: number; byMonth?: Record<number, number> }>
 }

@@ -8,7 +8,7 @@ import { getPortfolio } from '@/lib/store'
 import type { Coll } from '@/lib/cloud'
 import { commit } from '@/lib/commit'
 import { useDepot } from '@/lib/context'
-import { dfmt, sUsd } from '@/lib/format'
+import { dfmt, sUsdRaw as sUsd } from '@/lib/format'
 import type { Op } from '@/lib/store'
 import type { DB } from '@/lib/types'
 

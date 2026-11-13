@@ -6,7 +6,7 @@
 import { defaultCat } from './buckets'
 import type { ParseResult } from './bulk'
 import { quote, wht } from './calc'
-import { qty, r2, uid, usd } from './format'
+import { qty, r2, uid, usdRaw as usd } from './format'
 import type { Op } from './store'
 import type { DB } from './types'
 
