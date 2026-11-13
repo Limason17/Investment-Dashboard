@@ -53,8 +53,9 @@ function Hero() {
   const investedLabel = ps?.cashTracked ? 'Eingezahlt' : 'Netto investiert'
 
   // Linie grün bei Gewinn, rot bei Verlust im Zeitraum
-  const mainValues = ps ? (mode === 'rendite' ? ps.twr : ps.value) : []
-  const lineColor = n > 1 && mainValues[n - 1] < mainValues[0] ? 'var(--color-down)' : 'var(--color-up)'
+  // Farbe wie die Kennzahl oben: Ertrag im Zeitraum (Wert) bzw. zeitgewichtete Rendite
+  const signs = ps ? (mode === 'rendite' ? ps.twr : ps.pl) : undefined
+  const lineColor = signs && n > 0 && signs[n - 1] < 0 ? 'var(--color-down)' : 'var(--color-up)'
   // VTI im Wert-Modus: dieselben Ein- und Auszahlungen, in VTI angelegt
   const benchValues = useMemo(() => {
     if (!ps?.bench || ps.bench.length !== ps.value.length) return null
@@ -178,7 +179,8 @@ function Hero() {
             vlines={vlines}
             height={chartH}
             baseline={mode === 'rendite' ? 0 : undefined}
-            split
+            split={mode === 'wert' && ps.base != null ? ps.base : true}
+            signs={signs}
             format={mode === 'rendite' ? (v) => pct(v / 100, 2) : usd}
             tickFormat={mode === 'rendite' ? pctAxis : undefined}
             onHover={setHover}

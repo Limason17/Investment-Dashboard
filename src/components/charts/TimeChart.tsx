@@ -104,7 +104,7 @@ function timeTicks(t: number[], d: string[], kind: 'intraday' | 'daily', iw: num
  * Zeitreihe als Linie: 2px, Fläche als dünner Schleier, Fadenkreuz rastet auf den Punkt,
  * ein Tooltip für alle Reihen. Pfeiltasten bewegen das Fadenkreuz; auf dem Handy liest der Finger ab.
  */
-export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [], markers = [], vlines = [], baseline, split, format = usd, tickFormat, onHover, tooltipExtra, ariaLabel, animateKey, pending, live, empty }: {
+export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [], markers = [], vlines = [], baseline, split, signs, format = usd, tickFormat, onHover, tooltipExtra, ariaLabel, animateKey, pending, live, empty }: {
   /** Zeitpunkt je Punkt, Millisekunden */
   t: number[]
   /** Handelstag je Punkt, JJJJ-MM-TT */
@@ -118,7 +118,9 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
   /** Fläche füllt bis zu diesem Wert (z. B. 0 bei Renditen) statt bis zum Boden */
   baseline?: number
   /** Startwert als feine gestrichelte Linie; die Hauptlinie ist darüber grün, darunter rot */
-  split?: boolean
+  split?: boolean | number
+  /** Vorzeichen je Punkt bestimmt die Farbe der Hauptlinie (z. B. Ertrag im Zeitraum), genau wie die Kennzahl oben */
+  signs?: number[]
   format?: (v: number) => string
   tickFormat?: (v: number) => string
   onHover?: (i: number | null) => void
@@ -144,17 +146,18 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
   const iw = Math.max(10, W - L - R)
   const ih = height - T - B
   const x = useCallback((i: number) => L + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw), [n, iw, L])
-  const sv = split ? (baseline ?? series[0]?.values.find(Number.isFinite)) : undefined
+  // Bezugswert der gestrichelten Linie: eine Zahl (z. B. Vortagesschluss) oder der Startwert
+  const sv = split == null || split === false ? undefined : typeof split === 'number' ? split : (baseline ?? series[0]?.values.find(Number.isFinite))
 
   const { y, ticks, tickFmt } = useMemo(() => {
-    const all = series.flatMap((s) => s.values).concat(refs.map((r) => r.y), baseline != null ? [baseline] : []).filter(Number.isFinite)
+    const all = series.flatMap((s) => s.values).concat(refs.map((r) => r.y), baseline != null ? [baseline] : [], sv != null ? [sv] : []).filter(Number.isFinite)
     let lo = Math.min(...all), hi2 = Math.max(...all)
     if (!Number.isFinite(lo)) { lo = 0; hi2 = 1 }
     const pad = (hi2 - lo) * 0.1 || Math.abs(hi2) * 0.02 || 1
     const sc = scaleLinear().domain([lo - pad, hi2 + pad]).range([T + ih, T]).nice(5)
     const tk = sc.ticks(5)
     return { y: sc, ticks: tk, tickFmt: tickFormat ?? axisFormatter(tk) }
-  }, [series, refs, baseline, ih, tickFormat])
+  }, [series, refs, baseline, sv, ih, tickFormat])
 
   const axis = useMemo(() => timeTicks(t, d, kind, iw), [t, d, kind, iw])
 
@@ -198,7 +201,23 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
   const main = series[0]
   const lastI = n - 1
   const UP = 'var(--color-up)', DOWN = 'var(--color-down)'
-  const colorAt = (s: TimeSeries, i: number) => (s === main && sv != null ? (s.values[i] >= sv ? UP : DOWN) : (s.color2 ?? s.color))
+  const useSigns = !!signs && signs.length === n
+  const colorAt = (s: TimeSeries, i: number) =>
+    s === main && useSigns ? (signs![i] >= 0 ? UP : DOWN) : s === main && sv != null ? (s.values[i] >= sv ? UP : DOWN) : (s.color2 ?? s.color)
+  // Farbwechsel entlang der Zeitachse, wo das Vorzeichen wechselt (harte Kante in der Mitte zwischen zwei Punkten)
+  const xStops: { o: number; c: string }[] = []
+  if (useSigns) {
+    let up = signs![0] >= 0
+    xStops.push({ o: 0, c: up ? UP : DOWN })
+    for (let i = 1; i < n; i++) {
+      const now = signs![i] >= 0
+      if (now === up) continue
+      const o = Math.max(0, Math.min(1, ((x(i - 1) + x(i)) / 2 - L) / iw))
+      xStops.push({ o, c: up ? UP : DOWN }, { o, c: now ? UP : DOWN })
+      up = now
+    }
+    xStops.push({ o: 1, c: up ? UP : DOWN })
+  }
   const so = sv != null ? Math.max(0, Math.min(1, (y(sv) - T) / ih)) : 0
   const hx = hi != null ? x(hi) : 0
   let tipLeft = hx + 14
@@ -230,7 +249,16 @@ export function TimeChart({ t, d, kind = 'daily', series, height = 260, refs = [
           onPointerCancel={() => hover(null)}
         >
           <defs>
-            {series.map((s, k) => k === 0 && sv != null ? (
+            {series.map((s, k) => k === 0 && useSigns ? (
+              <g key={s.key}>
+                <linearGradient id={`${id}-s${k}`} gradientUnits="userSpaceOnUse" x1={L} x2={L + iw} y1="0" y2="0">
+                  {xStops.map((st, j) => <stop key={j} offset={st.o} stopColor={st.c} />)}
+                </linearGradient>
+                <linearGradient id={`${id}-a${k}`} gradientUnits="userSpaceOnUse" x1={L} x2={L + iw} y1="0" y2="0">
+                  {xStops.map((st, j) => <stop key={j} offset={st.o} stopColor={st.c} stopOpacity="0.13" />)}
+                </linearGradient>
+              </g>
+            ) : k === 0 && sv != null ? (
               <g key={s.key}>
                 <linearGradient id={`${id}-s${k}`} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={T} y2={T + ih}>
                   <stop offset={so} stopColor={UP} />
