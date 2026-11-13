@@ -2,7 +2,7 @@ import { Check, Pencil, Upload } from 'lucide-react'
 import { useMemo } from 'react'
 import { DIV_EXPECTED, DIV_RECEIVED, DividendBars, type DivMonth } from '@/components/charts/DividendBars'
 import { Card, Chip, ConfirmDelete, DemoTag, Empty, Stat } from '@/components/ui'
-import { divAnnual, dividendsList, wht } from '@/lib/calc'
+import { divAnnual, dividendsList, projectedDividends, wht } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
 import { addMonths, dfmt, pctPlain, qty, usd } from '@/lib/format'
 import { reverseDividend } from '@/lib/reverse'
@@ -25,21 +25,23 @@ export function Dividends() {
   const recYear = received.filter((d) => (d.payDate || '').startsWith(year)).reduce((s, d) => s + (d.net || 0), 0)
   const recYearCount = received.filter((d) => (d.payDate || '').startsWith(year)).length
   const expected = all.filter((d) => d.status === 'erwartet')
-  const expSum = expected.reduce((s, d) => s + (d.net || 0), 0)
+  // Geschätzte Zahlungen der nächsten 6 Monate aus den bisherigen Ausschüttungen (nur Anzeige, nichts gespeichert)
+  const projected = useMemo(() => projectedDividends(db, now), [db, now])
+  const expSum = [...expected, ...projected].reduce((s, d) => s + (d.net || 0), 0)
   const w = wht(db)
 
   const months: DivMonth[] = useMemo(() => {
     const first = now.slice(0, 8) + '01'
     const list: DivMonth[] = []
     for (let i = -11; i <= 6; i++) list.push({ key: addMonths(first, i).slice(0, 7), received: 0, expected: 0, items: [] })
-    for (const d of all) {
+    for (const d of [...all, ...projected]) {
       const m = list.find((x) => x.key === (d.payDate || d.exDate || '').slice(0, 7))
       if (!m) continue
       m[d.status === 'erhalten' ? 'received' : 'expected'] += d.net || 0
       m.items.push(d)
     }
     return list
-  }, [all, now])
+  }, [all, projected, now])
   const hasDemo = all.some((d) => d.demo)
   // Spalten nur zeigen, wenn mindestens eine Zeile dort etwas stehen hat (importierte Buchungen kennen oft nur die Beträge).
   const cols = { ex: all.some((d) => d.exDate), per: all.some((d) => d.perShare != null), shares: all.some((d) => d.shares != null) }
@@ -50,7 +52,7 @@ export function Dividends() {
         <Stat label="Jahresprognose netto" value={<>{usd(a.per.length ? a.net : null)} <span className="text-[13px] font-medium text-muted">USD</span></>} sub={<span>{usd(a.per.length ? a.gross : null)} brutto, {pctPlain(w, 0)} Steuer</span>} />
         <Stat label="Rendite auf Wertpapiere" value={pctPlain(c.valuationComplete && a.per.length && c.sec ? a.gross / c.sec : null, 2)} sub={<span>brutto, laufende Raten</span>} />
         <Stat label={<>Erhalten {year} {hasDemo && <DemoTag />}</>} value={usd(recYear)} sub={<span>{recYearCount} {recYearCount === 1 ? 'Zahlung' : 'Zahlungen'}, netto</span>} />
-        <Stat label="Erwartet" value={expected.length ? usd(expSum) : '–'} sub={<span>{expected.length ? `${expected.length} offene ${expected.length === 1 ? 'Zahlung' : 'Zahlungen'}` : 'keine offene Zahlung erfasst'}</span>} />
+        <Stat label="Erwartet, 6 Monate" value={expected.length || projected.length ? usd(expSum) : '–'} sub={<span>{expected.length || projected.length ? [expected.length ? `${expected.length} erfasst` : '', projected.length ? `${projected.length} geschätzt` : ''].filter(Boolean).join(', ') + ', netto' : 'keine Zahlung in Sicht'}</span>} />
         <Stat className="max-lg:col-span-2" label="Pro Monat im Schnitt" value={usd(a.per.length ? a.net / 12 : null)} sub={<span>netto, Prognose</span>} />
       </section>
 

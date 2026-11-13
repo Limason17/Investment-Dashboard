@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { date, detectKind, num, parseImport, template, templateFile } from './bulk'
 import { planImport } from './bulk-plan'
+import { projectedDividends } from './calc'
 import { closeUpdates } from './closes'
 import { portfolioSeries, timeline } from './history'
 import { aggregate, newPortfolioId, portfolioList } from './portfolios'
@@ -114,6 +115,19 @@ describe('Import nach erfasstem Cash-Stand', () => {
     expect(p.cashBefore).toBe(10)
     expect(p.cashDelta).toBe(5)
     expect(applyOps(db, p.ops).meta.settings!.cash).toBe(1005)
+  })
+})
+
+describe('Dividenden-Schätzung', () => {
+  it('schätzt die nächsten Monate aus Monaten und letztem Betrag, ohne erfasste doppelt zu zählen', () => {
+    const db = empty()
+    db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 10, bucket: 'etf', cost: 1000 }
+    db.prices.VTI = { close: 300, prev: 299, date: '2026-11-12', divAnnual: 4, divMonths: [3, 6, 9, 12], divLast: 1 }
+    const all = projectedDividends(db, '2026-11-13')
+    expect(all.map((d) => d.payDate.slice(0, 7))).toEqual(['2026-12', '2027-03'])
+    expect(all[0]).toMatchObject({ gross: 10, tax: 1.5, net: 8.5, estimate: true })
+    db.dividends.x = { ticker: 'VTI', exDate: null, payDate: '2026-12-29', perShare: 1, shares: 10, gross: 10, tax: 1.5, net: 8.5, status: 'erwartet' }
+    expect(projectedDividends(db, '2026-11-13').map((d) => d.payDate.slice(0, 7))).toEqual(['2027-03'])
   })
 })
 

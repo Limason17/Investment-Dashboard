@@ -46,6 +46,10 @@ export interface LiveResult {
 export interface DivRate {
   annual: number
   freq: string
+  /** Monate (1–12) der Ausschüttungen der letzten 12 Monate (Ex-Tag) */
+  months?: number[]
+  /** letzte Ausschüttung je Stück */
+  last?: number
 }
 
 const UA = { 'User-Agent': 'Mozilla/5.0 (depot-dashboard lokal)' }
@@ -235,7 +239,7 @@ export function liveQuotes(src: QuoteSource, env: Record<string, string | undefi
         let list = all.filter((e) => typeof e.amount === 'number' && e.amount > 0 && (e.date ?? 0) >= since).sort((a, b) => (a.date ?? 0) - (b.date ?? 0))
         // Verschiebt sich ein Zahltag um wenige Tage, fallen fünf statt vier (13 statt 12) Zahlungen ins Fenster.
         if (list.length === 5 || list.length === 13) list = list.slice(1)
-        return list.map((e) => e.amount as number)
+        return list.map((e) => ({ amount: e.amount as number, month: new Date((e.date ?? 0) * 1000).getUTCMonth() + 1 }))
       })
       let ok = 0
       rs.forEach((r, i) => {
@@ -243,7 +247,12 @@ export function liveQuotes(src: QuoteSource, env: Record<string, string | undefi
         ok++
         const n = r.value.length
         if (!n) delete div[held[i]]
-        else div[held[i]] = { annual: round(r.value.reduce((s, x) => s + x, 0)), freq: n >= 11 ? 'monatlich' : n >= 3 ? 'quartalsweise' : n === 2 ? 'halbjährlich' : 'jährlich' }
+        else div[held[i]] = {
+          annual: round(r.value.reduce((s, x) => s + x.amount, 0)),
+          freq: n >= 11 ? 'monatlich' : n >= 3 ? 'quartalsweise' : n === 2 ? 'halbjährlich' : 'jährlich',
+          months: [...new Set(r.value.map((x) => x.month))].sort((a, b) => a - b),
+          last: r.value[n - 1].amount,
+        }
       })
       if (ok) divState = { key, at: Date.now(), busy: true }
     } catch {

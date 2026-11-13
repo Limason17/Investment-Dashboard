@@ -1,5 +1,5 @@
 import { applyCategories, BUCKETS, catOf, HOLDING_BUCKETS } from './buckets'
-import { daysBetween, dfmt, dshort, pctPlain } from './format'
+import { addMonths, daysBetween, dfmt, dshort, pctPlain, r2 } from './format'
 import type { BucketId, DB, LiveResult, DepotEvent, Dividend, Position, Quote, Settings, Snapshot, ViewId, WatchItem, WithId } from './types'
 
 export interface Row {
@@ -65,7 +65,7 @@ export function withLive(db: DB, live: LiveResult | null): DB {
     quotes[t] = { ...quotes[t], close: l.price, prev: l.ref, date, source: l.source, session: l.session, time: l.time }
     // Dividendenrate aus den Ausschüttungen der letzten 12 Monate; eine von Hand gepflegte Rate in prices.json bleibt bestehen.
     const dv = live.div?.[t]
-    if (dv && !(db.prices[t]?.divAnnual ?? 0)) quotes[t] = { ...quotes[t], divAnnual: dv.annual, divFreq: dv.freq }
+    if (dv && !(db.prices[t]?.divAnnual ?? 0)) quotes[t] = { ...quotes[t], divAnnual: dv.annual, divFreq: dv.freq, divMonths: dv.months, divLast: dv.last }
   }
   return { ...db, market: { ...db.market, latest: { ...db.market.latest, quotes, refreshedAt: live.at, by: 'Live', status: live.failures.length ? 'teilweise' : 'ok', failures: live.failures } } }
 }
@@ -168,6 +168,33 @@ export function divAnnual(db: DB) {
     }
   }
   return { gross, net: gross * (1 - wht(db)), per: per.sort((a, b) => b.v - a.v) }
+}
+
+/**
+ * Geschätzte Ausschüttungen der nächsten Monate: gleiche Monate wie in den letzten 12 Monaten, letzter Betrag je
+ * Stück mal heutiger Bestand, nach Quellensteuer. Monate mit erfasster (erwarteter oder erhaltener) Zahlung desselben
+ * Titels werden übersprungen, damit nichts doppelt zählt.
+ */
+export function projectedDividends(db: DB, now: string, ahead = 6): Dividend[] {
+  const w = wht(db)
+  const out: Dividend[] = []
+  const first = now.slice(0, 8) + '01'
+  const keys = Array.from({ length: ahead + 1 }, (_, i) => addMonths(first, i).slice(0, 7))
+  const booked = new Set(Object.values(db.dividends).map((d) => d.ticker + '|' + (d.payDate || d.exDate || '').slice(0, 7)))
+  for (const [t, p] of Object.entries(db.positions)) {
+    const q = quote(db, t)
+    if (!p || !(p.shares > 0) || !q?.divMonths?.length) continue
+    const per = q.divLast ?? (q.divAnnual ? q.divAnnual / q.divMonths.length : 0)
+    if (!(per > 0)) continue
+    for (const k of keys) {
+      if (!q.divMonths.includes(+k.slice(5)) || booked.has(t + '|' + k)) continue
+      // Laufender Monat: nur, wenn die Zahlung nach üblicher Lage (Mitte Monat) noch aussteht
+      if (k === now.slice(0, 7) && now.slice(8) > '20') continue
+      const gross = r2(p.shares * per)
+      out.push({ ticker: t, exDate: null, payDate: k + '-15', perShare: per, shares: p.shares, gross, tax: r2(gross * w), net: r2(gross * (1 - w)), status: 'erwartet', payDateEstimated: true, estimate: true, source: 'Schätzung' })
+    }
+  }
+  return out
 }
 
 /* ------------------------------------------------------------------ Watchlist */
