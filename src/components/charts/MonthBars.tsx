@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { MONTHS, cur } from '@/lib/format'
+import { MONTHS, cur, curRate } from '@/lib/format'
 
 export interface MonthPair {
   key: string // JJJJ-MM
@@ -46,7 +46,7 @@ export function MonthBars({ months, labels, colors, format, current, height = 16
             <div key={m.key} className={clsx('flex h-full min-w-0 flex-1 items-end justify-center gap-[2px] rounded-t-md sm:gap-[3px]', m.key === current && 'bg-white/[0.025]')} title={`${name(m.key)} ${m.key.slice(0, 4)} · ${labels[0]} ${format(m.a)} USD · ${labels[1]} ${format(m.b)} USD`}>
               {[m.a, m.b].map((v, i) => (
                 <span key={i} className="relative flex h-full w-full max-w-[13px] flex-col justify-end md:max-w-[26px]">
-                  {v > 0 && <span className="num absolute inset-x-[-8px] text-center text-[10px] leading-none text-ink-2 max-md:hidden" style={{ bottom: `calc(${(v / max) * 100}% + 4px)` }}>{short(v)}</span>}
+                  {v > 0 && <span className="num absolute inset-x-[-8px] text-center text-[10px] leading-none text-ink-2 max-md:hidden" style={{ bottom: `calc(${(v / max) * 100}% + 4px)` }}>{short(v * curRate())}</span>}
                   <i className="block w-full rounded-t-[3px] md:rounded-t-[4px]" style={{ height: max ? `${(v / max) * 100}%` : 0, minHeight: v > 0 ? 2 : 0, background: colors[i] }} />
                 </span>
               ))}
