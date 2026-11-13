@@ -156,6 +156,10 @@ export interface PortfolioSeries {
   buckets: Record<HoldingBucket, { value: number[]; twr: number[] }>
   /** Vergleichsindex: kumulierte Kursrendite je Punkt */
   bench: number[] | null
+  /** Zu- und Abflüsse seit Beginn des Zeitraums je Punkt */
+  flows: number[]
+  /** Nenner der Rendite je Punkt (eingesetztes Kapital) */
+  den: number[]
   /** gehaltene Titel ohne Kursverlauf (zum letzten bekannten Kurs bewertet) */
   approx: string[]
   cashTracked: boolean
@@ -238,7 +242,7 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   let tp = 0
   while (tp < tl.trades.length && tl.trades[tp].date < start) tp++
   let prevV = baseTotal, cum = 1, gainFlows = 0
-  const pl: number[] = [], mwr: number[] = []
+  const pl: number[] = [], mwr: number[] = [], flowsAt: number[] = [], den: number[] = []
   const seen: { t: number; amount: number }[] = []
   // Zeitpunkt des Anfangswerts: ein Schritt vor dem ersten Punkt
   const t0 = chart.t[s0] - (s0 + 1 < n ? chart.t[s0 + 1] - chart.t[s0] : 864e5)
@@ -282,7 +286,10 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
     pl.push(g)
     // Max (seit Beginn): Ertrag im Verhältnis zum eingesetzten Geld, wie beim Broker; sonst zeitgewichtetes Kapital (Simple Dietz)
     const paid = baseTotal + invested
-    mwr.push(chart.range === 'MAX' && paid > 1e-6 ? g / paid : cap > 1e-6 ? g / cap : 0)
+    const dn = chart.range === 'MAX' && paid > 1e-6 ? paid : cap > 1e-6 ? cap : 0
+    mwr.push(dn ? g / dn : 0)
+    den.push(dn)
+    flowsAt.push(gainFlows)
     t.push(chart.t[i])
     d.push(date)
     value.push(v)
@@ -305,7 +312,7 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   }
   return {
     kind: chart.kind, t, d, value, invested: inv, twr, pl, mwr, base, gain: value[value.length - 1] - baseTotal - gainFlows,
-    buckets, bench, approx, cashTracked, session: chart.session,
+    buckets, bench, approx, cashTracked, session: chart.session, flows: flowsAt, den,
   }
 }
 

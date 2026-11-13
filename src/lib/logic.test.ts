@@ -248,6 +248,22 @@ describe('Rendite seit Beginn', () => {
   })
 })
 
+describe('Rendite und Betrag passen zusammen', () => {
+  it('früh Gewinn, dann grosser Kauf mit Verlust: Prozent und Betrag haben dasselbe Vorzeichen', () => {
+    const db = empty()
+    db.meta.settings = { cash: 0, cashExcluded: true }
+    db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 110, bucket: 'etf', cost: 13000 }
+    db.transactions.a = { type: 'kauf', date: '2025-01-02', ticker: 'VTI', shares: 10, price: 100, cashDelta: -1000 }
+    db.transactions.b = { type: 'kauf', date: '2025-01-06', ticker: 'VTI', shares: 100, price: 120, cashDelta: -12000 }
+    const days = ['2025-01-02', '2025-01-03', '2025-01-06', '2025-01-07']
+    const ch = { range: 'MAX' as const, kind: 'daily' as const, interval: '1d', at: '', t: days.map((d) => Date.parse(d + 'T21:00:00Z')), d: days, series: { VTI: [100, 120, 120, 115] }, prev: { VTI: 100 }, failures: [] }
+    const ps = portfolioSeries(db, timeline(db), ch)!
+    expect(ps.gain).toBeCloseTo(110 * 115 - 13000)
+    expect(ps.twr.at(-1)!).toBeGreaterThan(0) // zeitgewichtet wäre positiv
+    expect(Math.sign(ps.mwr.at(-1)!)).toBe(Math.sign(ps.gain)) // angezeigt wird die passende Rendite
+  })
+})
+
 describe('Schlusskurse', () => {
   it('schreibt Schlusskurs und Tageswert nur bei vollständigen Kursen', () => {
     const q = { VTI: { regular: 300, regularPrev: 298, regularDate: '2026-11-11' } }

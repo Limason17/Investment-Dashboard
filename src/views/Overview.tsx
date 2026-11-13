@@ -52,30 +52,32 @@ function Hero() {
   const investedLabel = ps?.cashTracked ? 'Eingezahlt' : 'Netto investiert'
 
   // Linie grün bei Gewinn, rot bei Verlust im Zeitraum
-  // Farbe wie die Kennzahl oben: Ertrag im Zeitraum (Wert) bzw. zeitgewichtete Rendite
-  const signs = ps ? (mode === 'rendite' ? ps.twr : ps.pl) : undefined
+  // Farbe wie die Kennzahl oben: Ertrag im Zeitraum (gleiches Vorzeichen in Wert und Rendite)
+  const signs = ps ? ps.pl : undefined
   const lineColor = signs && n > 0 && signs[n - 1] < 0 ? 'var(--color-down)' : 'var(--color-up)'
   // VTI im Wert-Modus: dieselben Ein- und Auszahlungen, in VTI angelegt
   const benchValues = useMemo(() => {
     if (!ps?.bench || ps.bench.length !== ps.value.length) return null
-    if (mode === 'rendite') return ps.bench.map((v) => v * 100)
     const p = ps.bench.map((v) => 1 + v)
     const out: number[] = []
     for (let i = 0, units = p[0] > 0 ? ps.value[0] / p[0] : 0; i < p.length; i++) {
       if (i > 0 && p[i] > 0) units += (ps.invested[i] - ps.invested[i - 1]) / p[i]
       out.push(units * p[i])
     }
-    return out
+    if (mode === 'wert') return out
+    // Rendite von VTI mit denselben Einzahlungen, gleich gerechnet wie beim Depot
+    const base = ps.base ?? 0
+    return out.map((v, i) => (ps.den[i] > 0 ? ((v - base - ps.flows[i]) / ps.den[i]) * 100 : 0))
   }, [ps, mode])
   const showBench = benchOn === 'an' && !!benchValues
   // Eingezahltes Kapital als Treppe im Wert-Modus
   const showInv = invOn === 'an' && mode === 'wert'
-  const benchLabel = <>{BENCH}<span className="max-sm:hidden">{mode === 'rendite' ? ', US-Gesamtmarkt' : ', gleiche Einzahlungen'}</span></>
+  const benchLabel = <>{BENCH}<span className="max-sm:hidden">, gleiche Einzahlungen</span></>
 
   const series: TimeSeries[] = useMemo(() => {
     if (!ps) return []
     const s: TimeSeries[] = [mode === 'rendite'
-      ? { key: 'twr', label: 'Depot', values: ps.twr.map((v) => v * 100), color: lineColor, area: true, glow: true }
+      ? { key: 'ret', label: 'Depot', values: ps.mwr.map((v) => v * 100), color: lineColor, area: true, glow: true }
       : { key: 'total', label: valueLabel, values: ps.value, color: lineColor, area: true, glow: true }]
     if (showBench && benchValues) s.push({ key: 'bench', label: BENCH, values: benchValues, color: 'var(--color-etf)', width: 1.5, opacity: 0.5 })
     if (showInv) s.push({ key: 'inv', label: investedLabel, values: ps.invested, color: 'var(--color-ref)', kind: 'step', width: 1.5, opacity: 0.65 })
@@ -94,8 +96,8 @@ function Hero() {
   // Kacheln unter dem Chart: Tag, Woche, Monat und das Jahr; ist das Depot jünger, der ganze Zeitraum.
   const periods = useMemo(() => [...(['1T', '1W', '1M'] as RangeId[]).filter((r) => ranges.includes(r)), ranges.includes('1J') ? '1J' : 'MAX'] as RangeId[], [ranges])
   const chf = db.market.latest?.usdchf ?? c.settings.usdchf
-  // «Wert» zeigt, was das eingesetzte Geld gemacht hat (passt zum Ertrag in USD), «Rendite» die zeitgewichtete Sicht.
-  const ret = ps ? (mode === 'rendite' ? ps.twr : ps.mwr)[hi ?? n - 1] : null
+  // Eine Rendite für alles: Ertrag im Verhältnis zum eingesetzten Geld, passend zum Betrag in USD.
+  const ret = ps ? ps.mwr[hi ?? n - 1] : null
   const chartH = wide ? (tall ? 300 : 232) : 220
   const dayText = c.live ? 'heute' : 'letzter Handelstag'
 
@@ -157,7 +159,7 @@ function Hero() {
          </div>
           <div className="hidden flex-none flex-col items-end gap-2 sm:flex min-[1500px]:flex-row min-[1500px]:items-center">
             <Segmented label="Zeitraum" value={range} onChange={setRange} options={ranges.map((r) => ({ value: r, label: RANGE_LABEL[r], title: RANGE_TITLE[r] }))} />
-            <Segmented label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'rendite', label: 'Rendite', title: 'Zeitgewichtet und im Vergleich zum Markt: Käufe, Verkäufe und Einzahlungen sind herausgerechnet' }, { value: 'wert', label: 'Wert', title: 'Wert in USD; der Ertrag bezieht sich auf das eingesetzte Kapital' }]} />
+            <Segmented label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'rendite', label: 'Rendite', title: 'Ertrag in Prozent des eingesetzten Geldes, im Vergleich zu VTI' }, { value: 'wert', label: 'Wert', title: 'Wert in USD; der Ertrag bezieht sich auf das eingesetzte Kapital' }]} />
           </div>
         </div>
 
@@ -185,7 +187,7 @@ function Hero() {
             animateKey={range + mode}
             pending={pending}
             live={c.live}
-            ariaLabel={mode === 'rendite' ? 'Zeitgewichtete Rendite des Depots im Vergleich zum US-Gesamtmarkt' : `${valueLabel} im Verlauf`}
+            ariaLabel={mode === 'rendite' ? 'Rendite des Depots auf das eingesetzte Geld, im Vergleich zu VTI mit denselben Einzahlungen' : `${valueLabel} im Verlauf`}
             empty={<Empty title="Heute noch kein Handel">Der Tages-Chart beginnt mit dem Pre-Market um 10:00 Uhr.</Empty>}
             tooltipExtra={(i) => (
               <>
@@ -215,7 +217,7 @@ function Hero() {
         {/* Handy: Umschalter links, damit der Plus-Knopf unten rechts ihn nicht verdeckt */}
         <Segmented className="sm:hidden" label="Darstellung" value={mode} onChange={setMode} options={[{ value: 'rendite', label: 'Rendite' }, { value: 'wert', label: 'Wert' }]} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-ink-2">
-          <span className="inline-flex items-center"><i className="linekey" style={{ background: lineColor }} />{mode === 'rendite' ? 'Depot, zeitgewichtet' : valueLabel}</span>
+          <span className="inline-flex items-center"><i className="linekey" style={{ background: lineColor }} />{mode === 'rendite' ? 'Depot' : valueLabel}</span>
           {ps?.bench && (
             <button type="button" aria-pressed={showBench} onClick={() => setBenchOn(showBench ? 'aus' : 'an')} title={showBench ? `${BENCH} ausblenden` : `${BENCH} einblenden`} className={clsx('inline-flex items-center rounded-md px-1.5 py-1 transition-opacity hover:bg-white/[0.05]', !showBench && 'opacity-45 line-through decoration-white/40')}>
               <i className="linekey opacity-60" style={{ background: 'var(--color-etf)' }} />{benchLabel}
