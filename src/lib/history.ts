@@ -280,7 +280,9 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
     const floor = (baseTotal + seen.reduce((s, fl) => s + Math.max(fl.amount, 0), 0)) * 0.1
     if (!(cap > floor)) cap = Math.max(floor, 0)
     pl.push(g)
-    mwr.push(cap > 1e-6 ? g / cap : 0)
+    // Max (seit Beginn): Ertrag im Verhältnis zum eingesetzten Geld, wie beim Broker; sonst zeitgewichtetes Kapital (Simple Dietz)
+    const paid = baseTotal + invested
+    mwr.push(chart.range === 'MAX' && paid > 1e-6 ? g / paid : cap > 1e-6 ? g / cap : 0)
     t.push(chart.t[i])
     d.push(date)
     value.push(v)

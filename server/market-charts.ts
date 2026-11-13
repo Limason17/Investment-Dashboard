@@ -220,12 +220,13 @@ export function marketCharts(live: { (force?: boolean): Promise<unknown>; intrad
     if (range === 'MAX') {
       const start = from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : addDays(today, -5 * 365)
       const days = Math.max(1, Math.round((noon(today) - noon(start)) / 864e5))
-      interval = days <= 2300 ? '1d' : '1wk'
+      // Bis knapp 2 Jahre stündlich (Grenze von Yahoo: 730 Tage), danach täglich bzw. wöchentlich.
+      interval = days <= 700 ? '60m' : days <= 2300 ? '1d' : '1wk'
       // Eine Woche Vorlauf, damit Yahoo den Schlusskurs davor mitliefert; Tagesgrenze, damit der Zwischenspeicher greift.
       q = `period1=${Math.floor(noon(addDays(start, -7)) / 1000)}&period2=${Math.floor(noon(addDays(today, 2)) / 1000)}&interval=${interval}`
-      kind = 'daily'
-      step = 0
-      ttl = interval === '1d' ? 30 * MIN : 360 * MIN
+      kind = interval === '60m' ? 'intraday' : 'daily'
+      step = interval === '60m' ? 3600 : 0
+      ttl = interval === '60m' ? 20 * MIN : interval === '1d' ? 30 * MIN : 360 * MIN
     } else ({ q, interval, kind, step, ttl } = SPEC[range])
 
     const { raws, failures } = await loadAll(tickers, q, ttl)

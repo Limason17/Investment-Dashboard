@@ -205,6 +205,7 @@ describe('Wertverlauf gegen echte Zahlen', () => {
     expect(ps.invested).toEqual([1000, 1000, 1000])
     expect(ps.gain).toBeCloseTo(200)
     expect(ps.twr.at(-1)).toBeCloseTo(0.2)
+    expect(ps.mwr.at(-1)).toBeCloseTo(0.2) // seit Beginn: Ertrag / eingesetztes Geld
   })
 
   it('Cash erst später erfasst: zählt von Anfang an mit, Gewinn nur aus Kursen', () => {
@@ -230,6 +231,20 @@ describe('Wertverlauf gegen echte Zahlen', () => {
     expect(ps.value).toEqual([1000, 1050, 1100])
     expect(ps.invested).toEqual([1000, 1000, 1000])
     expect(ps.gain).toBeCloseTo(100)
+  })
+})
+
+describe('Rendite seit Beginn', () => {
+  it('teilt den Ertrag durch das insgesamt eingesetzte Geld, auch bei späteren Käufen', () => {
+    const db = empty()
+    db.meta.settings = { cash: 0, cashExcluded: true }
+    db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 20, bucket: 'etf', cost: 3100 }
+    db.transactions.a = { type: 'kauf', date: '2025-01-02', ticker: 'VTI', shares: 10, price: 100, cashDelta: -1000 }
+    db.transactions.b = { type: 'kauf', date: '2025-01-06', ticker: 'VTI', shares: 10, price: 210, cashDelta: -2100 }
+    const ch = { range: 'MAX' as const, kind: 'daily' as const, interval: '1d', at: '', t: ['2025-01-02', '2025-01-03', '2025-01-06'].map((d) => Date.parse(d + 'T21:00:00Z')), d: ['2025-01-02', '2025-01-03', '2025-01-06'], series: { VTI: [100, 200, 210] }, prev: { VTI: 100 }, failures: [] }
+    const ps = portfolioSeries(db, timeline(db), ch)!
+    expect(ps.gain).toBeCloseTo(1100)
+    expect(ps.mwr.at(-1)).toBeCloseTo(1100 / 3100)
   })
 })
 

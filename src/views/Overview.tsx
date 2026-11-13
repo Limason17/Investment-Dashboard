@@ -31,7 +31,6 @@ function useCountUp(target: number) {
 /* ------------------------------------------------------------------ Wert + Verlauf */
 function Hero() {
   const { db, c } = useDepot()
-  const nav = useNav()
   const ranges = usePortfolioRanges()
   const [stored, setRange] = useStored<RangeId>('depot.range', '1M')
   const range = ranges.includes(stored) ? stored : 'MAX'
@@ -49,7 +48,7 @@ function Hero() {
   const fx = fxOf(db)
   const n = ps?.t.length ?? 0
   const hi = hover != null && hover < n ? hover : null
-  const valueLabel = cashOff ? 'Wertpapiere' : 'Gesamtwert'
+  const valueLabel = 'Gesamtwert'
   const investedLabel = ps?.cashTracked ? 'Eingezahlt' : 'Netto investiert'
 
   // Linie grün bei Gewinn, rot bei Verlust im Zeitraum
@@ -122,7 +121,6 @@ function Hero() {
                     {c.priceLabel}
                   </span>
                 )}
-                {cashOff && <button type="button" onClick={() => nav.openEntry('einzahlung')} title="Cash-Stand eintragen" className="rounded-full focus-visible:outline-2"><Chip tone="mute" icon={false}>ohne Cash · eintragen</Chip></button>}
                 {c.settings.demo && <DemoTag />}
               </>
             )}
