@@ -191,7 +191,7 @@ function Hero() {
               <>
                 {mode === 'rendite' && <div className="tip-row"><span>{valueLabel}</span><b>{usd(ps.value[i])}</b></div>}
                 {mode === 'wert' && <div className="tip-row"><span>Ertrag im Zeitraum</span><b className={ps.pl[i] >= 0 ? '!text-up' : '!text-down'}>{sUsd(ps.pl[i])} · {pct(ps.mwr[i], 2)}</b></div>}
-                {mode === 'wert' && <div className="tip-row"><span>{investedLabel}</span><b>{usd(ps.invested[i])}</b></div>}
+                {mode === 'wert' && !showInv && <div className="tip-row"><span>{investedLabel}</span><b>{usd(ps.invested[i])}</b></div>}
               </>
             )}
           />
