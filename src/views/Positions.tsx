@@ -99,6 +99,21 @@ export function Positions() {
       </span>
     ) : <span className="text-faint">–</span>
 
+
+  // Leeres Depot: ein klarer Einstieg statt leerer Kacheln
+  if (!c.rows.length)
+    return (
+      <div className="grid grid-cols-12 gap-3 sm:gap-4">
+        <Card className="col-span-12" title="Positionen">
+          <Empty title="Noch keine Positionen">Lade deine bisherigen Käufe auf einmal hoch oder erfasse den ersten Kauf einzeln.</Empty>
+          <div className="flex flex-wrap justify-center gap-2 pb-3">
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => nav.openEntry('import', { kind: 'trades' })}><Upload /> Hochladen</button>
+            <button type="button" className="btn btn-sm" onClick={() => nav.openEntry('kauf')}>Kauf erfassen</button>
+          </div>
+        </Card>
+      </div>
+    )
+
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
       {/* Kategorien: Gewicht gegen Plan und Rendite im Zeitraum. Ein Tipp filtert die Liste. */}

@@ -29,6 +29,7 @@ export function Allocation({ c }: { c: Calc }) {
   // Ohne erfassten Cash: Anteile an den Wertpapieren. Der Plan zählt Cash mit, der Vergleich ist dann eine Näherung.
   const noCash = !!c.settings.cashExcluded
   const total = noCash ? c.sec : c.total
+  if (!c.rows.length) return <Empty>Die Allokation erscheint mit den ersten Positionen.</Empty>
   if (!c.valuationComplete) return <Empty>Aktuelle Kurse fehlen. Die Allokation bleibt offen.</Empty>
   if (!total) return <Empty>Die Allokation erscheint mit den Positionen.</Empty>
 

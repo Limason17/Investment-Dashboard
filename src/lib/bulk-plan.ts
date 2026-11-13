@@ -5,7 +5,7 @@
  */
 import type { ParseResult } from './bulk'
 import { quote, wht } from './calc'
-import { r2, uid } from './format'
+import { qty, r2, uid, usd } from './format'
 import type { Op } from './store'
 import type { DB } from './types'
 
@@ -57,7 +57,7 @@ export function planImport(db: DB, p: ParseResult): Plan {
   const trades = [...p.trades].sort((a, b) => a.date.localeCompare(b.date) || a.line - b.line)
   for (const r of trades) {
     const amt = r.shares * r.price
-    const item: PlanItem = { line: r.line, kind: r.type === 'kauf' ? 'Kauf' : 'Verkauf', ticker: r.ticker, date: r.date, detail: `${r.shares} × ${r.price}`, amount: r.type === 'kauf' ? -(amt + r.fees) : amt - r.fees, state: 'neu' }
+    const item: PlanItem = { line: r.line, kind: r.type === 'kauf' ? 'Kauf' : 'Verkauf', ticker: r.ticker, date: r.date, detail: `${qty(r.shares)} × ${usd(r.price)}`, amount: r.type === 'kauf' ? -(amt + r.fees) : amt - r.fees, state: 'neu' }
     items.push(item)
     if (existing.some((x) => x.type === r.type && x.date === r.date && x.ticker === r.ticker && same(x.shares, r.shares, 1e-6) && same(x.price, r.price, 0.0001))) {
       item.state = 'doppelt'
