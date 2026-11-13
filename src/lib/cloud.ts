@@ -53,7 +53,16 @@ function load(): Promise<Api> {
       a.connectAuthEmulator(auth, `http://${EMULATOR}:9099`, { disableWarnings: true })
       f.connectFirestoreEmulator(db, EMULATOR, 8080)
     }
-    a.onAuthStateChanged(auth, (u) => setAccount(u ? { status: 'in', user: toAccount(u) } : { status: 'out', user: null }))
+    a.onAuthStateChanged(auth, async (u) => {
+      // Bestätigt, aber das Token stammt noch von vorher: neu holen, sonst lehnen die Datenbankregeln das Schreiben ab.
+      if (u?.emailVerified) {
+        try {
+          const t = await u.getIdTokenResult()
+          if (t.claims.email_verified !== true) await u.getIdToken(true)
+        } catch { /* ohne Netz: beim nächsten Mal */ }
+      }
+      setAccount(u ? { status: 'in', user: toAccount(u) } : { status: 'out', user: null })
+    })
     return { auth, db, a, f }
   })()
   return api
@@ -134,7 +143,7 @@ export async function deleteAccount(password: string) {
   const b = x.f.writeBatch(x.db)
   for (const pf of list) for (const c of COLLECTIONS) b.delete(x.f.doc(x.db, ...collPath(u.uid, pf.id), c))
   b.delete(x.f.doc(x.db, 'depots', u.uid))
-  await b.commit()
+  await commit(b)
   await x.a.deleteUser(u)
 }
 
@@ -158,16 +167,26 @@ export async function cloudPortfolios(): Promise<PortfolioInfo[]> {
 }
 export async function cloudSavePortfolios(list: PortfolioInfo[]) {
   const x = await load()
-  await x.f.setDoc(x.f.doc(x.db, 'depots', uidNow()), { portfolios: toMap(list) })
+  await x.f.setDoc(x.f.doc(x.db, 'depots', uidNow()), { portfolios: toMap(list) }).catch((e) => { throw writeError(e) })
 }
 /** Alle Daten eines Portfolios löschen. */
 export async function cloudDeletePortfolio(pid: string) {
   const x = await load()
   const b = x.f.writeBatch(x.db)
   for (const c of COLLECTIONS) b.delete(x.f.doc(x.db, ...collPath(uidNow(), pid), c))
-  await b.commit()
+  await commit(b)
   existingBy.delete(pid)
 }
+/** Fehler beim Schreiben in verständliche Sätze */
+function writeError(e: unknown): Error {
+  const code = (e as { code?: string })?.code ?? ''
+  if (code === 'permission-denied' || /insufficient permissions/i.test(String((e as Error)?.message)))
+    return new Error('Speichern nicht erlaubt. Lade die Seite neu oder melde dich neu an. Neue Konten brauchen eine bestätigte E-Mail-Adresse.')
+  if (code === 'unavailable') return new Error('Keine Verbindung zur Datenbank. Prüfe das Internet und versuche es erneut.')
+  return e instanceof Error ? e : new Error(String(e))
+}
+const commit = (b: { commit: () => Promise<void> }) => b.commit().catch((e) => { throw writeError(e) })
+
 const uidNow = () => {
   const u = account.user
   if (!u) throw new Error('Nicht angemeldet.')
@@ -232,7 +251,7 @@ export async function cloudBatch(db: DB, ops: Op[], pid = MAIN): Promise<Partial
       if (pairs.length) b.update(ref, pairs[0] as InstanceType<StoreModule['FieldPath']>, pairs[1], ...pairs.slice(2))
     }
   }
-  await b.commit()
+  await commit(b)
   for (const c of touched.keys()) existingOf(pid).add(c)
   return Object.fromEntries(touched) as Partial<DB>
 }
@@ -253,5 +272,5 @@ export async function cloudReplace(all: Partial<DB>, pid = MAIN) {
       existingOf(pid).delete(c)
     }
   }
-  await b.commit()
+  await commit(b)
 }
