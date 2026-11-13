@@ -24,6 +24,8 @@ export const curRate = () => fxRate
 export const usd = (v: number | null | undefined) => (bad(v) ? '–' : nf2.format(v * fxRate).replace('-', MINUS))
 /** Betrag in USD, ohne Umrechnung (Eingaben) */
 export const usdRaw = (v: number | null | undefined) => (bad(v) ? '–' : nf2.format(v).replace('-', MINUS))
+/** Betrag mit Währung, z. B. «1'250.50 USD» (für Text und Beschriftungen) */
+export const money = (v: number | null | undefined) => (bad(v) ? '–' : usd(v) + ' ' + fxCode)
 /** Ganzzahliger Betrag in der Anzeigewährung */
 export const cur0 = (v: number | null | undefined) => (bad(v) ? '–' : nf0.format(v * fxRate).replace('-', MINUS))
 export const int = (v: number | null | undefined) => (bad(v) ? '–' : nf0.format(v).replace('-', MINUS))

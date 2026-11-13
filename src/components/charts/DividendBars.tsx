@@ -1,7 +1,7 @@
 import { scaleLinear } from 'd3-scale'
 import { motion, useReducedMotion } from 'motion/react'
 import { useState, type KeyboardEvent } from 'react'
-import { axisFormatter, MONTHS, usd, curRate } from '@/lib/format'
+import { axisFormatter, MONTHS, usd, curRate, money } from '@/lib/format'
 import type { Dividend } from '@/lib/types'
 import { useMeasure } from '@/lib/useMeasure'
 
@@ -84,13 +84,13 @@ export function DividendBars({ months, current, height = 236 }: { months: DivMon
       {h && hi != null && (
         <div className="tip" style={tipRight ? { right: W - (L + hi * band) + 6, top: T - 6 } : { left: L + (hi + 1) * band + 6, top: T - 6 }}>
           <div className="text-[11.5px] text-muted">{MONTHS[+h.key.slice(5) - 1]} {h.key.slice(0, 4)}</div>
-          <div className="tip-row"><span><i className="swatch mr-[7px]" style={{ background: DIV_RECEIVED }} />erhalten</span><b>{usd(h.received)}</b></div>
-          <div className="tip-row"><span><i className="swatch mr-[7px]" style={{ background: DIV_EXPECTED }} />erwartet</span><b>{usd(h.expected)}</b></div>
+          <div className="tip-row"><span><i className="swatch mr-[7px]" style={{ background: DIV_RECEIVED }} />erhalten</span><b>{money(h.received)}</b></div>
+          <div className="tip-row"><span><i className="swatch mr-[7px]" style={{ background: DIV_EXPECTED }} />erwartet</span><b>{money(h.expected)}</b></div>
           {h.items.length > 0 && <div className="hairline my-2" />}
           {h.items.map((d) => (
             <div className="tip-row" key={d.ticker + d.payDate} style={{ marginTop: 3 }}>
               <span className="tk !text-[11.5px] !text-ink-2">{d.ticker}{d.estimate && <span className="ml-1.5 font-sans text-[10.5px] font-normal text-muted">geschätzt</span>}</span>
-              <span className="num">{d.estimate ? '≈ ' : ''}{usd(d.net)}</span>
+              <span className="num">{d.estimate ? '≈ ' : ''}{money(d.net)}</span>
             </div>
           ))}
           {!h.items.length && <div className="mt-1.5 text-faint">keine Zahlung</div>}

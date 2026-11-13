@@ -9,7 +9,7 @@ import { CLOUD } from '@/lib/config'
 import { LegalLinks, LegalSheet, type LegalDoc } from './Legal'
 import { ALL } from '@/lib/portfolios'
 import { useNav } from '@/lib/context'
-import { loadDb, useStore } from '@/lib/store'
+import { loadDb, mutate, useStore } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DB } from '@/lib/types'
 
@@ -295,6 +295,15 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
           </div>
           <button type="button" className="btn btn-sm flex-none" onClick={onTour}>Ansehen</button>
         </section>
+        {!allView && (
+          <section className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold">Währung</div>
+              <div className="truncate text-[12px] text-muted">Anzeige aller Beträge; Eingaben in USD</div>
+            </div>
+            <Segmented label="Anzeigewährung" value={db?.meta.settings?.fx ?? 'USD'} onChange={(v) => void mutate([{ op: 'merge', coll: 'meta', id: 'settings', data: { fx: v === 'USD' ? null : v } }]).then(() => toast('Beträge in ' + v + '.')).catch((e) => toast('Nicht gespeichert: ' + e.message))} options={(['USD', 'CHF', 'EUR'] as const).map((x) => ({ value: x, label: x }))} />
+          </section>
+        )}
 
         {allView ? (
           <p className="rounded-xl border border-line px-3.5 py-3 text-[12.5px] text-muted">Du siehst die Gesamtansicht. Zum Hochladen oder Sichern wähle zuerst ein Portfolio.</p>

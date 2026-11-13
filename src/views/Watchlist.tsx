@@ -7,7 +7,7 @@ import { WatchAddSheet } from '@/features/EditSheets'
 import { watchRows, type WatchRow } from '@/lib/calc'
 import { useChart } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { pct, sign, usd } from '@/lib/format'
+import { pct, sign, usd, money, cur } from '@/lib/format'
 import { rangeChange, withNow } from '@/lib/history'
 
 const GROUPS: { id: string; title: string; hint: string; test: (r: WatchRow) => boolean }[] = [
@@ -44,7 +44,7 @@ export function Watchlist() {
         <Stat label="Unter der Grenze" value={priced ? under.length : '–'} sub={priced ? <span>{under.length ? under.map((r) => r.w.ticker).join(', ') : 'kein Titel'}</span> : none} />
         <Stat label="Davon kaufbereit" value={priced ? ready.length : '–'} sub={priced ? <span>{!under.length ? 'kein Titel unter der Grenze' : ready.length ? 'Bedingung erfüllt oder keine' : 'Bedingung überall noch offen'}</span> : none} />
         <Stat label="Nahe (bis 5 %)" value={priced ? near.length : '–'} sub={priced ? <span>{near.length ? near.map((r) => r.w.ticker).join(', ') : 'kein Titel'}</span> : none} />
-        <Stat label="Nächster darüber" value={next ? <span className="tk !text-[20px]">{next.w.ticker}</span> : '–'} sub={next ? <span>{pct(next.s.d, 1)} über {usd(next.w.limit)}</span> : priced ? undefined : none} />
+        <Stat label="Nächster darüber" value={next ? <span className="tk !text-[20px]">{next.w.ticker}</span> : '–'} sub={next ? <span>{pct(next.s.d, 1)} über {money(next.w.limit)}</span> : priced ? undefined : none} />
       </section>}
 
       {focus.length > 0 && (
@@ -64,7 +64,7 @@ export function Watchlist() {
                       <span className="mt-0.5 block text-[11.5px] text-muted">bis zur Grenze</span>
                     </span>
                   </span>
-                  <FluidSparkline className="mt-3" height={56} values={chart?.series[r.w.ticker] ?? []} baseline={r.w.limit} baselineColor="rgb(255 255 255 / 0.82)" baselineLabel={`Kaufgrenze ${usd(r.w.limit)}`} endLabel={usd(r.px)} split={false} tone={trendOf(chart?.series[r.w.ticker])} label={`${r.w.ticker}: Kurs der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
+                  <FluidSparkline className="mt-3" height={56} values={chart?.series[r.w.ticker] ?? []} baseline={r.w.limit} baselineColor="rgb(255 255 255 / 0.82)" baselineLabel={`Kaufgrenze ${money(r.w.limit)}`} endLabel={usd(r.px)} split={false} tone={trendOf(chart?.series[r.w.ticker])} label={`${r.w.ticker}: Kurs der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
                 </button>
               )
             })}
@@ -84,8 +84,8 @@ export function Watchlist() {
                   <tr>
                     <th>Titel</th>
                     <th title="Kursverlauf der letzten 3 Monate">3 Monate</th>
-                    <th className="r">Kurs · Tag</th>
-                    <th className="r">Grenze</th>
+                    <th className="r">Kurs {cur()} · Tag</th>
+                    <th className="r">Grenze {cur()}</th>
                     <th>Kurs zur Grenze</th>
                     <th className="r">Abstand</th>
                     <th>Status</th>

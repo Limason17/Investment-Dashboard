@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { CalendarClock, ChartNoAxesColumn, Check, ChevronRight, CircleDot, Eye, Flag, Layers, OctagonAlert, Target, TriangleAlert, type LucideIcon } from 'lucide-react'
 import type { Attention, WatchRow } from '@/lib/calc'
-import { daysBetween, dshort, pct, usd, weekday } from '@/lib/format'
+import { daysBetween, dshort, pct, weekday, money } from '@/lib/format'
 import type { DepotEvent, WithId } from '@/lib/types'
 import { LimitTrack } from './charts/Small'
 import { Chip, DemoTag } from './ui'
@@ -143,7 +143,7 @@ export function LimitRow({ r, onClick }: { r: WatchRow; onClick: () => void }) {
         </span>
       </span>
       <span className="mt-2 block"><LimitTrack d={r.s.d} tone={r.s.tone} width="100%" /></span>
-      <span className="mt-1.5 flex justify-between gap-3 text-[11.5px] text-muted"><span>Kurs <b className="num font-medium text-ink-2">{usd(r.px)}</b></span><span>Kaufgrenze <b className="num font-medium text-ink-2">{usd(r.w.limit)}</b></span></span>
+      <span className="mt-1.5 flex justify-between gap-3 text-[11.5px] text-muted"><span>Kurs <b className="num font-medium text-ink-2">{money(r.px)}</b></span><span>Kaufgrenze <b className="num font-medium text-ink-2">{money(r.w.limit)}</b></span></span>
     </button>
   )
 }

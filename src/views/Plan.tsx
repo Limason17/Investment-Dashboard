@@ -3,12 +3,12 @@ import { useMemo, useState } from 'react'
 import { EventItem, EventStrip } from '@/components/blocks'
 import { Allocation } from '@/components/charts/Allocation'
 import { Meter } from '@/components/charts/Small'
-import { Card, Empty } from '@/components/ui'
+import { Card, Empty, Cur } from '@/components/ui'
 import { EventSheet, PlanSheet, PotSheet } from '@/features/EditSheets'
 import { BUCKETS } from '@/lib/buckets'
 import { eventsSorted, isCap, targetOf } from '@/lib/calc'
 import { useDepot } from '@/lib/context'
-import { pctPlain, usd, cur } from '@/lib/format'
+import { pctPlain, usd, cur, money } from '@/lib/format'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DepotEvent, WithId } from '@/lib/types'
@@ -52,14 +52,14 @@ export function Plan() {
                   <div className="mt-1 text-[26px] font-semibold leading-8 tracking-[-0.03em]">{usd(budget - used)} <span className="text-[13px] font-medium text-muted">{cur()}</span></div>
                 </div>
                 <div className="text-right text-[12.5px] text-muted">
-                  <div><span className="num text-ink-2">{usd(used)}</span> eingesetzt von <span className="num text-ink-2">{usd(budget)}</span></div>
-                  <div hidden={c.settings.cashExcluded}>Cash laut Konto <span className="num text-ink-2">{usd(c.cash)}</span>, davon <span className="num text-ink-2">{usd(c.cash - (budget - used))}</span> ohne Topf</div>
+                  <div><span className="num text-ink-2">{usd(used)}</span> eingesetzt von <span className="num text-ink-2">{money(budget)}</span></div>
+                  <div hidden={c.settings.cashExcluded}>Cash laut Konto <span className="num text-ink-2">{money(c.cash)}</span>, davon <span className="num text-ink-2">{money(c.cash - (budget - used))}</span> ohne Topf</div>
                 </div>
               </div>
               {/* Ein Abschnitt je Topf, Breite = Budget, gefüllt = eingesetzt */}
               <div className="mt-3.5 flex h-2 gap-[3px]" role="img" aria-label={`Töpfe nach Budget, gefüllt ist der eingesetzte Teil: ${pctPlain(budget ? used / budget : 0, 0)} eingesetzt`}>
                 {pots.filter((p) => p.budget > 0).map((p) => (
-                  <div key={p.id} title={`${p.label}: ${usd(p.used || 0)} von ${usd(p.budget)} eingesetzt`} className="relative min-w-[3px] basis-0 overflow-hidden rounded-full bg-white/[0.08]" style={{ flexGrow: p.budget }}>
+                  <div key={p.id} title={`${p.label}: ${usd(p.used || 0)} von ${money(p.budget)} eingesetzt`} className="relative min-w-[3px] basis-0 overflow-hidden rounded-full bg-white/[0.08]" style={{ flexGrow: p.budget }}>
                     <div className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${Math.min((p.used || 0) / p.budget, 1) * 100}%` }} />
                   </div>
                 ))}
@@ -76,8 +76,8 @@ export function Plan() {
                       {p.note && <div className="mt-0.5 text-[12.5px] text-muted">{p.note}</div>}
                     </div>
                     <div className="text-right leading-tight">
-                      <div className="num text-[13.5px] font-medium">{usd(rest)} <span className="font-normal text-muted">frei</span></div>
-                      <div className="num mt-0.5 text-[12px] text-muted">von {usd(p.budget)}{u > 0 && ` · ${pctPlain(u, 0)} eingesetzt`}</div>
+                      <div className="num text-[13.5px] font-medium">{usd(rest)}<Cur /> <span className="font-normal text-muted">frei</span></div>
+                      <div className="num mt-0.5 text-[12px] text-muted">von {money(p.budget)}{u > 0 && ` · ${pctPlain(u, 0)} eingesetzt`}</div>
                     </div>
                     <Meter className="col-span-2" value={u} height={5} />
                   </li>

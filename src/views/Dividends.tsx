@@ -1,10 +1,10 @@
 import { Check, Pencil, Upload } from 'lucide-react'
 import { useMemo } from 'react'
 import { DIV_EXPECTED, DIV_RECEIVED, DividendBars, type DivMonth } from '@/components/charts/DividendBars'
-import { Card, Chip, ConfirmDelete, DemoTag, Empty, Stat } from '@/components/ui'
+import { Card, Chip, ConfirmDelete, DemoTag, Empty, Stat, Cur } from '@/components/ui'
 import { divAnnual, dividendsList, projectedDividends, wht } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
-import { addMonths, dfmt, pctPlain, qty, usd, cur } from '@/lib/format'
+import { addMonths, dfmt, pctPlain, qty, usd, cur, money } from '@/lib/format'
 import { reverseDividend } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -49,11 +49,11 @@ export function Dividends() {
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
       <section className="card col-span-12 grid grid-cols-2 divide-line lg:grid-cols-5 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l">
-        <Stat label="Jahresprognose netto" value={<>{usd(a.per.length ? a.net : null)} <span className="text-[13px] font-medium text-muted">{cur()}</span></>} sub={<span>{usd(a.per.length ? a.gross : null)} brutto, {pctPlain(w, 0)} Steuer</span>} />
+        <Stat label="Jahresprognose netto" value={<>{usd(a.per.length ? a.net : null)}<Cur /></>} sub={<span>{money(a.per.length ? a.gross : null)} brutto, {pctPlain(w, 0)} Steuer</span>} />
         <Stat label="Rendite auf Wertpapiere" value={pctPlain(c.valuationComplete && a.per.length && c.sec ? a.gross / c.sec : null, 2)} sub={<span>brutto, laufende Raten</span>} />
-        <Stat label={<>Erhalten {year} {hasDemo && <DemoTag />}</>} value={usd(recYear)} sub={<span>{recYearCount} {recYearCount === 1 ? 'Zahlung' : 'Zahlungen'}, netto</span>} />
-        <Stat label="Erwartet, 6 Monate" value={expected.length || projected.length ? usd(expSum) : '–'} sub={<span>{expected.length || projected.length ? [expected.length ? `${expected.length} erfasst` : '', projected.length ? `${projected.length} geschätzt` : ''].filter(Boolean).join(', ') + ', netto' : 'keine Zahlung in Sicht'}</span>} />
-        <Stat className="max-lg:col-span-2" label="Pro Monat im Schnitt" value={usd(a.per.length ? a.net / 12 : null)} sub={<span>netto, Prognose</span>} />
+        <Stat label={<>Erhalten {year} {hasDemo && <DemoTag />}</>} value={<>{usd(recYear)}<Cur /></>} sub={<span>{recYearCount} {recYearCount === 1 ? 'Zahlung' : 'Zahlungen'}, netto</span>} />
+        <Stat label="Erwartet, 6 Monate" value={expected.length || projected.length ? <>{usd(expSum)}<Cur /></> : '–'} sub={<span>{expected.length || projected.length ? [expected.length ? `${expected.length} erfasst` : '', projected.length ? `${projected.length} geschätzt` : ''].filter(Boolean).join(', ') + ', netto' : 'keine Zahlung in Sicht'}</span>} />
+        <Stat className="max-lg:col-span-2" label="Pro Monat im Schnitt" value={<>{usd(a.per.length ? a.net / 12 : null)}<Cur /></>} sub={<span>netto, Prognose</span>} />
       </section>
 
       <div className="col-span-12 grid content-start gap-3 sm:gap-4 xl:col-span-7">
@@ -88,10 +88,10 @@ export function Dividends() {
                       {d.status === 'erhalten' ? <Chip tone="up">erhalten</Chip> : due ? <Chip tone="warn">zu bestätigen</Chip> : <Chip tone="info">erwartet</Chip>}
                       {d.demo && <DemoTag />}
                     </div>
-                    <div className="num mt-1 truncate text-[12px] text-muted">{dfmt(d.payDate)}{d.payDateEstimated ? ' (geschätzt)' : ''} · brutto {usd(d.gross)} · Steuer {usd(d.tax)}</div>
+                    <div className="num mt-1 truncate text-[12px] text-muted">{dfmt(d.payDate)}{d.payDateEstimated ? ' (geschätzt)' : ''} · brutto {money(d.gross)} · Steuer {money(d.tax)}</div>
                   </div>
                   <div className="text-right">
-                    <div className="num text-[14px] font-medium">{usd(d.net)}</div>
+                    <div className="num text-[14px] font-medium">{usd(d.net)}<Cur /></div>
                     <div className="mt-1 flex items-center justify-end gap-0.5">
                       {d.status === 'erwartet' ? <button type="button" className="btn btn-sm" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Check /> Bestätigen</button> : <button type="button" className="btn btn-ghost btn-sm" aria-label="Dividende bearbeiten" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Pencil /></button>}
                       <ConfirmDelete label={d.status === 'erhalten' ? 'Dividende stornieren' : 'Erwartete Dividende löschen'} onConfirm={() => void del(d.id)} />
@@ -104,7 +104,7 @@ export function Dividends() {
           <div className="hidden overflow-x-auto md:block">
             <table className="tbl">
               <thead>
-                <tr><th>Titel</th>{cols.ex && <th>Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r">je Stück</th>}{cols.shares && <th className="r">Stück</th>}<th className="r">Brutto</th><th className="r">Steuer</th><th className="r">Netto</th><th>Status</th><th /></tr>
+                <tr><th>Titel</th>{cols.ex && <th>Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r">je Stück</th>}{cols.shares && <th className="r">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th>Status</th><th /></tr>
               </thead>
               <tbody>
                 {all.map((d) => {
@@ -149,7 +149,7 @@ export function Dividends() {
           <div className="overflow-x-auto">
             <table className="tbl">
               <thead>
-                <tr><th>Titel</th><th className="r">Rate pro Jahr</th><th className="r">Rendite</th><th className="r">Netto pro Jahr</th></tr>
+                <tr><th>Titel</th><th className="r">Rate pro Jahr</th><th className="r">Rendite</th><th className="r">Netto pro Jahr {cur()}</th></tr>
               </thead>
               <tbody>
                 {a.per.map((r) => (

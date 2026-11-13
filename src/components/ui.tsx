@@ -3,7 +3,7 @@ import { ArrowDownRight, ArrowUpRight, Minus, Trash2 } from 'lucide-react'
 import { motion } from 'motion/react'
 import { useId, useState, type ComponentType, type ReactNode } from 'react'
 import type { Tone } from '@/lib/calc'
-import { pct, sign, sUsd } from '@/lib/format'
+import { pct, sign, sUsd, cur } from '@/lib/format'
 
 /* ------------------------------------------------------------------ Karte */
 export function Card({ title, sub, action, children, className, bodyClassName, flush }: {
@@ -34,6 +34,11 @@ export function Card({ title, sub, action, children, className, bodyClassName, f
 
 /* ------------------------------------------------------------------ Status: farbiger Punkt und Wort */
 type IconType = ComponentType<{ className?: string; strokeWidth?: number }>
+/* ------------------------------------------------------------------ Währung neben einem Betrag: klein und zurückhaltend */
+export function Cur({ className }: { className?: string }) {
+  return <span className={clsx('cur', className)}>{cur()}</span>
+}
+
 /* ------------------------------------------------------------------ Schalter (statt Checkbox) */
 export function Switch({ checked, onChange, label, title, className, ariaLabel }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; title?: string; className?: string; ariaLabel?: string }) {
   return (

@@ -2,7 +2,7 @@ import { scaleLinear } from 'd3-scale'
 import { area as d3area, curveMonotoneX, curveStepAfter, line as d3line } from 'd3-shape'
 import { motion, useReducedMotion } from 'motion/react'
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
-import { axisFormatter, dfmt, dlong, dshort, hhmm, MONTHS, usd, weekday, curRate, usdRaw } from '@/lib/format'
+import { axisFormatter, dfmt, dlong, dshort, hhmm, MONTHS, usd, weekday, curRate, usdRaw, cur } from '@/lib/format'
 import { useMeasure } from '@/lib/useMeasure'
 import { Empty } from '../ui'
 
@@ -141,7 +141,7 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
   const refs = useMemo(() => (k === 1 ? refsIn : refsIn.map((r) => ({ ...r, y: r.y * k }))), [refsIn, k])
   const baseline = baselineIn != null ? baselineIn * k : undefined
   const split = typeof splitIn === 'number' ? splitIn * k : splitIn
-  const format = k === 1 ? formatIn : usdRaw
+  const format = formatIn === usd ? (v: number) => `${usdRaw(v)} ${cur()}` : formatIn
   const [ref, W] = useMeasure<HTMLDivElement>()
   const [hi, setHi] = useState<number | null>(null)
   const tipRef = useRef<HTMLDivElement>(null)

@@ -1,13 +1,13 @@
 import { ArrowDown, ArrowUp, Download, Search, Upload, X } from 'lucide-react'
 import { Fragment, useMemo, useState } from 'react'
 import { FluidSparkline, Meter, Sparkline } from '@/components/charts/Small'
-import { Card, Chip, Delta, DemoTag, Empty, Segmented, Ticker, Switch } from '@/components/ui'
+import { Card, Chip, Delta, DemoTag, Empty, Segmented, Ticker, Switch, Cur } from '@/components/ui'
 import { HOLDING_BUCKETS, catOf } from '@/lib/buckets'
 import { isCap, targetOf, type Row } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
 import { exportCsv } from '@/lib/export'
-import { pct, pctPlain, qty, sign, usd, dshort, hhmm, cur } from '@/lib/format'
+import { pct, pctPlain, qty, sign, usd, dshort, hhmm, cur, money } from '@/lib/format'
 import { rangeChange } from '@/lib/history'
 import { usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { HoldingBucket, RangeId } from '@/lib/types'
@@ -128,7 +128,7 @@ export function Positions() {
       >
         {c.sec > 0 && (
           <div className="mb-4 flex h-2 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={'Aufteilung: ' + HOLDING_BUCKETS.map((b) => `${b.name} ${pctPlain((c.b[b.id] || 0) / c.sec)}`).join(', ')}>
-            {HOLDING_BUCKETS.filter((b) => c.b[b.id] > 0).map((b) => <div key={b.id} className="basis-0" style={{ background: b.color, flexGrow: c.b[b.id] }} title={`${b.name}: ${usd(c.b[b.id])}`} />)}
+            {HOLDING_BUCKETS.filter((b) => c.b[b.id] > 0).map((b) => <div key={b.id} className="basis-0" style={{ background: b.color, flexGrow: c.b[b.id] }} title={`${b.name}: ${money(c.b[b.id])}`} />)}
           </div>
         )}
         <div className="grid grid-cols-2 gap-x-5 gap-y-5 lg:grid-cols-4 lg:gap-x-7">
@@ -150,7 +150,7 @@ export function Positions() {
                   <span className="truncate">{b.name}</span>
                   <span className="text-faint">{n}</span>
                 </div>
-                <div className="num mt-1 text-[19px] font-semibold leading-6 tracking-[-0.02em]">{usd(c.valuationComplete ? v : null)}</div>
+                <div className="num mt-1 text-[19px] font-semibold leading-6 tracking-[-0.02em]">{usd(c.valuationComplete ? v : null)}<Cur /></div>
                 <div className="num mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[12px] text-muted">
                   <span className="text-ink-2">{pctPlain(c.valuationComplete ? w : null)}</span>
                   {tgt != null && <span>/ {isCap(c.settings, b.id) ? 'max ' : ''}{pctPlain(tgt, 0)}</span>}
@@ -205,11 +205,11 @@ export function Positions() {
               <tr>
                 {th('t', 'Titel')}
                 {th(null, `Verlauf ${RANGE_LABEL[range]}`, false, `Kursverlauf, ${rangeText}`)}
-                {th('px', 'Kurs', true)}
+                {th('px', `Kurs ${cur()}`, true)}
                 {th('gl', `G/V ${RANGE_LABEL[range]} ${cur()}`, true, `Gewinn oder Verlust in ${cur()}, ${glTitle}. Erst im Zeitraum gekaufte Titel: seit Kauf.`)}
                 {th('glp', `G/V ${RANGE_LABEL[range]} %`, true, `Gewinn oder Verlust in Prozent, ${glTitle}`)}
-                {th('shares', 'Stück · Ø Einstand', true, costDemo ? 'Einstand: Testwerte' : undefined, 'max-lg:hidden')}
-                {th('val', 'Wert', true)}
+                {th('shares', `Stück · Ø Einstand`, true, costDemo ? 'Einstand: Testwerte' : undefined, 'max-lg:hidden')}
+                {th('val', `Wert ${cur()}`, true)}
                 {th(null, 'Anteil', true, cashOff ? 'Anteil an den Wertpapieren' : 'Anteil am Gesamtwert')}
               </tr>
             </thead>
@@ -273,7 +273,7 @@ export function Positions() {
         <div className="md:hidden">
           <div className="flex justify-between border-b border-line px-3 pb-2 text-[11.5px] text-faint">
             <span>Titel · Verlauf {RANGE_LABEL[range]}</span>
-            <span>Wert · Gewinn/Verlust</span>
+            <span>Wert · Gewinn/Verlust in {cur()}</span>
           </div>
           {groups.map(({ b, rs }) => {
             const sum = rs.every((r) => r.val != null) ? rs.reduce((s, r) => s + r.val!, 0) : null
@@ -282,7 +282,7 @@ export function Positions() {
                 {b && (
                   <div className="flex items-center justify-between gap-3 border-b border-line px-3 pb-2 pt-4 text-[12px] font-medium text-ink-2">
                     <span className="inline-flex items-center gap-2"><i className="swatch" style={{ background: b.color }} />{b.name}</span>
-                    <span className="num">{usd(sum)} <span className="font-normal text-muted">· {share(sum)}</span></span>
+                    <span className="num">{usd(sum)}<Cur /> <span className="font-normal text-muted">· {share(sum)}</span></span>
                   </div>
                 )}
                 <ul>
@@ -294,7 +294,7 @@ export function Positions() {
                           <Ticker t={r.t} name={r.p.name} />
                           <span className={pending ? 'opacity-40' : ''}><Sparkline width={56} height={26} values={d?.values ?? []} tone={sign(d?.move.pct)} /></span>
                           <span className="min-w-[96px] text-right leading-tight">
-                            <span className="num block text-[13.5px] font-medium">{usd(r.val)}</span>
+                            <span className="num block text-[13.5px] font-medium">{usd(r.val)}<Cur /></span>
                             <span className="mt-0.5 block whitespace-nowrap">{gl(d?.move, true)}</span>
                           </span>
                         </button>
@@ -308,7 +308,7 @@ export function Positions() {
           {showCash && (
             <div className="flex items-center justify-between gap-3 border-t border-line px-3 pb-2 pt-3 text-[12.5px] font-medium text-ink-2">
               <span className="inline-flex items-center gap-2">{grouped === 'an' && <i className="swatch" style={{ background: 'var(--color-cash)' }} />}Cash</span>
-              <span className="num">{usd(c.cash)} <span className="font-normal text-muted">· {share(c.cash)}</span></span>
+              <span className="num">{usd(c.cash)}<Cur /> <span className="font-normal text-muted">· {share(c.cash)}</span></span>
             </div>
           )}
         </div>

@@ -214,6 +214,14 @@
     background: rgb(143 125 255 / 0.12);
     border-color: rgb(143 125 255 / 0.2);
   }
+  /* Währung neben Beträgen */
+  .cur {
+    margin-left: 0.3em;
+    font-size: max(10px, 0.6em);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--color-muted);
+  }
   /* Status: farbiger Punkt und Wort, ohne Rahmen */
   .tag {
     display: inline-flex;

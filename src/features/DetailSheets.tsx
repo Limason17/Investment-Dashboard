@@ -3,12 +3,12 @@ import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { LimitTrack } from '@/components/charts/Small'
 import { TimeChart, type Marker, type RefLine, type VLine } from '@/components/charts/TimeChart'
 import { Sheet } from '@/components/Sheet'
-import { Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented } from '@/components/ui'
+import { Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Cur } from '@/components/ui'
 import { bucketOf, catOf, HOLDING_BUCKETS } from '@/lib/buckets'
 import { quote, quoteLabel, withIds, wlState, wht } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE, refreshCharts, useChart } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { dfmt, parseNum, pct, pctPlain, qty, usd, cur } from '@/lib/format'
+import { dfmt, parseNum, pct, pctPlain, qty, usd, cur, money } from '@/lib/format'
 import { withNow } from '@/lib/history'
 import { useStored } from '@/lib/hooks'
 import { TX_LABEL } from '@/lib/labels'
@@ -82,7 +82,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
                 {view.base > 0 && <div className="tip-row"><span>im Zeitraum</span><b className={view.values[i] >= view.base ? '!text-up' : '!text-down'}>{pct(view.values[i] / view.base - 1, 1)}</b></div>}
                 {view.byIndex.get(i)?.map((x) => (
                   <div key={x.id} className="mt-2 border-t border-line pt-2 text-[11.5px] text-ink-2">
-                    {TX_LABEL[x.type]} {qty(x.shares)} × {usd(x.price)}
+                    {TX_LABEL[x.type]} {qty(x.shares)} × {money(x.price)}
                   </div>
                 ))}
               </>
@@ -174,7 +174,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
     return `${ticker} gespeichert.`
   }, () => setEdit(false))
 
-  const refs: RefLine[] = r?.avg != null ? [{ y: r.avg, label: `Ø Einstand ${usd(r.avg)}`, color: 'var(--color-ref)' }] : []
+  const refs: RefLine[] = r?.avg != null ? [{ y: r.avg, label: `Ø Einstand ${money(r.avg)}`, color: 'var(--color-ref)' }] : []
   const yearly = p && q?.divAnnual ? p.shares * q.divAnnual * (1 - wht(db)) : null
 
   return (
@@ -204,7 +204,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
             <div>
               <div className="label">{quoteLabel(q)}</div>
               <div className="mt-0.5 flex items-baseline gap-2.5">
-                <span className="text-[30px] font-semibold leading-9 tracking-[-0.03em]">{usd(q?.close)}</span>
+                <span className="text-[30px] font-semibold leading-9 tracking-[-0.03em]">{usd(q?.close)}<Cur /></span>
                 <Delta value={r?.chg} digits={2} className="text-[13.5px] font-medium" />
               </div>
             </div>
@@ -219,10 +219,10 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             <Fact label="Stück">{qty(p.shares)}</Fact>
             <Fact label="Anteil am Depot">{pctPlain(r?.w)}</Fact>
-            <Fact label={<>Ø Einstand {p.costDemo && <DemoTag />}</>}>{usd(r?.avg)}</Fact>
-            <Fact label="Gewinn/Verlust">{r?.pl != null ? <Delta value={r.pl} kind="usd" icon={false} /> : <span className="text-muted">offen</span>}</Fact>
+            <Fact label={<>Ø Einstand {p.costDemo && <DemoTag />}</>}>{money(r?.avg)}</Fact>
+            <Fact label="Gewinn/Verlust">{r?.pl != null ? <><Delta value={r.pl} kind="usd" icon={false} /><Cur /></> : <span className="text-muted">offen</span>}</Fact>
             <Fact label="in Prozent">{r?.plPct != null ? <Delta value={r.plPct} digits={1} icon={false} /> : <span className="text-muted">–</span>}</Fact>
-            <Fact label="Dividende netto pro Jahr">{yearly != null ? usd(yearly) : <span className="text-muted">keine</span>}</Fact>
+            <Fact label="Dividende netto pro Jahr">{yearly != null ? money(yearly) : <span className="text-muted">keine</span>}</Fact>
           </div>
 
           {p.status && <Block title="Regel">{p.status}</Block>}
@@ -238,8 +238,8 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
                   <li key={x.id} className="grid grid-cols-[74px_70px_minmax(0,1fr)_auto] items-center gap-2 px-3.5 py-2.5 text-[12.5px]">
                     <span className="num text-muted">{dfmt(x.date)}</span>
                     <span className="font-medium">{TX_LABEL[x.type]}</span>
-                    <span className="num text-ink-2">{qty(x.shares)} × {usd(x.price)} {x.demo && <DemoTag className="ml-1" />}</span>
-                    <Delta value={x.cashDelta} kind="usd" icon={false} />
+                    <span className="num text-ink-2">{qty(x.shares)} × {money(x.price)} {x.demo && <DemoTag className="ml-1" />}</span>
+                    <span><Delta value={x.cashDelta} kind="usd" icon={false} /><Cur /></span>
                   </li>
                 ))}
               </ul>
@@ -292,8 +292,8 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
   }, () => setEdit(false))
 
   const refs: RefLine[] = []
-  if (w?.limit) refs.push({ y: w.limit, label: `Grenze ${usd(w.limit)}`, color: 'var(--color-warn)' })
-  if (w?.limitCautious) refs.push({ y: w.limitCautious, label: `vorsichtig ${usd(w.limitCautious)}`, color: 'var(--color-bench)' })
+  if (w?.limit) refs.push({ y: w.limit, label: `Grenze ${money(w.limit)}`, color: 'var(--color-warn)' })
+  if (w?.limitCautious) refs.push({ y: w.limitCautious, label: `vorsichtig ${money(w.limitCautious)}`, color: 'var(--color-bench)' })
 
   return (
     <Sheet
@@ -322,7 +322,7 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
             <div>
               <div className="label">{quoteLabel(q, w.priceDate)}</div>
               <div className="mt-0.5 flex items-baseline gap-2.5">
-                <span className="text-[30px] font-semibold leading-9 tracking-[-0.03em]">{usd(px)}</span>
+                <span className="text-[30px] font-semibold leading-9 tracking-[-0.03em]">{usd(px)}<Cur /></span>
                 {q?.prev ? <Delta value={q.close / q.prev - 1} digits={2} className="text-[13.5px] font-medium" /> : null}
               </div>
             </div>
@@ -338,9 +338,9 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
           <PriceChart t={ticker!} refs={refs} />
 
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-            <Fact label="Grenze">{w.limit ? usd(w.limit) : '–'}</Fact>
-            <Fact label="Vorsichtige Grenze">{w.limitCautious != null ? usd(w.limitCautious) : <span className="text-muted">–</span>}</Fact>
-            <Fact label="Bis zur Grenze">{px != null && w.limit ? (px <= w.limit ? <span className="text-up">erreicht</span> : usd(px - w.limit)) : '–'}</Fact>
+            <Fact label="Grenze">{w.limit ? money(w.limit) : '–'}</Fact>
+            <Fact label="Vorsichtige Grenze">{w.limitCautious != null ? money(w.limitCautious) : <span className="text-muted">–</span>}</Fact>
+            <Fact label="Bis zur Grenze">{px != null && w.limit ? (px <= w.limit ? <span className="text-up">erreicht</span> : money(px - w.limit)) : '–'}</Fact>
           </div>
 
           {w.condition && (

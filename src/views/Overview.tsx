@@ -5,11 +5,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertItem, EventItem, EventStrip, LimitRow } from '@/components/blocks'
 import { FluidSparkline } from '@/components/charts/Small'
 import { TimeChart, type TimeSeries, type VLine } from '@/components/charts/TimeChart'
-import { Card, Chip, Delta, DemoTag, Empty, Segmented } from '@/components/ui'
+import { Card, Chip, Delta, DemoTag, Empty, Segmented, Cur } from '@/components/ui'
 import { alerts, capChecks, divAnnual, eventsSorted, fxOf, watchRows, yearStats } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TITLE, refreshCharts } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { dlong, hhmm, int, pct, pctPlain, sign, sUsd, usd, cur, usdRaw } from '@/lib/format'
+import { dlong, hhmm, int, pct, pctPlain, sign, sUsd, usd, cur, usdRaw, money } from '@/lib/format'
 import { BENCH, useMedia, usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { RangeId } from '@/lib/types'
 
@@ -144,7 +144,7 @@ function Hero() {
               </span>
               {ps && hi == null && (
                 <span className="text-muted">
-                  <Delta value={ps.gain} kind="usd" icon={false} className="font-medium" /> {range === '1T' ? dayText : PHRASE[range]}
+                  <Delta value={ps.gain} kind="usd" icon={false} className="font-medium" /> {cur()} {range === '1T' ? dayText : PHRASE[range]}
                 </span>
               )}
               {ps && hi != null && <span className="text-muted">bis hier, {range === '1T' ? 'seit Vortagesschluss' : PHRASE[range].replace(/^in /, 'über ')}</span>}
@@ -191,9 +191,9 @@ function Hero() {
             empty={<Empty title="Heute noch kein Handel">Der Tages-Chart beginnt mit dem Pre-Market um 10:00 Uhr.</Empty>}
             tooltipExtra={(i) => (
               <>
-                {mode === 'rendite' && <div className="tip-row"><span>{valueLabel}</span><b>{usd(ps.value[i])}</b></div>}
-                {mode === 'wert' && <div className="tip-row"><span>Ertrag im Zeitraum</span><b className={ps.pl[i] >= 0 ? '!text-up' : '!text-down'}>{sUsd(ps.pl[i])} · {pct(ps.mwr[i], 2)}</b></div>}
-                {mode === 'wert' && !showInv && <div className="tip-row"><span>{investedLabel}</span><b>{usd(ps.invested[i])}</b></div>}
+                {mode === 'rendite' && <div className="tip-row"><span>{valueLabel}</span><b>{money(ps.value[i])}</b></div>}
+                {mode === 'wert' && <div className="tip-row"><span>Ertrag im Zeitraum</span><b className={ps.pl[i] >= 0 ? '!text-up' : '!text-down'}>{sUsd(ps.pl[i])} {cur()} · {pct(ps.mwr[i], 2)}</b></div>}
+                {mode === 'wert' && !showInv && <div className="tip-row"><span>{investedLabel}</span><b>{money(ps.invested[i])}</b></div>}
               </>
             )}
           />
@@ -281,16 +281,16 @@ function KeyFigures() {
   const cashOff = !!c.settings.cashExcluded
   return (
     <section className={clsx('card grid overflow-hidden [&>*]:border-line [&>*+*]:border-l', cashOff ? 'grid-cols-2' : 'grid-cols-3')}>
-      {!cashOff && <Figure label="Cash" value={usd(c.cash)} sub={<span>{c.total ? pctPlain(c.cash / c.total) : '–'} vom Depot</span>} />}
+      {!cashOff && <Figure label="Cash" value={<>{usd(c.cash)}<Cur /></>} sub={<span>{c.total ? pctPlain(c.cash / c.total) : '–'} vom Depot</span>} />}
       <Figure
         label="Realisiert"
-        value={all.sales ? <Delta value={all.realized} kind="usd" icon={false} /> : <span className="text-muted">–</span>}
+        value={all.sales ? <><Delta value={all.realized} kind="usd" icon={false} /><Cur /></> : <span className="text-muted">–</span>}
         sub={<span>seit Beginn · {all.sales} {all.sales === 1 ? 'Verkauf' : 'Verkäufe'}</span>}
       />
       <Figure
         label="Dividenden"
-        value={all.divCount ? usd(all.divNet) : <span className="text-muted">–</span>}
-        sub={<span>netto seit Beginn{div.per.length ? <span className="max-sm:hidden"> · {usd(div.net)} p. a. erwartet</span> : null}</span>}
+        value={all.divCount ? <>{usd(all.divNet)}<Cur /></> : <span className="text-muted">–</span>}
+        sub={<span>netto seit Beginn{div.per.length ? <span className="max-sm:hidden"> · {money(div.net)} p. a. erwartet</span> : null}</span>}
       />
     </section>
   )
@@ -340,7 +340,7 @@ function Limits() {
           <div className="text-[13.5px] font-medium">{priced ? 'Kein Titel an der Grenze' : rows.length ? 'Kurse fehlen' : 'Keine Watchlist erfasst'}</div>
           {priced && next && (
             <p className="mt-1 text-[12.5px] text-muted">
-              Am nächsten: <button type="button" className="tk hover:underline" onClick={() => nav.openWatch(next.w.ticker)}>{next.w.ticker}</button>, {pct(next.s.d, 1)} über {usd(next.w.limit)}
+              Am nächsten: <button type="button" className="tk hover:underline" onClick={() => nav.openWatch(next.w.ticker)}>{next.w.ticker}</button>, {pct(next.s.d, 1)} über {money(next.w.limit)}
             </p>
           )}
         </div>
