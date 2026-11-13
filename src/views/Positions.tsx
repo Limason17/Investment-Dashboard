@@ -12,7 +12,7 @@ import { rangeChange } from '@/lib/history'
 import { usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { HoldingBucket, RangeId } from '@/lib/types'
 
-type SortKey = 't' | 'px' | 'gl' | 'shares' | 'val'
+type SortKey = 't' | 'px' | 'gl' | 'glp' | 'shares' | 'val'
 const SORTS: { k: SortKey; label: string }[] = [
   { k: 'val', label: 'Wert' },
   { k: 'gl', label: 'Gewinn/Verlust' },
@@ -61,7 +61,7 @@ export function Positions() {
   }, [c.rows, chart, range, firstBuy])
 
   const value = (r: Row, k: SortKey): number | string | null =>
-    k === 't' ? r.t : k === 'shares' ? r.p.shares : k === 'px' ? r.px : k === 'gl' ? (data[r.t]?.move.abs ?? null) : r.val
+    k === 't' ? r.t : k === 'shares' ? r.p.shares : k === 'px' ? r.px : k === 'gl' ? (data[r.t]?.move.abs ?? null) : k === 'glp' ? (data[r.t]?.move.pct ?? null) : r.val
   const needle = q.trim().toLowerCase()
   const rows = c.rows
     .filter((r) => (bucket === 'alle' || catOf(r.p.bucket) === bucket) && (!needle || r.t.toLowerCase().includes(needle) || r.p.name.toLowerCase().includes(needle)))
@@ -206,7 +206,8 @@ export function Positions() {
                 {th('t', 'Titel')}
                 {th(null, `Verlauf ${RANGE_LABEL[range]}`, false, `Kursverlauf, ${rangeText}`)}
                 {th('px', 'Kurs', true)}
-                {th('gl', `Gewinn/Verlust ${RANGE_LABEL[range]}`, true, `In USD und Prozent, ${glTitle}. Erst im Zeitraum gekaufte Titel: seit Kauf.`)}
+                {th('gl', `G/V ${RANGE_LABEL[range]} USD`, true, `Gewinn oder Verlust in USD, ${glTitle}. Erst im Zeitraum gekaufte Titel: seit Kauf.`)}
+                {th('glp', `G/V ${RANGE_LABEL[range]} %`, true, `Gewinn oder Verlust in Prozent, ${glTitle}`)}
                 {th('shares', 'Stück · Ø Einstand', true, costDemo ? 'Einstand: Testwerte' : undefined, 'max-lg:hidden')}
                 {th('val', 'Wert', true)}
                 {th(null, 'Anteil', true, cashOff ? 'Anteil an den Wertpapieren' : 'Anteil am Gesamtwert')}
@@ -215,6 +216,7 @@ export function Positions() {
             <tbody>
               {groups.map(({ b, rs }) => {
                 const sum = rs.every((r) => r.val != null) ? rs.reduce((s, r) => s + r.val!, 0) : null
+                const gAbs = rs.every((r) => data[r.t]?.move.abs != null) ? rs.reduce((t, r) => t + data[r.t].move.abs!, 0) : null
                 return (
                   <Fragment key={b?.id ?? 'alle'}>
                     {b && (
@@ -222,7 +224,8 @@ export function Positions() {
                         <td colSpan={3}>
                           <span className="inline-flex items-center gap-2.5"><i className="swatch" style={{ background: b.color }} />{b.name}<span className="font-normal text-muted">{rs.length} Titel</span></span>
                         </td>
-                        <td className="r"><Delta value={rs.every((r) => data[r.t]?.move.abs != null) ? rs.reduce((t, r) => t + data[r.t].move.abs!, 0) : null} kind="usd" icon={false} className="font-medium" /></td>
+                        <td className="r"><Delta value={gAbs} kind="usd" icon={false} className="font-medium" /></td>
+                        <td className="r"><Delta value={gAbs != null && sum != null && sum - gAbs > 0 ? gAbs / (sum - gAbs) : null} digits={2} icon={false} className="font-medium" /></td>
                         <td className="max-lg:hidden" />
                         <td className="r num">{usd(sum)}</td>
                         <td className="r num">{share(sum)}</td>
@@ -232,12 +235,13 @@ export function Positions() {
                       const d = data[r.t]
                       return (
                         <tr key={r.t} className="row-click" tabIndex={0} onClick={() => nav.openPosition(r.t)} onKeyDown={(e) => e.key === 'Enter' && nav.openPosition(r.t)}>
-                          <td><Ticker t={r.t} name={r.p.name} /></td>
+                          <td className="w-[150px] max-w-[150px]"><Ticker t={r.t} name={r.p.name} className="[&>div:last-child]:max-w-[140px]" /></td>
                           <td className={`transition-opacity ${pending ? 'opacity-40' : ''}`}>
                             <Sparkline values={d?.values ?? []} tone={sign(d?.move.pct)} label={`${r.t}: ${pct(d?.move.pct, 1)} ${glTitle}`} />
                           </td>
                           <td className="r num">{usd(r.px)}</td>
-                          <td className="r">{gl(d?.move)}</td>
+                          <td className="r">{d?.move.abs != null ? <Delta value={d.move.abs} kind="usd" icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
+                          <td className="r" title={d?.move.sinceBuy ? 'seit Kauf' : undefined}>{d?.move.pct != null ? <Delta value={d.move.pct} digits={2} icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
                           <td className="r leading-tight max-lg:hidden">
                             <div className="num text-ink-2">{qty(r.p.shares)}</div>
                             <div className="num text-[11.5px] text-muted">{usd(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}</div>
@@ -254,6 +258,7 @@ export function Positions() {
                 <tr className="row-group">
                   <td colSpan={3}>
                     <span className="inline-flex items-center gap-2.5">{grouped === 'an' && <i className="swatch" style={{ background: 'var(--color-cash)' }} />}Cash</span> {c.settings.cashEstimate && <Chip tone="warn" title={c.settings.cashNote}>Schätzung</Chip>}</td>
+                  <td />
                   <td />
                   <td className="max-lg:hidden" />
                   <td className="r num">{usd(c.cash)}</td>
