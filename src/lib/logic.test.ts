@@ -245,6 +245,9 @@ describe('Rendite seit Beginn', () => {
     const ps = portfolioSeries(db, timeline(db), ch)!
     expect(ps.gain).toBeCloseTo(1100)
     expect(ps.mwr.at(-1)).toBeCloseTo(1100 / 3100)
+    // Kategorie gleich gerechnet wie das Depot
+    expect(ps.buckets.etf.pl.at(-1)).toBeCloseTo(1100)
+    expect(ps.buckets.etf.mwr.at(-1)).toBeCloseTo(1100 / 3100)
   })
 })
 

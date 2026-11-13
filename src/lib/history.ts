@@ -153,7 +153,8 @@ export interface PortfolioSeries {
   base: number | null
   /** Ertrag im Zeitraum: Wertänderung abzüglich der Zuflüsse */
   gain: number
-  buckets: Record<HoldingBucket, { value: number[]; twr: number[] }>
+  /** je Kategorie: Wert, zeitgewichtete Rendite, Ertrag und Rendite auf das eingesetzte Geld */
+  buckets: Record<HoldingBucket, { value: number[]; twr: number[]; pl: number[]; mwr: number[] }>
   /** Vergleichsindex: kumulierte Kursrendite je Punkt */
   bench: number[] | null
   /** Zu- und Abflüsse seit Beginn des Zeitraums je Punkt */
@@ -236,7 +237,7 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   // «Eingezahlt» enthält den ersten erfassten Cash-Stand (er ist von Anfang an im Wert)
   const startCash = cashTracked && tl.cashStart ? cashAt(tl.cashStart) : 0
   const t: number[] = [], d: string[] = [], value: number[] = [], inv: number[] = [], twr: number[] = []
-  const buckets = Object.fromEntries(ids.map((id) => [id, { value: [] as number[], twr: [] as number[] }])) as PortfolioSeries['buckets']
+  const buckets = Object.fromEntries(ids.map((id) => [id, { value: [] as number[], twr: [] as number[], pl: [] as number[], mwr: [] as number[] }])) as PortfolioSeries['buckets']
   let fp = 0
   while (fp < flows.length && flows[fp].date < start) fp++
   let tp = 0
@@ -248,6 +249,8 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   const t0 = chart.t[s0] - (s0 + 1 < n ? chart.t[s0 + 1] - chart.t[s0] : 864e5)
   const bPrev = { ...bBase }
   const bCum = Object.fromEntries(ids.map((id) => [id, 1])) as Record<HoldingBucket, number>
+  const bFlow = Object.fromEntries(ids.map((id) => [id, 0])) as Record<HoldingBucket, number>
+  const bSeen = Object.fromEntries(ids.map((id) => [id, [] as { t: number; amount: number }[]])) as Record<HoldingBucket, { t: number; amount: number }[]>
 
   for (let i = s0; i < n; i++) {
     const date = chart.d[i]
@@ -300,6 +303,18 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
       bPrev[id] = bv[id]
       buckets[id].value.push(bv[id])
       buckets[id].twr.push(bCum[id] - 1)
+      // Wie beim Depot: Ertrag = Wert − Anfangswert − Käufe + Verkäufe; Nenner = eingesetztes Geld
+      if (bf[id]) {
+        bFlow[id] += bf[id]
+        bSeen[id].push({ t: i > s0 ? chart.t[i - 1] : t0, amount: bf[id] })
+      }
+      const bg = bv[id] - bBase[id] - bFlow[id]
+      let bcap = bBase[id]
+      for (const fl of bSeen[id]) bcap += fl.amount * (span > 0 ? (chart.t[i] - fl.t) / span : 1)
+      const bpaid = bBase[id] + bFlow[id]
+      const bden = chart.range === 'MAX' && bpaid > 1e-6 ? bpaid : bcap > 1e-6 ? bcap : bpaid > 1e-6 ? bpaid : 0
+      buckets[id].pl.push(bg)
+      buckets[id].mwr.push(bden ? bg / bden : 0)
     }
   }
   if (!value.length) return null

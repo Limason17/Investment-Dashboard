@@ -44,18 +44,27 @@ export function Positions() {
 
   const data = useMemo(() => {
     const start = chart?.d[0] ?? null
-    const out: Record<string, { values: number[]; base: number | null; move: Move }> = {}
+    const out: Record<string, { values: number[]; base: number | null; ref: number | null; move: Move }> = {}
     for (const r of c.rows) {
       const values = chart?.series[r.t] ?? []
       const base = chart?.prev[r.t] ?? null
       let move: Move
-      if (range === 'MAX' || (start && firstBuy[r.t] && firstBuy[r.t] > start)) move = { abs: r.pl, pct: r.plPct, sinceBuy: true }
-      else if (range === '1T') move = { abs: r.dayAbs, pct: r.chg, sinceBuy: false }
-      else {
+      // ref: Bezugswert der Zahl (Ø Einstand, Vortagesschluss oder Kurs zu Beginn); daran färbt sich auch der Mini-Chart
+      let ref: number | null
+      if (range === 'MAX' || (start && firstBuy[r.t] && firstBuy[r.t] > start)) {
+        move = { abs: r.pl, pct: r.plPct, sinceBuy: true }
+        ref = r.avg
+      } else if (range === '1T') {
+        move = { abs: r.dayAbs, pct: r.chg, sinceBuy: false }
+        ref = r.q?.prev ?? base ?? null
+      } else {
         const chg = rangeChange(chart, r.t)
         move = { abs: r.val != null && chg != null ? (r.val * chg) / (1 + chg) : null, pct: chg, sinceBuy: false }
+        ref = base ?? values[0] ?? null
       }
-      out[r.t] = { values, base, move }
+      // Letzter Punkt = aktueller Kurs, damit Chart und Zahl dasselbe zeigen
+      const shown = values.length && r.px != null ? [...values.slice(0, -1), r.px] : values
+      out[r.t] = { values: shown, base, ref, move }
     }
     return out
   }, [c.rows, chart, range, firstBuy])
@@ -123,7 +132,7 @@ export function Positions() {
       <Card
         className="col-span-12"
         title="Kategorien"
-        sub={<span className="max-sm:hidden">Gewicht gegen Plan · Rendite {rangeText}, Käufe und Verkäufe herausgerechnet</span>}
+        sub={<span className="max-sm:hidden">Gewicht gegen Plan · Rendite {rangeText} auf das eingesetzte Geld</span>}
         action={rangeSwitch}
       >
         {c.sec > 0 && (
@@ -137,9 +146,10 @@ export function Positions() {
             const w = c.total ? v / c.total : 0
             const tgt = targetOf(c.settings, b.id)
             const s = ps?.buckets[b.id as HoldingBucket]
-            const ret = s && s.twr.length ? s.twr[s.twr.length - 1] : null
+            // Rendite auf das eingesetzte Geld, gleich gerechnet wie in der Übersicht
+            const ret = s && s.mwr.length ? s.mwr[s.mwr.length - 1] : null
             const n = c.rows.filter((r) => catOf(r.p.bucket) === b.id).length
-            const at = hov?.id === b.id && s && hov.i < s.twr.length ? hov.i : null
+            const at = hov?.id === b.id && s && hov.i < s.mwr.length ? hov.i : null
             const over = isCap(c.settings, b.id) && !cashOff && tgt != null && w > tgt
             return (
               <div key={b.id} className={`min-w-0 transition-opacity ${bucket !== 'alle' && bucket !== b.id ? 'opacity-45' : ''}`}>
@@ -160,10 +170,10 @@ export function Positions() {
               </button>
                 <div className={`mt-3 flex items-center gap-3 transition-opacity ${pending ? 'opacity-40' : ''}`}>
                   <span className="w-[62px] flex-none leading-tight">
-                    <Delta value={at != null ? s!.twr[at] : ret} digits={1} className="text-[12.5px] font-medium" />
+                    <Delta value={at != null ? s!.mwr[at] : ret} digits={1} className="text-[12.5px] font-medium" />
                     <span className="block text-[10.5px] text-muted">{at != null && ps ? (ps.kind === 'intraday' ? hhmm(ps.t[at]) : dshort(ps.d[at])) : RANGE_LABEL[range]}</span>
                   </span>
-                  <FluidSparkline className="min-w-0 flex-1" values={s?.twr ?? []} tone={sign(ret)} baseline={0} height={34} hi={at} onHover={(i) => setHov(i == null ? null : { id: b.id, i })} label={`${b.name}: ${pct(ret, 1)} ${rangeText}`} />
+                  <FluidSparkline className="min-w-0 flex-1" values={s?.mwr ?? []} tone={sign(ret)} baseline={0} height={34} hi={at} onHover={(i) => setHov(i == null ? null : { id: b.id, i })} label={`${b.name}: ${pct(ret, 1)} ${rangeText}`} />
                 </div>
               </div>
             )
@@ -237,7 +247,7 @@ export function Positions() {
                         <tr key={r.t} className="row-click" tabIndex={0} onClick={() => nav.openPosition(r.t)} onKeyDown={(e) => e.key === 'Enter' && nav.openPosition(r.t)}>
                           <td className="w-[150px] max-w-[150px]"><Ticker t={r.t} name={r.p.name} className="[&>div:last-child]:max-w-[140px]" /></td>
                           <td className={`transition-opacity ${pending ? 'opacity-40' : ''}`}>
-                            <Sparkline values={d?.values ?? []} tone={sign(d?.move.pct)} label={`${r.t}: ${pct(d?.move.pct, 1)} ${glTitle}`} />
+                            <Sparkline values={d?.values ?? []} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} label={`${r.t}: ${pct(d?.move.pct, 1)} ${glTitle}`} />
                           </td>
                           <td className="r num">{usd(r.px)}</td>
                           <td className="r">{d?.move.abs != null ? <Delta value={d.move.abs} kind="usd" icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
@@ -292,7 +302,7 @@ export function Positions() {
                       <li key={r.t} className="border-b border-white/[0.04] last:border-b-0">
                         <button type="button" onClick={() => nav.openPosition(r.t)} className="grid min-h-[58px] w-full grid-cols-[minmax(0,1fr)_56px_auto] items-center gap-3 px-3 py-2 text-left active:bg-white/[0.04]">
                           <Ticker t={r.t} name={r.p.name} />
-                          <span className={pending ? 'opacity-40' : ''}><Sparkline width={56} height={26} values={d?.values ?? []} tone={sign(d?.move.pct)} /></span>
+                          <span className={pending ? 'opacity-40' : ''}><Sparkline width={56} height={26} values={d?.values ?? []} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} /></span>
                           <span className="min-w-[96px] text-right leading-tight">
                             <span className="num block text-[13.5px] font-medium">{usd(r.val)}<Cur /></span>
                             <span className="mt-0.5 block whitespace-nowrap">{gl(d?.move, true)}</span>
