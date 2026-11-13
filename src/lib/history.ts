@@ -88,8 +88,11 @@ export function timeline(db: DB): Timeline {
   }
   const firsts = Object.values(steps).map((s) => s[0]?.date).filter(Boolean) as string[]
   const first = firsts.length && !firsts.includes(BEGIN) ? firsts.reduce((a, b) => (a < b ? a : b)) : null
-  // Vor dem ersten Cash-Stand war Cash nicht erfasst: Ein- und Auszahlungen davor zählen nicht als Zufluss.
-  const ext = cashStart ? external.filter((f) => f.date >= cashStart!) : external
+  // Vor dem ersten Cash-Stand war Cash nicht erfasst: Ein- und Auszahlungen davor zählen nicht als Zufluss,
+  // dafür jeder Kauf und Verkauf (das Geld kam von aussen, der Cash-Stand davor bleibt gleich).
+  const ext = cashStart
+    ? [...trades.filter((f) => f.date < cashStart!).map((f) => ({ date: f.date, amount: f.amount })), ...external.filter((f) => f.date >= cashStart!)].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+    : external
   return { steps, trades, external: ext, cashMoves, cashStart, first, tickers: Object.keys(steps).filter((t) => steps[t].length), unbooked }
 }
 
@@ -225,6 +228,8 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   const baseTotal = baseSec + baseCash
   const base = baseTotal > 1e-9 ? baseTotal : null
 
+  // Für die Linie «Eingezahlt»: der erste erfasste Cash-Stand zählt als eingezahlt
+  const startCash = cashTracked && tl.cashStart ? cashAt(tl.cashStart) : 0
   const t: number[] = [], d: string[] = [], value: number[] = [], inv: number[] = [], twr: number[] = []
   const buckets = Object.fromEntries(ids.map((id) => [id, { value: [] as number[], twr: [] as number[] }])) as PortfolioSeries['buckets']
   let fp = 0
@@ -278,7 +283,7 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
     t.push(chart.t[i])
     d.push(date)
     value.push(v)
-    inv.push(invested)
+    inv.push(invested + startCash)
     twr.push(cum - 1)
     for (const id of ids) {
       bCum[id] *= 1 + stepReturn(bPrev[id], bv[id], bf[id])

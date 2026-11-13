@@ -274,6 +274,11 @@ export function ImportForm({ formId, initial, initialText, initialWay, setBusy, 
               Cash-Wirkung <b className="num text-ink">{sUsd(plan.cashDelta)} USD</b>{base.meta.settings?.cashExcluded ? ' (Cash ist derzeit nicht erfasst und bleibt unverändert).' : '.'}
             </div>
           )}
+          {plan.cashBefore !== 0 && !base.meta.settings?.cashExcluded && plan.balanceDate && (
+            <div className="text-[12.5px] text-muted">
+              Einträge bis {dfmt(plan.balanceDate)} ändern den Cash-Stand nicht: Sie sind im damals erfassten Saldo schon enthalten.
+            </div>
+          )}
 
           {hasData && (
             <fieldset className="grid gap-2 rounded-xl border border-line px-3.5 py-3 text-[12.5px] text-ink-2">

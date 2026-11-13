@@ -50,7 +50,7 @@ function Hero() {
   const n = ps?.t.length ?? 0
   const hi = hover != null && hover < n ? hover : null
   const valueLabel = cashOff ? 'Wertpapiere' : 'Gesamtwert'
-  const investedLabel = ps?.cashTracked ? 'Einzahlungen netto' : 'Netto investiert'
+  const investedLabel = ps?.cashTracked ? 'Eingezahlt' : 'Netto investiert'
 
   // Linie grün bei Gewinn, rot bei Verlust im Zeitraum
   const mainValues = ps ? (mode === 'rendite' ? ps.twr : ps.value) : []

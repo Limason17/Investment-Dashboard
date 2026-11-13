@@ -106,6 +106,17 @@ describe('Import planen', () => {
   })
 })
 
+describe('Import nach erfasstem Cash-Stand', () => {
+  it('ändert den Cash-Stand nur mit Einträgen nach dem Saldo-Datum', () => {
+    const db = empty()
+    db.transactions.c = { type: 'korrektur', date: '2026-11-13', cashDelta: 1000, cashStart: true }
+    const p = planImport(db, parseImport('dividenden', 'Zahltag;Ticker;Brutto;Steuer\n2025-03-26;VTI;10;0\n2026-11-20;VTI;5;0'))
+    expect(p.cashBefore).toBe(10)
+    expect(p.cashDelta).toBe(5)
+    expect(applyOps(db, p.ops).meta.settings!.cash).toBe(1005)
+  })
+})
+
 describe('Storno', () => {
   it('setzt Kauf vollständig zurück', () => {
     const db = empty()
@@ -133,13 +144,13 @@ describe('Storno', () => {
 })
 
 describe('Wertverlauf', () => {
-  it('zählt den ersten Cash-Stand nicht als Einzahlung', () => {
+  it('zählt den ersten Cash-Stand nicht als Einzahlung, Käufe davor aber als Geld von aussen', () => {
     const db = empty()
     db.transactions.k = { type: 'kauf', date: '2025-01-02', ticker: 'VTI', shares: 1, price: 100, cashDelta: -100 }
     db.transactions.c = { type: 'korrektur', date: '2025-06-01', cashDelta: 2500 }
     const tl = timeline(db)
     expect(tl.cashStart).toBe('2025-06-01')
-    expect(tl.external).toEqual([])
+    expect(tl.external).toEqual([{ date: '2025-01-02', amount: 100 }])
   })
   it('zählt Einzahlungen nach dem Start weiterhin als Zufluss', () => {
     const db = empty()

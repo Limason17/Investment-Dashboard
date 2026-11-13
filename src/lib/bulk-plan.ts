@@ -24,6 +24,10 @@ export interface Plan {
   ops: Op[]
   items: PlanItem[]
   cashDelta: number
+  /** Cash-Wirkung von Einträgen bis zum letzten Cash-Stand: steckt schon im erfassten Saldo */
+  cashBefore: number
+  /** Datum des letzten Cash-Stands */
+  balanceDate: string | null
   count: number
 }
 
@@ -34,6 +38,13 @@ export function planImport(db: DB, p: ParseResult): Plan {
   const ops: Op[] = []
   const items: PlanItem[] = []
   let cashDelta = 0
+  let cashBefore = 0
+  // Letzter Cash-Stand (Saldo laut Broker): Was davor geschah, ist darin schon enthalten.
+  const balanceDate = Object.values(db.transactions).filter((x) => x.type === 'korrektur' && !x.ticker && x.date).map((x) => x.date).sort().at(-1) ?? null
+  const addCash = (date: string, v: number) => {
+    if (balanceDate && date <= balanceDate) cashBefore += v
+    else cashDelta += v
+  }
   const createdAt = new Date().toISOString()
   const by = p.format === 'schwab' ? 'Schwab-Import' : 'Massen-Import'
 
@@ -71,7 +82,7 @@ export function planImport(db: DB, p: ParseResult): Plan {
         cur.cost = cur.cost != null ? r2(cur.cost + amt + r.fees) : null
       } else pos.set(r.ticker, { shares: r.shares, cost: r2(amt + r.fees), isNew: true, name: r.ticker, bucket: r.bucket ?? 'aktien' })
       ops.push({ op: 'set', coll: 'transactions', id: uid(), data: { type: 'kauf', date: r.date, ticker: r.ticker, shares: r.shares, price: r.price, fees: r.fees, cashDelta: r2(cashD), pot: null, note: r.note, createdAt, by } })
-      cashDelta += cashD
+      addCash(r.date, cashD)
       if (!quote(db, r.ticker)) priced.add(r.ticker)
     } else {
       if (!cur || cur.shares < r.shares - 1e-9) {
@@ -84,7 +95,7 @@ export function planImport(db: DB, p: ParseResult): Plan {
       cur.shares = +(cur.shares - r.shares).toFixed(6)
       cur.cost = avg != null ? r2(avg * cur.shares) : null
       ops.push({ op: 'set', coll: 'transactions', id: uid(), data: { type: 'verkauf', date: r.date, ticker: r.ticker, shares: r.shares, price: r.price, fees: r.fees, cashDelta: r2(cashD), realized: avg != null ? r2(cashD - avg * r.shares) : null, note: r.note, createdAt, by } })
-      cashDelta += cashD
+      addCash(r.date, cashD)
     }
   }
   const touched = new Set(trades.map((r) => r.ticker))
@@ -108,7 +119,7 @@ export function planImport(db: DB, p: ParseResult): Plan {
   for (const r of p.dividends) {
     const tax = r.tax ?? r2(r.gross * w)
     const net = r2(r.gross - tax)
-    const item: PlanItem = { line: r.line, kind: 'Dividende', ticker: r.ticker, date: r.payDate, detail: `brutto ${r.gross}, Steuer ${tax}`, amount: net, state: 'neu' }
+    const item: PlanItem = { line: r.line, kind: 'Dividende', ticker: r.ticker, date: r.payDate, detail: `brutto ${usd(r.gross)}, Steuer ${usd(tax)}`, amount: net, state: 'neu' }
     items.push(item)
     if (divs.some(([, d]) => d.status === 'erhalten' && d.ticker === r.ticker && d.payDate === r.payDate && same(d.gross, r.gross))) {
       item.state = 'doppelt'
@@ -125,11 +136,11 @@ export function planImport(db: DB, p: ParseResult): Plan {
       op: 'set', coll: 'dividends', id: expected?.[0] ?? `${r.ticker}-${r.payDate}-${uid().slice(-4)}`,
       data: { ticker: r.ticker, exDate: r.exDate ?? from?.exDate ?? null, payDate: r.payDate, perShare: from?.perShare ?? null, shares: from?.shares ?? db.positions[r.ticker]?.shares ?? null, gross: r2(r.gross), tax: r2(tax), net, status: 'erhalten', source: by, note: r.note },
     })
-    cashDelta += net
+    addCash(r.payDate, net)
   }
 
   // Cash einmal nachführen; entfällt, solange Cash nicht erfasst wird.
   const s = db.meta.settings
   if (cashDelta && !s?.cashExcluded) ops.push({ op: 'merge', coll: 'meta', id: 'settings', data: { cash: r2((Number(s?.cash) || 0) + cashDelta) } })
-  return { ops, items, cashDelta: r2(cashDelta), count: items.filter((i) => i.state === 'neu' || i.state === 'ändert').length }
+  return { ops, items, cashDelta: r2(cashDelta), cashBefore: r2(cashBefore), balanceDate, count: items.filter((i) => i.state === 'neu' || i.state === 'ändert').length }
 }
