@@ -15,7 +15,8 @@
     "prepare": "git config core.hooksPath .githooks || true",
     "dev:cloud": "vite --mode cloud",
     "icons": "node scripts/render-icons.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:rules": "npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-depot \"vitest run -c vitest.rules.config.ts\""
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
@@ -36,6 +37,7 @@
     "tailwindcss": "^4.3.5"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@types/d3-array": "^3.2.2",
     "@types/d3-scale": "^4.0.9",
     "@types/d3-shape": "^3.2.0",

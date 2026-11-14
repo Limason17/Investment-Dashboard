@@ -10,11 +10,11 @@ import { catOf, categoriesOf, MAX_CATEGORIES, newCategoryId, PALETTE } from '@/l
 import { isCap, targetOf } from '@/lib/calc'
 import { useDepot } from '@/lib/context'
 import { parseNum, r2, today, uid } from '@/lib/format'
+import { normTicker } from '@/lib/ticker'
 import { mutate, type Op } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { BucketId, DepotEvent, Pot } from '@/lib/types'
 
-const TICKER = /^[A-Z0-9][A-Z0-9.\-^=]{0,11}$/
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: (id: string) => ReactNode }) {
   const id = useId()
@@ -249,10 +249,10 @@ export function EventSheet({ id, open, onClose }: { id: string | null; open: boo
   const [tentative, setTentative] = useState(!!e?.tentative)
 
   const save = async () => {
-    const t = ticker.trim().toUpperCase()
+    const t = normTicker(ticker) ?? ''
     if (!title.trim()) throw new Error('Titel eingeben.')
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Datum eingeben.')
-    if (t && !TICKER.test(t)) throw new Error('Ticker ungültig.')
+    if (ticker.trim() && !t) throw new Error('Ticker ungültig.')
     await mutate([{ op: 'set', coll: 'events', id: id ?? uid(), data: { title: title.trim().slice(0, 100), date, kind, ticker: t || undefined, detail: detail.trim().slice(0, 300) || undefined, tentative: tentative || undefined, done: e?.done || undefined } }])
     return e ? 'Termin gespeichert.' : 'Termin angelegt.'
   }
@@ -289,8 +289,8 @@ export function WatchAddSheet({ open, onClose }: { open: boolean; onClose: () =>
   const [note, setNote] = useState('')
 
   const save = async () => {
-    const t = ticker.trim().toUpperCase()
-    if (!TICKER.test(t)) throw new Error('Ticker eingeben, z. B. MSFT.')
+    const t = normTicker(ticker)
+    if (!t) throw new Error('Ticker eingeben, z. B. MSFT.')
     if (db.watchlist[t]) throw new Error(`${t} ist schon auf der Watchlist.`)
     const l = parseNum(limit)
     if (limit.trim() && (l == null || l <= 0)) throw new Error('Grenze muss eine positive Zahl sein.')

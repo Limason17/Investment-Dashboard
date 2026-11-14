@@ -88,3 +88,8 @@ Tag grob 20 Lese- und 30 Schreibzugriffe. Der Cloudflare-Gratis-Tarif erlaubt 10
 2. `npx firebase-tools emulators:start --only auth,firestore --project demo-depot`
 3. `cd worker && npx wrangler dev`
 4. `npm run dev:cloud` → <http://localhost:5177>
+
+## Tests
+
+- `npm test`: Rechenlogik, Import, Währungen und Kurs-Dienst (ohne Netz).
+- `npm run test:rules`: Datenbankregeln (`firestore.rules`) gegen den Firestore-Emulator. Braucht Java.

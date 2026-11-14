@@ -7,6 +7,7 @@ import { commit } from '@/lib/commit'
 import { getAccount } from '@/lib/cloud'
 import { CLOUD } from '@/lib/config'
 import { useDepot, type EntryType } from '@/lib/context'
+import { normTicker } from '@/lib/ticker'
 import { dfmt, parseNum, pctPlain, qty, r2, today, uid, sUsdRaw as sUsd, usdRaw as usd } from '@/lib/format'
 import type { ImportKind } from '@/lib/bulk'
 import { ImportForm } from './ImportForm'
@@ -84,7 +85,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
   const tickers = [...new Set([...Object.keys(db.positions), ...Object.keys(db.watchlist)])].sort()
   const pots = Object.entries(db.pots).map(([id, p]) => ({ id, ...p })).sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
 
-  const t = tk.trim().toUpperCase()
+  const t = normTicker(tk) ?? ''
   const nSh = parseNum(sh), nPx = parseNum(px), nFee = parseNum(fee) || 0
   const p = db.positions[t]
   const have = p?.shares || 0
@@ -92,6 +93,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
   const amt = nSh && nPx ? nSh * nPx : null
 
   const { err, onSubmit } = useSubmit(fp, async () => {
+    if (tk.trim() && !t) throw new Error('Ticker ungültig, z. B. MSFT oder BRK-B.')
     if (!t || !nSh || !nPx || nSh <= 0 || nPx <= 0) throw new Error('Titel, Stück und Preis müssen ausgefüllt sein.')
     const a = nSh * nPx
     const createdAt = new Date().toISOString()
@@ -186,7 +188,8 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
   const tx = parseNum(tax) ?? (g != null ? r2(g * w) : null)
 
   const { err, onSubmit } = useSubmit(fp, async () => {
-    const t = tk.trim().toUpperCase()
+    const t = normTicker(tk)
+    if (tk.trim() && !t) throw new Error('Ticker ungültig, z. B. MSFT oder BRK-B.')
     if (!t || g == null || g <= 0 || tx == null) throw new Error('Titel und Bruttobetrag eingeben.')
     await commit([
       {

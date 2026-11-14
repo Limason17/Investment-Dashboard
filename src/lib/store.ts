@@ -245,15 +245,30 @@ export async function mutate(ops: Op[]) {
   if (CLOUD) {
     if (!state.db) throw new Error('Daten noch nicht geladen')
     const changed = await cloudBatch(state.db, ops, pid)
-    if (ops.some((o) => o.coll === 'positions' || o.coll === 'watchlist')) setTimeout(() => void loadLive(), 0)
     set({ db: { ...state.db, ...changed } })
+    refetchQuotes(ops)
     return state.db!
   }
   const r = await fetch('/api/batch?p=' + encodeURIComponent(pid), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops }) })
   const j = await r.json().catch(() => ({}))
   if (!r.ok) throw new Error(j.error || 'Speichern fehlgeschlagen')
   if (state.db) set({ db: { ...state.db, ...j.changed } })
+  refetchQuotes(ops)
   return state.db!
+}
+
+/**
+ * Neue Titel oder eine andere Anzeigewährung brauchen sofort Kurse (sonst erst bei der nächsten Abfrage, bis zu 5 Minuten):
+ * neue Titel nach dem Speichern, der Devisenkurs der neuen Währung sofort von der Quelle.
+ */
+export function needsQuotes(ops: Op[]): 'force' | 'normal' | null {
+  if (ops.some((o) => o.coll === 'meta' && o.id === 'settings' && o.data && 'fx' in o.data)) return 'force'
+  if (ops.some((o) => o.coll === 'positions' || o.coll === 'watchlist')) return CLOUD ? 'normal' : null
+  return null
+}
+function refetchQuotes(ops: Op[]) {
+  const n = needsQuotes(ops)
+  if (n) setTimeout(() => void loadLive(n === 'force'), 0)
 }
 
 export function useStore() {

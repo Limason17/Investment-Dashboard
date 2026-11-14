@@ -4,6 +4,7 @@
  * ImportForm zeigt die Vorschau und schreibt erst nach der Bestätigung.
  */
 import { HOLDING_BUCKETS } from './buckets'
+import { normTicker } from './ticker'
 import type { HoldingBucket } from './types'
 
 export type ImportKind = 'bestand' | 'trades' | 'dividenden'
@@ -106,7 +107,7 @@ export const TEMPLATE_NAME: Record<ImportKind, string> = { trades: 'vorlage-kaeu
 
 /** Art einer ausgefüllten Vorlage an der Kopfzeile erkennen. */
 export function detectKind(text: string): ImportKind | null {
-  const rows = splitTable(text.replace(/^﻿/, '')).filter((r) => !isComment(r)).slice(0, 8)
+  const rows = splitTable(text.replace(/^﻿/, '')).filter((r) => r.length && !isComment(r)).slice(0, 8)
   for (const r of rows) {
     const n = new Set(r.map(norm))
     if (n.has('action') && n.has('symbol')) return 'trades' // Schwab-Export
@@ -149,7 +150,7 @@ function unifyDelimiters(text: string, d: string) {
     .join('\n')
 }
 
-/** Zerlegt Text in Zeilen und Zellen; beachtet Anführungszeichen wie in CSV. */
+/** Zerlegt Text in Zeilen und Zellen; beachtet Anführungszeichen wie in CSV. Leere Zeilen bleiben als [] stehen, damit Zeilennummern stimmen. */
 export function splitTable(text: string, d = delimiter(text)): string[][] {
   text = unifyDelimiters(text, d)
   const rows: string[][] = []
@@ -165,7 +166,7 @@ export function splitTable(text: string, d = delimiter(text)): string[][] {
     else if (ch === '\n' || ch === '\r') {
       if (ch === '\r' && text[i + 1] === '\n') i++
       row.push(cell.trim()); cell = ''
-      if (row.some((c) => c !== '')) rows.push(row)
+      rows.push(row.some((c) => c !== '') ? row : [])
       row = []
     } else cell += ch
   }
@@ -179,8 +180,11 @@ const norm = (s: string) =>
 
 /** Zahl aus «1'234.50», «1.234,50», «1234,5», «$1,234.56» oder «(12.00)». thousandsComma: Komma ist Tausendertrenner (US-Format). */
 export function num(raw: string | undefined, thousandsComma = false): number | null {
+  return parseNumber(raw, thousandsComma)
+}
+function parseNumber(raw: string | undefined, thousandsComma: boolean): number | null {
   if (raw == null) return null
-  let s = raw.replace(/[\s'’$€]|USD|CHF/gi, '')
+  let s = raw.replace(/[\s'’$€]|USD|CHF/gi, '').replace(/^[−–]/, '-')
   if (!s || s === '-' || s === '--') return null
   let neg = false
   if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1) }
@@ -202,17 +206,14 @@ export function date(raw: string | undefined): string | null {
   let out: string | null = null
   if (m) out = `${m[1]}-${pad(m[2])}-${pad(m[3])}`
   else if ((m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})$/))) out = `${year(m[3])}-${pad(m[2])}-${pad(m[1])}`
-  else if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/))) out = `${year(m[3])}-${pad(m[1])}-${pad(m[2])}`
+  // Schrägstrich: US-Format Monat/Tag; kann der erste Teil kein Monat sein (23/06/2026), dann Tag/Monat.
+  else if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/))) out = +m[1] > 12 ? `${year(m[3])}-${pad(m[2])}-${pad(m[1])}` : `${year(m[3])}-${pad(m[1])}-${pad(m[2])}`
   if (!out) return null
   const d = new Date(out + 'T12:00:00Z')
   return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== out ? null : out
 }
 
-const TICKER = /^[A-Z0-9][A-Z0-9.\-/^=]{0,11}$/
-const ticker = (raw: string | undefined) => {
-  const t = (raw ?? '').trim().toUpperCase()
-  return TICKER.test(t) ? t : null
-}
+const ticker = (raw: string | undefined) => normTicker(raw)
 
 const BUCKET_WORDS: [HoldingBucket, string[]][] = [
   ['etf', ['etf', 'etfkern', 'kern', 'fonds']],
@@ -335,6 +336,9 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
     res.errors.push({ line: start, msg: `Spalte fehlt: ${missing.map((c) => c.label).join(', ')}` })
     return res
   }
+  // Komma-getrennte Dateien (Export aus englischem Excel oder Google Sheets) schreiben Zahlen im US-Format: 1,000.50.
+  const us = delimiter(text) === ','
+  const num = (raw: string | undefined) => parseNumber(raw, us)
   const get = (r: string[], k: string) => (k in idx ? (r[idx[k]] ?? '').trim().slice(0, k === 'note' || k === 'name' ? LIMITS.note : 64) : '')
 
   rows.slice(start).forEach((r, i) => {

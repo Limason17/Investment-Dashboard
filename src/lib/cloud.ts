@@ -95,27 +95,48 @@ export function authMessage(e: unknown): string {
 
 export const PASSWORD_MIN = 8
 
+/**
+ * Link in den Mails (Bestätigen, Passwort zurücksetzen): Nach dem Klick führt Firebase zurück zur App.
+ * Ist die Adresse in Firebase nicht als Domain freigegeben, geht die Mail ohne Rücksprung raus.
+ */
+const returnTo = () => (typeof location === 'undefined' ? undefined : { url: location.origin + (import.meta.env.BASE_URL || '/') })
+async function withReturn(send: (s: { url: string } | undefined) => Promise<void>) {
+  const s = returnTo()
+  try {
+    await send(s)
+  } catch (e) {
+    const code = (e as { code?: string })?.code ?? ''
+    if (s && /continue-uri|unauthorized-domain/.test(code)) await send(undefined)
+    else throw e
+  }
+}
+
 export async function signUp(email: string, password: string, name: string) {
   if (password.length < PASSWORD_MIN) throw Object.assign(new Error(), { code: 'auth/weak-password' })
   const x = await load()
   const cred = await x.a.createUserWithEmailAndPassword(x.auth, email.trim(), password)
   if (name.trim()) await x.a.updateProfile(cred.user, { displayName: name.trim().slice(0, 40) })
-  await x.a.sendEmailVerification(cred.user).catch(() => {})
+  await withReturn((st) => x.a.sendEmailVerification(cred.user, st)).catch(() => {})
   setAccount({ status: 'in', user: toAccount(cred.user) })
 }
 export async function signIn(email: string, password: string) {
   const x = await load()
   await x.a.signInWithEmailAndPassword(x.auth, email.trim(), password)
 }
+/** Mail zum Zurücksetzen. Ob es die Adresse gibt, verrät die Antwort nicht (wie bei aktiviertem Schutz vor Adress-Abfragen in Firebase). */
 export async function resetPassword(email: string) {
   const x = await load()
-  await x.a.sendPasswordResetEmail(x.auth, email.trim())
+  try {
+    await withReturn((st) => x.a.sendPasswordResetEmail(x.auth, email.trim(), st))
+  } catch (e) {
+    if ((e as { code?: string })?.code !== 'auth/user-not-found') throw e
+  }
 }
 /** Bestätigungs-Mail erneut senden */
 export async function resendVerification() {
   const x = await load()
   const u = x.auth.currentUser
-  if (u) await x.a.sendEmailVerification(u)
+  if (u) await withReturn((st) => x.a.sendEmailVerification(u, st))
 }
 /** Holt den Stand der E-Mail-Bestätigung neu; nach der Bestätigung auch ein neues Token für die Datenbankregeln. */
 export async function checkVerified(): Promise<boolean> {
