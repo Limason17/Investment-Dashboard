@@ -1,9 +1,9 @@
 import { Pencil, RefreshCw, ShoppingCart, TrendingDown } from 'lucide-react'
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { LimitTrack } from '@/components/charts/Small'
-import { TimeChart, type Marker, type RefLine, type VLine } from '@/components/charts/TimeChart'
+import { TimeChart, TradeGlyph, type Marker, type RefLine, type VLine } from '@/components/charts/TimeChart'
 import { Sheet } from '@/components/Sheet'
-import { Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Cur } from '@/components/ui'
+import { Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Switch, Cur } from '@/components/ui'
 import { bucketOf, catOf, HOLDING_BUCKETS } from '@/lib/buckets'
 import { quote, quoteLabel, withIds, wlState, wht } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE, refreshCharts, useChart } from '@/lib/charts'
@@ -22,6 +22,9 @@ const RANGES: RangeId[] = ['1T', '1W', '1M', '3M', '1J', '5J']
 function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: RefLine[]; txs?: WithId<Tx>[] }) {
   const { db, c } = useDepot()
   const [range, setRange] = useStored<RangeId>('depot.range.titel', '3M', RANGES)
+  // Käufe und Verkäufe im Chart ein- oder ausblenden (gilt für alle Titel, bleibt gespeichert)
+  const [tradesPref, setTradesPref] = useStored<'an' | 'aus'>('depot.trades.titel', 'an', ['an', 'aus'])
+  const showTrades = tradesPref === 'an'
   const tickers = useMemo(() => [t], [t])
   const { data, pending, error } = useChart(range, tickers)
   const chart = useMemo(() => (data ? withNow(db, data) : null), [db, data])
@@ -34,9 +37,14 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
       if ((x.type !== 'kauf' && x.type !== 'verkauf') || x.date < chart.d[0]) continue
       const i = chart.d.findIndex((d) => d >= x.date)
       if (i < 0) continue
-      if (!byIndex.has(i)) markers.push({ i, filled: x.type === 'kauf' })
+      const mk = markers.find((m) => m.i === i && m.type === x.type)
+      if (mk) {
+        mk.price = (mk.price! * mk.shares! + (x.price ?? 0) * (x.shares ?? 0)) / (mk.shares! + (x.shares ?? 0) || 1)
+        mk.shares! += x.shares ?? 0
+      } else markers.push({ i, type: x.type, shares: x.shares, price: x.price })
       byIndex.set(i, [...(byIndex.get(i) ?? []), x])
     }
+    markers.sort((a, b) => a.i - b.i).forEach((m, k) => (m.seq = k + 1))
     const base = chart.prev[t] ?? values[0]
     // Schwellen nur zeigen, wenn sie den Kursverlauf nicht zur flachen Linie drücken.
     const lo = Math.min(...values), hi = Math.max(...values)
@@ -70,7 +78,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
             series={[{ key: 'px', label: chart.kind === 'intraday' ? 'Kurs' : 'Schlusskurs', values: view.values, color: 'var(--color-accent)', color2: 'var(--color-accent-2)', area: true }]}
             split={view.base}
             refs={view.refs}
-            markers={view.markers}
+            markers={showTrades ? view.markers : NO_MARKERS}
             vlines={view.vlines}
             height={220}
             animateKey={t + chart.range}
@@ -80,9 +88,13 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
             tooltipExtra={(i) => (
               <>
                 {view.base > 0 && <div className="tip-row"><span>im Zeitraum</span><b className={view.values[i] >= view.base ? '!text-up' : '!text-down'}>{pct(view.values[i] / view.base - 1, 1)}</b></div>}
-                {view.byIndex.get(i)?.map((x) => (
-                  <div key={x.id} className="mt-2 border-t border-line pt-2 text-[11.5px] text-ink-2">
-                    {TX_LABEL[x.type]} {qty(x.shares)} × {money(x.price)}
+                {showTrades && view.byIndex.get(i)?.map((x) => (
+                  <div key={x.id} className="mt-2 border-t border-line pt-2 text-[11.5px]">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-ink"><TradeGlyph type={x.type as Marker['type']} />{TX_LABEL[x.type]}</span>
+                      <span className="num text-muted">{dfmt(x.date)}</span>
+                    </div>
+                    <div className="num mt-0.5 text-ink-2">{qty(x.shares)} Stk. × {money(x.price)}</div>
                   </div>
                 ))}
               </>
@@ -104,11 +116,12 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
         </div>
       )}
       {view && (view.markers.length > 0 || view.refs.length > 0 || view.away.length > 0) && (
-        <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-muted">
-          {view.markers.some((m) => m.filled) && <span className="inline-flex items-center gap-1.5"><i className="inline-block size-2 rounded-full bg-ink" />Kauf</span>}
-          {view.markers.some((m) => !m.filled) && <span className="inline-flex items-center gap-1.5"><i className="inline-block size-2 rounded-full border-2 border-ink" />Verkauf</span>}
-          {view.refs.map((r) => <span key={r.label} className="inline-flex items-center gap-1.5"><i className="inline-block w-4 border-t border-dashed" style={{ borderColor: r.color }} />{r.label.replace(/ [\d’'.,]+$/, '')}</span>)}
+        <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11.5px] text-muted">
+          {showTrades && view.markers.some((m) => m.type === 'kauf') && <span className="inline-flex items-center gap-1.5"><TradeGlyph type="kauf" />Kauf</span>}
+          {showTrades && view.markers.some((m) => m.type === 'verkauf') && <span className="inline-flex items-center gap-1.5"><TradeGlyph type="verkauf" />Verkauf</span>}
+          {view.refs.map((r) => <span key={r.label} className="num inline-flex items-center gap-1.5"><i className="inline-block w-4 border-t border-dashed" style={{ borderColor: r.color }} />{r.name === 'Ø Einstand' ? r.label.replace('Ø Einstand ', 'Ø ') : r.label}</span>)}
           {view.away.length > 0 && <span>{view.away.map((r) => r.label).join(' · ')}: ausserhalb des Ausschnitts</span>}
+          {view.markers.length > 0 && <Switch className="ml-auto !text-[11.5px] !text-muted" checked={showTrades} onChange={(v) => setTradesPref(v ? 'an' : 'aus')} label="Käufe/Verkäufe" title="Käufe und Verkäufe im Chart zeigen" />}
         </div>
       )}
     </div>
@@ -116,6 +129,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
 }
 const NO_REFS: RefLine[] = []
 const NO_TXS: WithId<Tx>[] = []
+const NO_MARKERS: Marker[] = []
 
 const Fact = ({ label, children }: { label: ReactNode; children: ReactNode }) => (
   <div className="min-w-0 rounded-xl border border-line bg-white/[0.02] px-3.5 py-3">
@@ -176,7 +190,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
     return `${ticker} gespeichert.`
   }, () => setEdit(false))
 
-  const refs: RefLine[] = r?.avg != null ? [{ y: r.avg, label: `Ø Einstand ${money(r.avg)}`, color: 'var(--color-ref)' }] : []
+  const refs: RefLine[] = r?.avg != null ? [{ y: r.avg, name: 'Ø Einstand', label: `Ø Einstand ${money(r.avg)}`, color: 'var(--color-ref)' }] : []
   const yearly = p && q?.divAnnual ? p.shares * q.divAnnual * (1 - wht(db)) : null
 
   return (
@@ -298,8 +312,8 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
   }, () => setEdit(false))
 
   const refs: RefLine[] = []
-  if (w?.limit) refs.push({ y: w.limit, label: `Grenze ${money(w.limit)}`, color: 'var(--color-warn)' })
-  if (w?.limitCautious) refs.push({ y: w.limitCautious, label: `vorsichtig ${money(w.limitCautious)}`, color: 'var(--color-bench)' })
+  if (w?.limit) refs.push({ y: w.limit, name: 'Grenze', label: `Grenze ${money(w.limit)}`, color: 'var(--color-warn)' })
+  if (w?.limitCautious) refs.push({ y: w.limitCautious, name: 'vorsichtig', label: `vorsichtig ${money(w.limitCautious)}`, color: 'var(--color-bench)' })
 
   return (
     <Sheet

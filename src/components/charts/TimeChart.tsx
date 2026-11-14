@@ -2,7 +2,8 @@ import { scaleLinear } from 'd3-scale'
 import { area as d3area, curveMonotoneX, curveStepAfter, line as d3line } from 'd3-shape'
 import { motion, useReducedMotion } from 'motion/react'
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
-import { axisFormatter, dfmt, dlong, dshort, hhmm, MONTHS, usd, weekday, curRate, usdRaw, cur } from '@/lib/format'
+import { axisFormatter, dfmt, dlong, dshort, hhmm, MONTHS, usd, weekday, curRate, usdRaw, cur, qty } from '@/lib/format'
+const MINUS_SIGN = '−'
 import { useMeasure } from '@/lib/useMeasure'
 import { Empty } from '../ui'
 
@@ -25,10 +26,30 @@ export interface RefLine {
   y: number
   label: string
   color: string
+  /** kurzer Name ohne Betrag, z. B. «Ø Einstand» (Tooltip) */
+  name?: string
 }
+/** Kauf (grünes Dreieck nach oben) oder Verkauf (rotes Dreieck nach unten) an einem Punkt */
 export interface Marker {
   i: number
-  filled: boolean
+  type: 'kauf' | 'verkauf'
+  /** Stück und Ø-Preis der Buchungen an diesem Punkt, laufende Nummer (chronologisch) */
+  shares?: number
+  price?: number
+  seq?: number
+}
+
+const TRADE_COLOR = { kauf: 'var(--color-up)', verkauf: 'var(--color-down)' } as const
+/** Etikett der Buchungen: Höhe und Abstand vom Kurs */
+const TAG_H = 11.5, TAG_OFF = 12.5
+
+/** Symbol für Kauf/Verkauf in Legende und Tooltip, gleich wie im Chart */
+export function TradeGlyph({ type, size = 10 }: { type: Marker['type']; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 10 10" className="inline-block shrink-0" aria-hidden>
+      <circle cx="5" cy="5" r="3.5" fill={TRADE_COLOR[type]} stroke="var(--color-card)" strokeWidth="1.25" />
+    </svg>
+  )
 }
 /** senkrechte Marke, z. B. Börseneröffnung */
 export interface VLine {
@@ -194,8 +215,16 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
   }
   const at = (e: PointerEvent<SVGSVGElement>) => {
     const r = e.currentTarget.getBoundingClientRect()
-    const i = Math.round(((e.clientX - r.left - L) / iw) * (n - 1))
-    hover(Math.max(0, Math.min(n - 1, i)))
+    const px = e.clientX - r.left
+    let i = Math.max(0, Math.min(n - 1, Math.round(((px - L) / iw) * (n - 1))))
+    // In der Nähe eines Kaufs/Verkaufs rastet das Fadenkreuz darauf ein, damit der Tooltip die Buchung zeigt.
+    const reach = e.pointerType === 'touch' ? 16 : 9
+    let best = reach
+    for (const m of markers) {
+      const dx = Math.abs(x(m.i) - px)
+      if (dx <= best) { best = dx; i = m.i }
+    }
+    hover(i)
   }
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const step = e.shiftKey ? Math.max(5, Math.round(n / 20)) : 1
@@ -233,6 +262,37 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
   if (tipLeft + tipW > W - 2) tipLeft = hx - 14 - tipW
   if (tipLeft < 2) tipLeft = Math.max(2, Math.min(W - tipW - 2, hx - tipW / 2))
   const sortedRefs = [...refs].sort((a, b) => b.y - a.y)
+  // Schwellen beschriften wir nicht im Chart, sondern mit einer kleinen Marke auf der Werteachse.
+  const refTags: { r: RefLine; ty: number; text: string; w: number }[] = []
+  for (const r of sortedRefs) {
+    const text = r.y >= 1000 ? usdRaw(r.y).replace(/\.\d+$/, '') : usdRaw(r.y)
+    let ty = y(r.y)
+    const prev = refTags[refTags.length - 1]
+    if (prev && ty - prev.ty < 16) ty = prev.ty + 16
+    refTags.push({ r, ty, text, w: text.length * 5.9 + 9 })
+  }
+  const tickHidden = (v: number) => refTags.some((g) => Math.abs(g.ty - y(v)) < 11)
+  // Etiketten für Käufe/Verkäufe; überlappende rücken weiter vom Kurs weg.
+  const tradeTags: { m: Marker; c: string; cx: number; cy: number; px: number; by: number; w: number; below: boolean; sign: string; rest: string }[] = []
+  for (const m of [...markers].sort((a, b) => a.i - b.i)) {
+    const cx = x(m.i), cy = y(main.values[m.i])
+    const buy = m.type === 'kauf'
+    const sign = (buy ? '+' : MINUS_SIGN) + (m.shares != null ? qty(m.shares) : '')
+    const rest = m.price != null ? ` × ${usdRaw(m.price * k)}` : ''
+    const w = (sign.length + rest.length) * 4.0 + 7
+    let below = buy
+    if (below && cy + TAG_OFF + TAG_H > T + ih + 4) below = false
+    else if (!below && cy - TAG_OFF - TAG_H < T - 2) below = true
+    const px = Math.max(L + w / 2 - 4, Math.min(L + iw - w / 2 + 4, cx))
+    let off = TAG_OFF
+    for (let tries = 0; tries < 4; tries++) {
+      const by = below ? cy + off : cy - off
+      const hit = tradeTags.some((o) => Math.abs(o.px - px) < (o.w + w) / 2 + 3 && Math.abs(o.by - by) < TAG_H + 2)
+      if (!hit) break
+      off += TAG_H + 3
+    }
+    tradeTags.push({ m, c: TRADE_COLOR[m.type], cx, cy, px, by: below ? cy + off : cy - off, w, below, sign, rest })
+  }
   const title = (i: number) => (kind === 'intraday' ? `${weekday(localDate(t[i]))}, ${dfmt(localDate(t[i]))} · ${hhmm(t[i])}` : dlong(d[i]))
 
   return (
@@ -298,7 +358,7 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
           {ticks.map((v) => (
             <g key={v}>
               <line x1={L} x2={L + iw} y1={y(v)} y2={y(v)} stroke="var(--color-grid)" strokeWidth="1" shapeRendering="crispEdges" />
-              <text x={L - 9} y={y(v) + 3.5} textAnchor="end" className={`num fill-muted ${narrow ? 'text-[10.5px]' : 'text-[11px]'}`}>{tickFmt(v)}</text>
+              {!tickHidden(v) && <text x={L - 9} y={y(v) + 3.5} textAnchor="end" className={`num fill-muted ${narrow ? 'text-[10.5px]' : 'text-[11px]'}`}>{tickFmt(v)}</text>}
             </g>
           ))}
           {sv != null ? (
@@ -356,20 +416,26 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
             })}
           </g>
 
-          {/* Kauf / Verkauf */}
-          {markers.map((m) => (
-            <circle key={m.i + (m.filled ? 'k' : 'v')} cx={x(m.i)} cy={y(main.values[m.i])} r="4" fill={m.filled ? 'var(--color-ink)' : 'var(--color-card)'} stroke={m.filled ? 'var(--color-card)' : 'var(--color-ink)'} strokeWidth="2" />
+          {/* Schwellen: kleine Marke auf der Werteachse statt Text im Chart */}
+          {refTags.map((g) => (
+            <g key={g.r.label} pointerEvents="none">
+              <rect x={L - 5 - g.w} y={g.ty - 8} width={g.w} height={16} rx={4} fill={`color-mix(in srgb, ${g.r.color} 16%, var(--color-card))`} stroke={`color-mix(in srgb, ${g.r.color} 55%, transparent)`} strokeWidth="1" />
+              <text x={L - 5 - g.w / 2} y={g.ty + 3.5} textAnchor="middle" className="num text-[10px] font-medium" fill={g.r.color}>{g.text}</text>
+            </g>
           ))}
 
-          {/* Beschriftung der Schwellen: über der Linie gezeichnet und auf der Seite, auf der der Kurs gerade nicht liegt */}
-          {sortedRefs.map((r, k) => {
-            const below = sortedRefs.length > 1 ? k > 0 : main.values[lastI] > r.y
-            return (
-              <text key={r.label} x={L + iw - 4} y={y(r.y) + (below ? 14 : -6)} textAnchor="end" className="num fill-ink-2 text-[11px]" style={{ paintOrder: 'stroke', stroke: 'var(--color-card)', strokeWidth: 5, strokeLinejoin: 'round' }}>
-                {r.label}
+          {/* Kauf / Verkauf: Punkt auf dem Kurs, feiner Stiel, kleines Etikett «+2 × 322.56» (Kauf darunter, Verkauf darüber) */}
+          {tradeTags.map((g) => (
+            <g key={g.m.i + g.m.type} pointerEvents="none">
+              <line x1={g.cx} x2={g.cx} y1={g.cy} y2={g.by + (g.below ? -TAG_H / 2 : TAG_H / 2)} stroke={g.c} strokeOpacity={0.5} strokeWidth="1" />
+              <circle cx={g.cx} cy={g.cy} r={hi === g.m.i ? 2.75 : 2} fill={g.c} stroke="var(--color-card)" strokeWidth="1.5" />
+              <rect x={g.px - g.w / 2} y={g.by - TAG_H / 2} width={g.w} height={TAG_H} rx={3} fill="rgb(14 16 20 / 0.92)" stroke={g.c} strokeOpacity={hi === g.m.i ? 1 : 0.6} strokeWidth="1" />
+              <text x={g.px} y={g.by + 2.7} textAnchor="middle" className="num text-[8px]">
+                <tspan fill={g.c} fontWeight={650}>{g.sign}</tspan>
+                <tspan fill="var(--color-ink-2)">{g.rest}</tspan>
               </text>
-            )
-          })}
+            </g>
+          ))}
 
           {/* Endpunkt */}
           {hi == null && (
@@ -399,6 +465,12 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
             <div className="tip-row" key={s.key}>
               <span className="whitespace-nowrap"><i className="linekey" style={{ background: s.color2 ?? s.color }} />{s.label}</span>
               <b>{format(s.values[hi])}</b>
+            </div>
+          ))}
+          {refs.map((r) => (
+            <div className="tip-row" key={r.label}>
+              <span className="whitespace-nowrap"><i className="linekey" style={{ background: `repeating-linear-gradient(90deg, ${r.color} 0 2px, transparent 2px 5px)` }} />{r.name ?? r.label.replace(/ [\d’'.,]+( [A-Z]{3})?$/, '')}</span>
+              <b>{format(r.y)}</b>
             </div>
           ))}
           {tooltipExtra?.(hi)}
