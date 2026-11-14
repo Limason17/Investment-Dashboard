@@ -29,6 +29,7 @@ import { Overview } from '@/views/Overview'
 import { Plan } from '@/views/Plan'
 import { Positions } from '@/views/Positions'
 import { Watchlist } from '@/views/Watchlist'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const VIEWS: { id: ViewId; label: string; short: string; icon: LucideIcon; sub: string }[] = [
   { id: 'uebersicht', label: 'Übersicht', short: 'Übersicht', icon: LayoutDashboard, sub: 'Wert, Limits und die nächsten Termine' },
@@ -375,12 +376,14 @@ function Dashboard() {
 
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div key={view} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
-                  {view === 'uebersicht' && <Overview />}
-                  {view === 'positionen' && <Positions />}
-                  {view === 'limits' && <Watchlist />}
-                  {view === 'dividenden' && <Dividends />}
-                  {view === 'plan' && <Plan />}
-                  {view === 'journal' && <Journal />}
+                  <ErrorBoundary scope="view" key={view + ':' + portfolio}>
+                    {view === 'uebersicht' && <Overview />}
+                    {view === 'positionen' && <Positions />}
+                    {view === 'limits' && <Watchlist />}
+                    {view === 'dividenden' && <Dividends />}
+                    {view === 'plan' && <Plan />}
+                    {view === 'journal' && <Journal />}
+                  </ErrorBoundary>
                 </motion.div>
               </AnimatePresence>
 

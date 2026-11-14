@@ -183,7 +183,7 @@ const existingOf = (pid: string) => {
 /** Portfolio-Liste des Kontos (Dokument depots/{uid}). */
 export async function cloudPortfolios(): Promise<PortfolioInfo[]> {
   const x = await load()
-  const snap = await x.f.getDoc(x.f.doc(x.db, 'depots', uidNow()))
+  const snap = await x.f.getDoc(x.f.doc(x.db, 'depots', uidNow())).catch((e) => { throw writeError(e) })
   return portfolioList(snap.exists() ? (snap.data().portfolios as PortfolioMap) : null)
 }
 export async function cloudSavePortfolios(list: PortfolioInfo[]) {
@@ -198,12 +198,17 @@ export async function cloudDeletePortfolio(pid: string) {
   await commit(b)
   existingBy.delete(pid)
 }
-/** Fehler beim Schreiben in verständliche Sätze */
-function writeError(e: unknown): Error {
+/** Fehler beim Lesen und Schreiben in verständliche Sätze */
+export function writeError(e: unknown): Error {
   const code = (e as { code?: string })?.code ?? ''
   if (code === 'permission-denied' || /insufficient permissions/i.test(String((e as Error)?.message)))
     return new Error('Speichern nicht erlaubt. Lade die Seite neu oder melde dich neu an. Neue Konten brauchen eine bestätigte E-Mail-Adresse.')
-  if (code === 'unavailable') return new Error('Keine Verbindung zur Datenbank. Prüfe das Internet und versuche es erneut.')
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+  if (code === 'unavailable' || offline || /failed to fetch|networkerror|network request failed|load failed/i.test(String((e as Error)?.message)))
+    return new Error('Keine Verbindung zur Datenbank. Prüfe das Internet und versuche es erneut.')
+  if (/maximum entity size|exceeds the maximum allowed size|too large/i.test(String((e as Error)?.message)))
+    return new Error('Zu viele Einträge: Eine Sammlung darf in der Datenbank höchstens 1 MB gross sein. Lösche alte Einträge (z. B. Notizen) oder teile die Daten auf ein zweites Portfolio auf.')
+  if (code === 'unauthenticated') return new Error('Die Anmeldung ist abgelaufen. Melde dich neu an.')
   return e instanceof Error ? e : new Error(String(e))
 }
 const commit = (b: { commit: () => Promise<void> }) => b.commit().catch((e) => { throw writeError(e) })
@@ -218,7 +223,7 @@ const uidNow = () => {
 export async function cloudLoad(pid = MAIN): Promise<Partial<DB>> {
   const x = await load()
   const uid = uidNow()
-  const snap = await x.f.getDocs(x.f.collection(x.db, ...collPath(uid, pid)))
+  const snap = await x.f.getDocs(x.f.collection(x.db, ...collPath(uid, pid))).catch((e) => { throw writeError(e) })
   const existing = existingOf(pid)
   const out: Record<string, unknown> = {}
   existing.clear()
@@ -268,8 +273,10 @@ export async function cloudBatch(db: DB, ops: Op[], pid = MAIN): Promise<Partial
     const ref = x.f.doc(x.db, ...collPath(uid, pid), c)
     if (!existingOf(pid).has(c) || full.has(c)) b.set(ref, data)
     else {
-      const pairs = [...fields.get(c)!.entries()].flatMap(([id, v]) => [new x.f.FieldPath(id), v])
-      if (pairs.length) b.update(ref, pairs[0] as InstanceType<StoreModule['FieldPath']>, pairs[1], ...pairs.slice(2))
+      // Nur die geänderten Einträge, jeweils ganz ersetzt. «set» mit mergeFields statt «update»: legt das Dokument
+      // neu an, falls ein anderes Gerät die Sammlung inzwischen gelöscht hat (update schlüge dann fehl).
+      const f = fields.get(c)!
+      if (f.size) b.set(ref, Object.fromEntries(f), { mergeFields: [...f.keys()].map((id) => new x.f.FieldPath(id)) })
     }
   }
   await commit(b)

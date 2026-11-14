@@ -64,6 +64,11 @@ function useSubmit({ onSaved, setBusy }: FormProps, save: () => Promise<string>)
   }
   return { err, onSubmit }
 }
+/** Buchungsdatum: vorhanden und nicht in der Zukunft (Käufe und Zahlungen geschehen nie später als heute). */
+function checkDate(d: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error('Datum eingeben.')
+  if (d > today()) throw new Error('Das Datum liegt in der Zukunft.')
+}
 const ErrorLine = ({ err }: { err: string }) => (err ? <div role="alert" className="text-[12.5px] text-down">{err}</div> : null)
 
 /* ------------------------------------------------------------------ Kauf / Verkauf */
@@ -95,6 +100,8 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
   const { err, onSubmit } = useSubmit(fp, async () => {
     if (tk.trim() && !t) throw new Error('Ticker ungültig, z. B. MSFT oder BRK-B.')
     if (!t || !nSh || !nPx || nSh <= 0 || nPx <= 0) throw new Error('Titel, Stück und Preis müssen ausgefüllt sein.')
+    if (fee.trim() && (parseNum(fee) == null || nFee < 0)) throw new Error('Gebühren prüfen: eine Zahl ab 0.')
+    checkDate(date)
     const a = nSh * nPx
     const createdAt = new Date().toISOString()
     if (type === 'kauf') {
@@ -191,6 +198,9 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
     const t = normTicker(tk)
     if (tk.trim() && !t) throw new Error('Ticker ungültig, z. B. MSFT oder BRK-B.')
     if (!t || g == null || g <= 0 || tx == null) throw new Error('Titel und Bruttobetrag eingeben.')
+    if (tax.trim() && parseNum(tax) == null) throw new Error('Quellensteuer prüfen: ein Betrag in USD, leer = Standardsatz.')
+    if (tx < 0 || tx > g) throw new Error('Die Quellensteuer muss zwischen 0 und dem Bruttobetrag liegen (ein Betrag in USD, kein Prozentsatz).')
+    if (pay) checkDate(pay)
     await commit([
       {
         op: 'set', coll: 'dividends', id: fromId || uid(),
@@ -234,6 +244,8 @@ function CashForm(fp: FormProps) {
 
   const { err, onSubmit } = useSubmit(fp, async () => {
     if (a == null || after == null) throw new Error('Betrag eingeben.')
+    if (dir !== 'korrektur' && a <= 0) throw new Error('Betrag muss grösser als 0 sein.')
+    checkDate(date)
     if (off && dir !== 'korrektur') throw new Error('Cash ist derzeit nicht erfasst. Trage zuerst mit «Cash-Stand korrigieren» den Saldo von deinem Broker ein.')
     await commit(
       [

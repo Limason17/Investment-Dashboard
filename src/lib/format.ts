@@ -82,9 +82,14 @@ export const hhmm = (ms: number) => {
 }
 export const daysBetween = (a: string, b: string) =>
   Math.round((new Date(b + 'T12:00:00Z').getTime() - new Date(a + 'T12:00:00Z').getTime()) / 864e5)
+/** Monate addieren; der Tag wird aufs Monatsende begrenzt (31. Januar + 1 Monat = 28./29. Februar, nicht 3. März). */
 export const addMonths = (d: string, n: number) => {
   const x = new Date(d + 'T12:00:00Z')
+  const day = x.getUTCDate()
+  x.setUTCDate(1)
   x.setUTCMonth(x.getUTCMonth() + n)
+  const last = new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + 1, 0)).getUTCDate()
+  x.setUTCDate(Math.min(day, last))
   return x.toISOString().slice(0, 10)
 }
 

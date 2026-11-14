@@ -131,12 +131,11 @@ function parseChart(r: any): YahooQuote {
   const cl: (number | null)[] = r.indicators?.quote?.[0]?.close ?? []
   let i = cl.length - 1
   while (i >= 0 && cl[i] == null) i--
+  // Ohne Handelszeiten (bei manchen Fonds und Devisen) gilt der letzte Kurs als Schluss seines Tages.
   const ctp = m.currentTradingPeriod
-  const periods = {
-    pre: [ctp.pre.start, ctp.pre.end] as [number, number],
-    regular: [ctp.regular.start, ctp.regular.end] as [number, number],
-    post: [ctp.post.start, ctp.post.end] as [number, number],
-  }
+  const span = (x: { start?: number; end?: number } | undefined): [number, number] => (typeof x?.start === 'number' && typeof x?.end === 'number' ? [x.start, x.end] : [0, 0])
+  const periods = { pre: span(ctp?.pre), regular: span(ctp?.regular), post: span(ctp?.post) }
+  if (!ctp?.regular) periods.regular = [m.regularMarketTime ?? 0, m.regularMarketTime ?? 0]
   const now = Date.now() / 1000
   const session: Session =
     now >= periods.pre[0] && now < periods.pre[1] ? 'pre'
@@ -291,7 +290,9 @@ export function liveQuotes(src: QuoteSource, env: Record<string, string | undefi
       if (r.status === 'fulfilled') take(rest[i], r.value)
       else failures.push(`${rest[i]} (${r.reason instanceof Error ? r.reason.message : r.reason})`)
     })
-    let session: Session = Object.values(quotes)[0]?.session ?? 'closed'
+    // Sitzung nach den gehaltenen Aktien, nicht nach Devisen (CHF=X handelt fast rund um die Uhr)
+    const lead = [...held, ...watch].find((t) => quotes[t] && !t.endsWith('=X')) ?? Object.keys(quotes)[0]
+    let session: Session = (lead && quotes[lead]?.session) || 'closed'
     let overnight: LiveResult['overnight'] = 'ruhend'
     if (inOvernight(Date.now())) {
       if (!key || !secret) overnight = 'kein Schlüssel'

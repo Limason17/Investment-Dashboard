@@ -5,9 +5,9 @@
 import { describe, expect, it } from 'vitest'
 import { date, detectKind, LIMITS, num, parseImport, splitTable } from './bulk'
 import { planImport } from './bulk-plan'
-import { compute, divAnnual, fxOf, quote, wlState } from './calc'
+import { alerts, compute, divAnnual, fxOf, quote, wlState } from './calc'
 import { csvCell } from './export'
-import { cur, money, parseNum, pct, pctPlain, setDisplayCurrency, sUsd, usd } from './format'
+import { addMonths, cur, daysBetween, money, parseNum, pct, pctPlain, setDisplayCurrency, sUsd, usd, weekday } from './format'
 import { applyOps } from './reverse'
 import { normTicker } from './ticker'
 import type { DB } from './types'
@@ -262,5 +262,84 @@ describe('Kurse nach Änderungen', () => {
     expect(needsQuotes([{ op: 'merge', coll: 'meta', id: 'settings', data: { fx: 'CHF' } }])).toBe('force')
     expect(needsQuotes([{ op: 'merge', coll: 'meta', id: 'settings', data: { fx: null } }])).toBe('force')
     expect(needsQuotes([{ op: 'merge', coll: 'meta', id: 'settings', data: { cash: 5 } }])).toBeNull()
+  })
+})
+
+describe('Import: Plausibilität', () => {
+  it('lehnt Daten in der Zukunft und Steuer über dem Bruttobetrag ab', () => {
+    const t = parseImport('trades', 'Datum;Art;Ticker;Stück;Preis\n2099-01-02;Kauf;VTI;1;10')
+    expect(t.errors[0].msg).toMatch(/Zukunft/)
+    const d = parseImport('dividenden', 'Zahltag;Ticker;Brutto;Quellensteuer\n2025-06-26;KO;2.70;15\n2099-06-26;KO;2.70;0.4')
+    expect(d.errors.map((e) => e.msg)).toEqual([expect.stringMatching(/grösser als der Bruttobetrag/), expect.stringMatching(/Zukunft/)])
+  })
+})
+
+describe('Schwab-Export: weitere Arten', () => {
+  const head = '"Date","Action","Symbol","Description","Quantity","Price","Fees & Comm","Amount"'
+  it('bucht Aktiensplits, damit spätere Verkäufe passen', () => {
+    const csv = [head,
+      '"07/15/2024","Sell","NVDA","NVIDIA CORP","50","$120.00","","$6,000.00"',
+      '"06/10/2024","Stock Split","NVDA","NVIDIA CORP","90","","",""',
+      '"01/05/2024","Buy","NVDA","NVIDIA CORP","10","$490.00","","-$4,900.00"',
+    ].join('\n')
+    const db = { positions: {}, prices: {}, watchlist: {}, pots: {}, events: {}, log: {}, transactions: {}, dividends: {}, snapshots: {}, meta: { settings: { cash: 0, cashExcluded: true } }, market: {} } as DB
+    const r = parseImport('trades', csv)
+    expect(r.splits).toEqual([expect.objectContaining({ ticker: 'NVDA', shares: 90, date: '2024-06-10' })])
+    const p = planImport(db, r)
+    expect(p.items.map((i) => [i.kind, i.state])).toEqual([['Kauf', 'neu'], ['Split', 'neu'], ['Verkauf', 'neu']])
+    const after = applyOps(db, p.ops)
+    expect(after.positions.NVDA).toMatchObject({ shares: 50, cost: 2450 })
+    // derselbe Export ein zweites Mal: alles schon vorhanden
+    expect(planImport(after, parseImport('trades', csv)).count).toBe(0)
+  })
+  it('Rückerstattung der Quellensteuer verringert die Steuer', () => {
+    const csv = [head,
+      '"10/30/2026","Qualified Dividend","KO","COCA COLA","","","","$10.00"',
+      '"10/30/2026","NRA Tax Adj","KO","COCA COLA","","","","-$3.00"',
+      '"11/05/2026","NRA Tax Adj","KO","COCA COLA","","","","$1.50"',
+    ].join('\n')
+    expect(parseImport('trades', csv).dividends[0]).toMatchObject({ gross: 10, tax: 1.5 })
+  })
+  it('Optionen, Leerverkäufe und Überweisungen werden übersprungen, nicht falsch gebucht', () => {
+    const csv = [head,
+      '"10/01/2026","Buy to Open","AAPL 12/20/2026 200.00 C","CALL","1","$5.00","$0.65","-$500.65"',
+      '"10/02/2026","Sell Short","TSLA","TESLA","1","$200.00","","$200.00"',
+      '"10/03/2026","Wire Received","","","","","","$5,000.00"',
+      '"10/04/2026","Credit Interest","","","","","","$0.12"',
+    ].join('\n')
+    const r = parseImport('trades', csv)
+    expect(r.trades).toEqual([])
+    expect(r.dividends).toEqual([])
+    expect(r.skipped).toHaveLength(4)
+  })
+})
+
+describe('Hinweis bei negativem Cash', () => {
+  const base = (cash: number, cashExcluded = false): DB => ({ positions: { VTI: { ticker: 'VTI', name: 'VTI', shares: 10, bucket: 'etf', cost: 2000 } }, prices: { VTI: { close: 200, prev: 200, date: '2026-11-13' } }, watchlist: {}, pots: {}, events: {}, log: {}, transactions: {}, dividends: {}, snapshots: {}, meta: { settings: { cash, cashExcluded, withholding: 0.15 } }, market: {} })
+  const has = (db: DB) => alerts(db, compute(db), '2026-11-14').some((a) => a.title === 'Cash ist negativ')
+  it('warnt, wenn der erfasste Cash-Stand unter null liegt', () => {
+    expect(has(base(-500))).toBe(true)
+    expect(has(base(0))).toBe(false)
+    expect(has(base(-0.2))).toBe(false)
+  })
+  it('schweigt, solange Cash nicht erfasst ist', () => expect(has(base(-500, true))).toBe(false))
+})
+
+describe('Kalender: Monatsende, Jahreswechsel, Zeitumstellung', () => {
+  it('Monate addieren bleibt im richtigen Monat', () => {
+    expect(addMonths('2026-01-31', 1)).toBe('2026-02-28')
+    expect(addMonths('2028-01-31', 1)).toBe('2028-02-29')
+    expect(addMonths('2026-03-31', 3)).toBe('2026-06-30')
+    expect(addMonths('2026-12-01', 1)).toBe('2027-01-01')
+    expect(addMonths('2027-01-01', -11)).toBe('2026-02-01')
+    expect(addMonths('2026-11-15', -12)).toBe('2025-11-15')
+  })
+  it('Tage zählen über Zeitumstellung und Jahreswechsel', () => {
+    expect(daysBetween('2026-03-07', '2026-03-09')).toBe(2) // USA: Sommerzeit ab 8. März
+    expect(daysBetween('2026-03-28', '2026-03-30')).toBe(2) // Europa: 29. März
+    expect(daysBetween('2026-10-31', '2026-11-02')).toBe(2)
+    expect(daysBetween('2026-12-31', '2027-01-01')).toBe(1)
+    expect(daysBetween('2024-02-28', '2024-03-01')).toBe(2)
+    expect(weekday('2026-11-14')).toBe(weekday('2026-11-21'))
   })
 })

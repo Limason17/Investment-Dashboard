@@ -16,7 +16,7 @@
     "dev:cloud": "vite --mode cloud",
     "icons": "node scripts/render-icons.mjs",
     "test": "vitest run",
-    "test:rules": "npx --yes firebase-tools@14 emulators:exec --only firestore --project demo-depot \"vitest run -c vitest.rules.config.ts\""
+    "test:rules": "npx --yes firebase-tools@14 emulators:exec --only auth,firestore --project demo-depot \"vitest run -c vitest.rules.config.ts\""
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

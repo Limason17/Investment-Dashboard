@@ -5,6 +5,7 @@ import { Segmented, Switch } from '@/components/ui'
 import { authMessage, checkVerified, cloudReplace, COLLECTIONS, deleteAccount, PASSWORD_MIN, resendVerification, resetPassword, signIn, signOut, signUp, useAccount } from '@/lib/cloud'
 import { detectKind, LIMITS, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
 import { BACKUP_KIND, downloadBackup } from '@/lib/backup'
+import { sanitizeDb } from '@/lib/sanitize'
 import { CLOUD } from '@/lib/config'
 import { LegalLinks, LegalSheet, type LegalDoc } from './Legal'
 import { ALL } from '@/lib/portfolios'
@@ -47,7 +48,9 @@ function readBackup(text: string): Partial<DB> {
     }
     out[c] = clean
   }
-  return out as Partial<DB>
+  // Typen bereinigen, damit eine von Hand geänderte Datei die App nicht beschädigt
+  const ok = sanitizeDb(out) as unknown as Record<string, unknown>
+  return Object.fromEntries(Object.keys(out).map((c) => [c, ok[c]])) as Partial<DB>
 }
 
 /** Ausgefüllte Vorlage lesen und das Upload-Blatt mit Vorschau öffnen. */

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { DEFAULT_CATEGORIES } from './buckets'
 import { closeUpdates } from './closes'
+import { sanitizeDb } from './sanitize'
 import { cloudBatch, cloudDeletePortfolio, cloudLoad, cloudPortfolios, cloudSavePortfolios, type Op as CloudOp } from './cloud'
 import { CLOUD, LEGAL_VERSION, QUOTES_URL } from './config'
 import { aggregate, ALL, MAIN, MAX_PORTFOLIOS, newPortfolioId, portfolioList, toMap, type PortfolioInfo } from './portfolios'
@@ -40,10 +41,10 @@ const EMPTY: DB = { positions: {}, prices: {}, watchlist: {}, pots: {}, events: 
 
 /** Ein Portfolio lesen: online aus Firestore, lokal aus data/ bzw. data/p/{id}/. */
 async function fetchOne(pid: string): Promise<DB> {
-  if (CLOUD) return { ...EMPTY, ...(await cloudLoad(pid)) }
+  if (CLOUD) return sanitizeDb({ ...EMPTY, ...(await cloudLoad(pid)) })
   const r = await fetch('/api/db?p=' + encodeURIComponent(pid), { cache: 'no-store' })
   if (!r.ok) throw new Error('Daten nicht erreichbar (' + r.status + ')')
-  return { ...EMPTY, ...(await r.json()) }
+  return sanitizeDb({ ...EMPTY, ...(await r.json()) })
 }
 
 /** Portfolio-Liste lesen; ein gewähltes, das es nicht mehr gibt, fällt auf das Hauptportfolio zurück. */

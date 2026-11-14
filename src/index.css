@@ -17,7 +17,7 @@
   --color-ink: #edeef2;
   --color-ink-2: #bcc1cc;
   --color-muted: #8d94a2;
-  --color-faint: #5e6472;
+  --color-faint: #7a8190; /* WCAG AA: mind. 4.5:1 auf Hintergrund und Karten */
 
   --color-accent: #9174ff;
   --color-accent-2: #b39fff;

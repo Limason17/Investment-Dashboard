@@ -13,7 +13,7 @@ import type { DB } from './types'
 export type ItemState = 'neu' | 'ändert' | 'doppelt' | 'fehler'
 export interface PlanItem {
   line: number
-  kind: 'Bestand' | 'Kauf' | 'Verkauf' | 'Dividende'
+  kind: 'Bestand' | 'Kauf' | 'Verkauf' | 'Dividende' | 'Split'
   ticker: string
   date?: string
   detail: string
@@ -67,7 +67,32 @@ export function planImport(db: DB, p: ParseResult): Plan {
   const existing = Object.values(db.transactions)
   const priced = new Set<string>()
   const trades = [...p.trades].sort((a, b) => a.date.localeCompare(b.date) || a.line - b.line)
+  // Splits in die Datumsfolge einreihen: am selben Tag vor den Käufen und Verkäufen (Schwab bucht sie zum Handelsbeginn).
+  const splits = [...(p.splits ?? [])].sort((a, b) => a.date.localeCompare(b.date) || a.line - b.line)
+  let si = 0
+  const applySplitsUntil = (date: string | null) => {
+    while (si < splits.length && (date == null || splits[si].date <= date)) {
+      const r = splits[si++]
+      const item: PlanItem = { line: r.line, kind: 'Split', ticker: r.ticker, date: r.date, detail: `${r.shares > 0 ? '+' : ''}${qty(r.shares)} Stück`, amount: null, state: 'neu' }
+      items.push(item)
+      if (existing.some((x) => x.type === 'korrektur' && x.date === r.date && x.ticker === r.ticker && same(x.shares, r.shares, 1e-6))) {
+        item.state = 'doppelt'
+        continue
+      }
+      const cur = pos.get(r.ticker)
+      if (!cur || cur.shares + r.shares < -1e-9) {
+        item.state = 'fehler'
+        item.msg = `kein Bestand für den Split`
+        continue
+      }
+      cur.shares = +(cur.shares + r.shares).toFixed(6)
+      ops.push({ op: 'set', coll: 'transactions', id: uid(), data: { type: 'korrektur', date: r.date, ticker: r.ticker, shares: r.shares, price: null, fees: 0, cashDelta: 0, note: 'Aktiensplit', createdAt, by } })
+      touchedSplit.add(r.ticker)
+    }
+  }
+  const touchedSplit = new Set<string>()
   for (const r of trades) {
+    applySplitsUntil(r.date)
     const amt = r.shares * r.price
     const item: PlanItem = { line: r.line, kind: r.type === 'kauf' ? 'Kauf' : 'Verkauf', ticker: r.ticker, date: r.date, detail: `${qty(r.shares)} × ${usd(r.price)}`, amount: r.type === 'kauf' ? -(amt + r.fees) : amt - r.fees, state: 'neu' }
     items.push(item)
@@ -99,7 +124,8 @@ export function planImport(db: DB, p: ParseResult): Plan {
       addCash(r.date, cashD)
     }
   }
-  const touched = new Set(trades.map((r) => r.ticker))
+  applySplitsUntil(null)
+  const touched = new Set([...trades.map((r) => r.ticker), ...touchedSplit])
   for (const t of touched) {
     const cur = pos.get(t)
     if (!cur) continue

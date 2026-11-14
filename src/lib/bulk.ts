@@ -51,6 +51,8 @@ export const COLUMNS: Record<ImportKind, Col[]> = {
 export interface PosRow { line: number; ticker: string; shares: number; cost: number | null; name: string; bucket?: HoldingBucket; note: string }
 export interface TradeRow { line: number; date: string; type: 'kauf' | 'verkauf'; ticker: string; shares: number; price: number; fees: number; bucket?: HoldingBucket; note: string }
 export interface DivRow { line: number; payDate: string; exDate: string | null; ticker: string; gross: number; tax: number | null; note: string }
+/** Aktiensplit aus dem Schwab-Export: zusätzliche Stück ohne Geldfluss (bei Zusammenlegung negativ). */
+export interface SplitRow { line: number; date: string; ticker: string; shares: number }
 export interface Issue { line: number; msg: string }
 
 export interface ParseResult {
@@ -58,6 +60,7 @@ export interface ParseResult {
   positions: PosRow[]
   trades: TradeRow[]
   dividends: DivRow[]
+  splits?: SplitRow[]
   errors: Issue[]
   skipped: Issue[]
 }
@@ -76,6 +79,12 @@ export const EXAMPLES: Record<ImportKind, string[][]> = {
     ['VTI', '3', '856.20', 'Vanguard Total Stock Market ETF', 'etf', ''],
     ['MSFT', '2', '821.20', 'Microsoft', 'aktien', ''],
   ],
+}
+
+/** Heute als JJJJ-MM-TT (Ortszeit); Buchungen danach sind Tippfehler. */
+const todayISO = () => {
+  const n = new Date()
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
 }
 
 const TITLE: Record<ImportKind, string> = {
@@ -260,13 +269,14 @@ function mapColumns(rows: string[][], cols: Col[]): { start: number; idx: Record
 
 const SCHWAB_DIV = /dividend|div reinvest|cap gain|qual div|non-qual/i
 const SCHWAB_TAX = /nra|withholding|foreign tax/i
+const SCHWAB_SPLIT = /stock split|reverse split/i
 
 /** Transaktions-Export von Schwab: Spalten Date, Action, Symbol, Quantity, Price, Fees & Comm, Amount. */
 function parseSchwab(rows: string[][], headerRow: number): ParseResult {
   const h = rows[headerRow].map(norm)
   const at = (k: string) => h.indexOf(k)
   const c = { date: at('date'), action: at('action'), symbol: at('symbol'), qty: at('quantity'), price: at('price'), fees: at('feescomm'), amount: at('amount'), desc: at('description') }
-  const res: ParseResult = { format: 'schwab', positions: [], trades: [], dividends: [], errors: [], skipped: [] }
+  const res: ParseResult = { format: 'schwab', positions: [], trades: [], dividends: [], splits: [], errors: [], skipped: [] }
   const divs = new Map<string, DivRow>()
   const taxes: { key: string; t: string; d: string; amt: number; line: number }[] = []
   rows.slice(headerRow + 1).forEach((r, i) => {
@@ -285,8 +295,11 @@ function parseSchwab(rows: string[][], headerRow: number): ParseResult {
       const shares = Math.abs(num(r[c.qty], true) ?? NaN), price = num(r[c.price], true)
       if (!t || !shares || !price) return void res.errors.push({ line, msg: `${action}: Ticker, Stück oder Preis fehlt` })
       res.trades.push({ line, date: d, type, ticker: t, shares, price, fees: Math.abs(num(r[c.fees], true) ?? 0), note: 'Schwab-Export' })
+    } else if (SCHWAB_SPLIT.test(action) && t && num(r[c.qty], true)) {
+      res.splits!.push({ line, date: d, ticker: t, shares: num(r[c.qty], true)! })
     } else if (SCHWAB_TAX.test(action) && t && amount != null) {
-      taxes.push({ key: t + d, t, d, amt: Math.abs(amount), line })
+      // Abzug negativ, Rückerstattung (z. B. «NRA Tax Adj» mit positivem Betrag) positiv
+      taxes.push({ key: t + d, t, d, amt: -amount, line })
     } else if (SCHWAB_DIV.test(action) && t && amount != null && amount > 0) {
       const key = t + d
       const prev = divs.get(key)
@@ -301,7 +314,7 @@ function parseSchwab(rows: string[][], headerRow: number): ParseResult {
       const near = [...divs.values()].filter((v) => v.ticker === x.t && Math.abs(+new Date(v.payDate) - +new Date(x.d)) <= 10 * 864e5)
       div = near.sort((a, b) => Math.abs(+new Date(a.payDate) - +new Date(x.d)) - Math.abs(+new Date(b.payDate) - +new Date(x.d)))[0]
     }
-    if (div) div.tax = Math.round(((div.tax ?? 0) + x.amt) * 100) / 100
+    if (div) div.tax = Math.max(0, Math.round(((div.tax ?? 0) + x.amt) * 100) / 100)
     else res.skipped.push({ line: x.line, msg: `Quellensteuer ${x.t} ohne passende Dividende` })
   }
   res.dividends = [...divs.values()].map((v) => ({ ...v, tax: v.tax ?? 0 }))
@@ -364,6 +377,7 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       const shares = num(get(r, 'shares')), price = num(get(r, 'price')), fees = num(get(r, 'fees')) ?? 0
       const b = bucket(get(r, 'bucket'))
       if (!d) return void err(`Datum «${get(r, 'date')}» ungültig`)
+      if (d > todayISO()) return void err(`Datum ${d} liegt in der Zukunft`)
       if (!type) return void err(`Art «${get(r, 'type')}» unbekannt (Kauf oder Verkauf)`)
       if (!t) return void err(get(r, 'ticker') ? `Ticker «${get(r, 'ticker')}» ungültig` : 'Ticker fehlt')
       if (!shares || shares <= 0) return void err('Stück fehlt oder ungültig')
@@ -380,7 +394,9 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       if (!d) return void err(`Zahltag «${get(r, 'payDate')}» ungültig`)
       if (!t) return void err(get(r, 'ticker') ? `Ticker «${get(r, 'ticker')}» ungültig` : 'Ticker fehlt')
       if (!gross || gross <= 0) return void err('Bruttobetrag fehlt oder ungültig')
+      if (d > todayISO()) return void err(`Zahltag ${d} liegt in der Zukunft`)
       if (taxRaw && tax == null) return void err(`Quellensteuer «${taxRaw}» ungültig`)
+      if (tax != null && Math.abs(tax) > gross) return void err('Quellensteuer grösser als der Bruttobetrag (Betrag in USD, kein Prozentsatz)')
       if (exRaw && !ex) return void err(`Ex-Tag «${exRaw}» ungültig`)
       res.dividends.push({ line, payDate: d, exDate: ex, ticker: t, gross, tax: tax == null ? null : Math.abs(tax), note: get(r, 'note') })
     }

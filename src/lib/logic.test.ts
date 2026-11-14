@@ -111,8 +111,8 @@ describe('Import planen', () => {
 describe('Import nach erfasstem Cash-Stand', () => {
   it('ändert den Cash-Stand nur mit Einträgen nach dem Saldo-Datum', () => {
     const db = empty()
-    db.transactions.c = { type: 'korrektur', date: '2026-11-13', cashDelta: 1000, cashStart: true }
-    const p = planImport(db, parseImport('dividenden', 'Zahltag;Ticker;Brutto;Steuer\n2025-03-26;VTI;10;0\n2026-11-20;VTI;5;0'))
+    db.transactions.c = { type: 'korrektur', date: '2026-11-01', cashDelta: 1000, cashStart: true }
+    const p = planImport(db, parseImport('dividenden', 'Zahltag;Ticker;Brutto;Steuer\n2025-03-26;VTI;10;0\n2026-11-10;VTI;5;0'))
     expect(p.cashBefore).toBe(10)
     expect(p.cashDelta).toBe(5)
     expect(applyOps(db, p.ops).meta.settings!.cash).toBe(1005)

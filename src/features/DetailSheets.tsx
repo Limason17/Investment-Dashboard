@@ -170,7 +170,9 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
   const { err, busy, onSubmit } = useSave(async () => {
     const n = parseNum(sh)
     if (n == null || n < 0) throw new Error('Stückzahl prüfen.')
-    await mutate([{ op: 'merge', coll: 'positions', id: ticker!, data: { shares: n, cost: parseNum(cost), bucket, status: status.trim(), note: note.trim(), costDemo: false } }])
+    const c = parseNum(cost)
+    if (cost.trim() && (c == null || c < 0)) throw new Error('Einstand prüfen: Betrag gesamt in USD, leer = unbekannt.')
+    await mutate([{ op: 'merge', coll: 'positions', id: ticker!, data: { shares: n, cost: c, bucket, status: status.trim(), note: note.trim(), costDemo: false } }])
     return `${ticker} gespeichert.`
   }, () => setEdit(false))
 
@@ -287,6 +289,10 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
   const [pot, setPot] = useState(w?.pot ?? '')
 
   const { err, busy, onSubmit } = useSave(async () => {
+    for (const [v, name] of [[limit, 'Grenze'], [cautious, 'Vorsichtige Grenze']] as const) {
+      const n = parseNum(v)
+      if (v.trim() && (n == null || n <= 0)) throw new Error(`${name} muss eine positive Zahl sein.`)
+    }
     await mutate([{ op: 'merge', coll: 'watchlist', id: ticker!, data: { limit: parseNum(limit), limitCautious: parseNum(cautious), condition: cond.trim(), conditionMet: met === 'offen' ? false : met === 'ja' ? true : null, pot: pot.trim() } }])
     return `${ticker} gespeichert.`
   }, () => setEdit(false))
@@ -304,7 +310,7 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
       footer={
         edit ? (
           <>
-            <span className="mr-auto"><ConfirmDelete label="Von der Watchlist entfernen" onConfirm={() => void mutate([{ op: 'delete', coll: 'watchlist', id: ticker! }]).then(() => { toast(`${ticker} von der Watchlist entfernt.`); onClose() })} /></span>
+            <span className="mr-auto"><ConfirmDelete label="Von der Watchlist entfernen" onConfirm={() => void mutate([{ op: 'delete', coll: 'watchlist', id: ticker! }]).then(() => { toast(`${ticker} von der Watchlist entfernt.`); onClose() }).catch((e) => toast('Nicht entfernt: ' + e.message))} /></span>
             <button type="button" className="btn btn-ghost" onClick={() => setEdit(false)}>Abbrechen</button>
             <button type="submit" form={formId} className="btn btn-primary" disabled={busy}>Speichern</button>
           </>
