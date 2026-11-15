@@ -7,9 +7,22 @@ import { r2 } from './format'
 import type { Op } from './store'
 import type { DB, Dividend, Tx } from './types'
 
-const cashOp = (db: DB, delta: number): Op[] => {
+/** Datum des letzten Cash-Stands (Saldo laut Broker) oder null. */
+export const lastBalance = (db: DB) => Object.values(db.transactions).filter((x) => x.type === 'korrektur' && !x.ticker && x.date).map((x) => x.date).sort().at(-1) ?? null
+
+/**
+ * Ändert eine Buchung mit diesem Datum das heutige Cash? Nein, wenn sie am oder vor dem letzten Cash-Stand liegt:
+ * Der damals erfasste Saldo enthält sie schon. Gleiche Regel wie beim Import.
+ */
+export const movesCash = (db: DB, date: string | undefined) => {
+  const bal = lastBalance(db)
+  return !bal || !date || date > bal
+}
+
+/** Cash-Stand nachführen; ohne Datum (z. B. Storno eines Cash-Stands selbst) immer. */
+const cashOp = (db: DB, delta: number, date?: string): Op[] => {
   const s = db.meta.settings
-  if (!delta || s?.cashExcluded) return []
+  if (!delta || s?.cashExcluded || !movesCash(db, date)) return []
   return [{ op: 'merge', coll: 'meta', id: 'settings', data: { cash: r2((Number(s?.cash) || 0) + delta) } }]
 }
 
@@ -28,11 +41,13 @@ export function reverseTx(db: DB, id: string, x: Tx): Op[] {
     if (p) ops.push({ op: 'merge', coll: 'positions', id: x.ticker!, data: { shares: +(p.shares + sh).toFixed(6), cost: p.cost != null && soldCost != null ? r2(p.cost + soldCost) : p.cost } })
     else if (x.ticker) ops.push({ op: 'set', coll: 'positions', id: x.ticker, data: { ticker: x.ticker, name: x.ticker, shares: sh, bucket: defaultCat(), cost: soldCost != null ? r2(soldCost) : null } })
   }
-  return [...ops, ...cashOp(db, -(x.cashDelta || 0))]
+  // Ein Cash-Stand selbst wird immer zurückgenommen; alle anderen Buchungen nur nach dem letzten Cash-Stand.
+  const balance = x.type === 'korrektur' && !x.ticker
+  return [...ops, ...cashOp(db, -(x.cashDelta || 0), balance ? undefined : x.date)]
 }
 
 export function reverseDividend(db: DB, id: string, d: Dividend): Op[] {
-  return [{ op: 'delete', coll: 'dividends', id }, ...(d.status === 'erhalten' ? cashOp(db, -(d.net || 0)) : [])]
+  return [{ op: 'delete', coll: 'dividends', id }, ...(d.status === 'erhalten' ? cashOp(db, -(d.net || 0), d.payDate) : [])]
 }
 
 /** Operationen im Speicher anwenden, wie es der Server tut (für «Bearbeiten» = Storno + neue Buchung in einem Zug). */

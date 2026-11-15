@@ -5,16 +5,17 @@ import { Card, Chip, ConfirmDelete, DemoTag, Empty, Stat, Cur } from '@/componen
 import { divAnnual, dividendsList, projectedDividends, wht } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
 import { addMonths, dfmt, pctPlain, qty, usd, cur, money } from '@/lib/format'
-import { reverseDividend } from '@/lib/reverse'
+import { movesCash, reverseDividend } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
 
 export function Dividends() {
   const { db, c, now } = useDepot()
   const nav = useNav()
+  const cashOff = !!db.meta.settings?.cashExcluded
   const del = (id: string) =>
     mutate(reverseDividend(db, id, db.dividends[id]))
-      .then(() => toast('Dividende entfernt. Cash ist zurückgesetzt.'))
+      .then(() => toast(db.dividends[id]?.status === 'erhalten' && !cashOff && movesCash(db, db.dividends[id].payDate) ? 'Dividende entfernt. Cash ist zurückgesetzt.' : 'Dividende entfernt.'))
       .catch((e) => toast('Nicht entfernt: ' + e.message))
   const a = useMemo(() => divAnnual(db), [db])
   const all = useMemo(() => dividendsList(db).sort((x, y) => ((y.payDate || y.exDate || '') > (x.payDate || x.exDate || '') ? 1 : -1)), [db])

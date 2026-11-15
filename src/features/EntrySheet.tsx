@@ -11,7 +11,7 @@ import { normTicker } from '@/lib/ticker'
 import { dfmt, parseNum, pctPlain, qty, r2, today, uid, sUsdRaw as sUsd, usdRaw as usd } from '@/lib/format'
 import { MIN_DATE, type ImportKind } from '@/lib/bulk'
 import { ImportForm } from './ImportForm'
-import { applyOps, replayOps, reverseTx } from '@/lib/reverse'
+import { applyOps, movesCash, replayOps, reverseTx } from '@/lib/reverse'
 import { mutate, type Op } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DB } from '@/lib/types'
@@ -40,8 +40,9 @@ const CalcBox = ({ children }: { children: ReactNode }) => (
 )
 const cashOf = (db: DB) => Number(db.meta.settings?.cash) || 0
 const cashOff = (db: DB) => !!db.meta.settings?.cashExcluded
-/** Cash-Stand nachführen; entfällt, solange Cash nicht erfasst wird. */
-const cashOp = (db: DB, delta: number): Op | null => (cashOff(db) ? null : { op: 'merge', coll: 'meta', id: 'settings', data: { cash: r2(cashOf(db) + delta) } })
+/** Cash-Stand nachführen; entfällt, solange Cash nicht erfasst wird oder die Buchung im letzten Cash-Stand schon enthalten ist. */
+const balanceNote = 'Das Datum liegt am oder vor deinem letzten Cash-Stand. Der Betrag ist dort schon enthalten, das Cash bleibt gleich.'
+const cashOp = (db: DB, delta: number, date?: string): Op | null => (cashOff(db) || !movesCash(db, date) ? null : { op: 'merge', coll: 'meta', id: 'settings', data: { cash: r2(cashOf(db) + delta) } })
 
 interface FormProps {
   onSaved: (msg: string) => void
@@ -97,6 +98,9 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
   const have = p?.shares || 0
   const avg = p && p.cost != null && have ? p.cost / have : null
   const amt = nSh && nPx ? nSh * nPx : null
+  // Buchung am oder vor dem letzten Cash-Stand: im erfassten Saldo schon enthalten, Cash bleibt.
+  const moves = !cashOff(db) && movesCash(db, date)
+  const inBalance = !cashOff(db) && !moves
   // Titel neu durchrechnen (auch den alten Titel, wenn beim Bearbeiten der Ticker wechselt): spätere Verkäufe stimmen so weiter.
   const replay = (ops: (Op | null | false)[]) => {
     let out = ops.filter((o): o is Op => !!o)
@@ -120,7 +124,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
         p
           ? { op: 'merge', coll: 'positions', id: t, data: { shares: +(p.shares + nSh).toFixed(6), cost: p.cost != null ? r2(p.cost + a + nFee) : null } }
           : { op: 'set', coll: 'positions', id: t, data: { ticker: t, name: db.watchlist[t]?.name || t, shares: nSh, bucket, cost: r2(a + nFee), status: 'Neu gekauft ' + dfmt(date), note: '' } },
-        cashOp(db, cashDelta),
+        cashOp(db, cashDelta, date),
         usedPot ? { op: 'merge', coll: 'pots', id: usedPot, data: { used: r2((db.pots[usedPot].used || 0) + a + nFee) } } : null,
         !quote(db, t) && { op: 'set', coll: 'prices', id: t, data: { close: nPx, prev: null, date, source: 'Kaufpreis' } },
       ]))
@@ -133,7 +137,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
       ...undo,
       { op: 'set', coll: 'transactions', id: fromId ?? uid(), data: { type, date, ticker: t, shares: nSh, price: nPx, fees: nFee, cashDelta: r2(cashDelta), realized: avg != null ? r2(cashDelta - avg * nSh) : null, note, createdAt: old?.createdAt ?? createdAt, by: 'Dashboard' } },
       { op: 'merge', coll: 'positions', id: t, data: { shares: left, cost: avg != null ? r2(avg * left) : null } },
-      cashOp(db, cashDelta),
+      cashOp(db, cashDelta, date),
     ]))
     return `Verkauf ${t} gespeichert.`
   })
@@ -171,12 +175,14 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
           'Titel, Stück und Preis eingeben.'
         ) : type === 'kauf' ? (
           <>
-            Kaufwert <b className="num">{usd(amt)}</b> + Gebühren {usd(nFee)} = <b className="num">{usd(amt + nFee)} USD</b>{cashOff(db) ? '' : ' aus dem Cash'}.
-            <br />Bestand danach: {qty(have + nSh!)} {t}{p ? '' : ' (neue Position)'}.{!cashOff(db) && <> Cash danach: <span className="num">{usd(cashOf(db) - amt - nFee)}</span>.</>}
+            Kaufwert <b className="num">{usd(amt)}</b> + Gebühren {usd(nFee)} = <b className="num">{usd(amt + nFee)} USD</b>{moves ? ' aus dem Cash' : ''}.
+            <br />Bestand danach: {qty(have + nSh!)} {t}{p ? '' : ' (neue Position)'}.{moves && <> Cash danach: <span className="num">{usd(cashOf(db) - amt - nFee)}</span>.</>}
+            {inBalance && <><br />{balanceNote}</>}
           </>
         ) : (
           <>
-            Erlös <b className="num">{usd(amt - nFee)} USD</b>{cashOff(db) ? '' : ' ins Cash'}. Bestand danach: {qty(have - nSh!)} {t}.
+            Erlös <b className="num">{usd(amt - nFee)} USD</b>{moves ? ' ins Cash' : ''}. Bestand danach: {qty(have - nSh!)} {t}.
+            {inBalance && <><br />{balanceNote}</>}
             {avg != null && <><br />Realisiert: <b className={`num font-semibold ${amt - nFee - avg * nSh! >= 0 ? 'text-up' : 'text-down'}`}>{sUsd(amt - nFee - avg * nSh!)}</b> USD gegen Ø-Einstand {usd(avg)}.</>}
             {nSh! > have + 1e-9 && <><br /><span className="font-medium text-down">Mehr als im Bestand.</span></>}
           </>
@@ -214,8 +220,8 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
         op: 'set', coll: 'dividends', id: fromId || uid(),
         data: { ticker: t, exDate: ex || null, payDate: pay || today(), gross: r2(g), tax: r2(tx), net: r2(g - tx), status: 'erhalten', source: 'Eintrag im Dashboard', note, perShare: from?.perShare ?? null, shares: from?.shares ?? db.positions[t]?.shares ?? null },
       },
-      // Schon erhaltene Dividende ändern: nur die Differenz geht ins Cash.
-      cashOp(db, g - tx - (from?.status === 'erhalten' ? from.net || 0 : 0)),
+      // Schon erhaltene Dividende ändern: nur die Differenz geht ins Cash. Zahlungen bis zum letzten Cash-Stand stecken schon im Saldo.
+      cashOp(db, (movesCash(db, pay || today()) ? g - tx : 0) - (from?.status === 'erhalten' && movesCash(db, from.payDate) ? from.net || 0 : 0)),
     ])
     return `Dividende ${t} ${usd(g - tx)} USD gespeichert.`
   })
@@ -231,7 +237,7 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
       </div>
       <Field label="Notiz">{(id) => <input id={id} className="input" value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
       <CalcBox>
-        {g == null || tx == null ? 'Bruttobetrag aus der Buchung des Brokers eingeben.' : <>Netto <b className="num">{usd(g - tx)} USD</b>{cashOff(db) ? ' wird als erhalten gebucht.' : ' wird dem Cash gutgeschrieben.'}</>}
+        {g == null || tx == null ? 'Bruttobetrag aus der Buchung des Brokers eingeben.' : <>Netto <b className="num">{usd(g - tx)} USD</b>{cashOff(db) || !movesCash(db, pay || today()) ? ' wird als erhalten gebucht.' : ' wird dem Cash gutgeschrieben.'}{!cashOff(db) && !movesCash(db, pay || today()) && <><br />{balanceNote}</>}</>}
       </CalcBox>
       <ErrorLine err={err} />
     </form>
@@ -280,7 +286,7 @@ function CashForm(fp: FormProps) {
       </div>
       <Field label="Notiz">{(id) => <input id={id} className="input" value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
       <CalcBox>
-        {off && dir !== 'korrektur' ? <>Cash ist derzeit nicht erfasst. Mit «Cash-Stand korrigieren» trägst du den Saldo laut Broker ein, danach zählt Cash mit.</> : after == null ? <>{off ? 'Cash ist derzeit nicht erfasst.' : <>Aktuelles Cash: <b className="num">{usd(cash)} USD</b>.</>}</> : <>Cash danach <b className="num">{usd(after)} USD</b>{dir === 'korrektur' ? ' (die Schätzung wird damit ersetzt)' : ''}.</>}
+        {off && dir !== 'korrektur' ? <>Cash ist derzeit nicht erfasst. Mit «Cash-Stand korrigieren» trägst du den Saldo laut Broker ein, danach zählt Cash mit.</> : after == null ? <>{off ? 'Cash ist derzeit nicht erfasst.' : <>Aktuelles Cash: <b className="num">{usd(cash)} USD</b>.</>}</> : <>Cash danach <b className="num">{usd(after)} USD</b>{dir === 'korrektur' && !off ? ' (ersetzt den bisherigen Stand)' : ''}.</>}
       </CalcBox>
       <ErrorLine err={err} />
     </form>

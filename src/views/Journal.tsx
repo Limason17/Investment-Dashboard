@@ -45,15 +45,15 @@ export function Journal() {
   const shown = all ? matching : matching.slice(0, RECENT)
   const log = useMemo(() => withIds(db.log).sort((a, b) => ((b.date || '') > (a.date || '') ? 1 : -1)), [db])
 
-  // Storno: Bestand, Einstand, Topf und Cash werden mit zurückgesetzt.
+  // Storno: Bestand, Einstand, Topf und Cash werden mit zurückgesetzt (Cash nur nach dem letzten Cash-Stand).
   const del = (id: string) =>
     Promise.resolve()
       .then(() => {
         const x = db.transactions[id]
         const ops = reverseTx(db, id, x)
-        return mutate(x.ticker && (x.type === 'kauf' || x.type === 'verkauf') ? replayOps(db, ops, x.ticker) : ops)
+        return mutate(x.ticker && (x.type === 'kauf' || x.type === 'verkauf') ? replayOps(db, ops, x.ticker) : ops).then(() => ops.some((o) => o.coll === 'meta'))
       })
-      .then(() => toast('Buchung storniert. Bestand und Cash sind zurückgesetzt.'))
+      .then((cash) => toast(cash ? 'Buchung storniert. Bestand und Cash sind zurückgesetzt.' : db.meta.settings?.cashExcluded ? 'Buchung storniert.' : 'Buchung storniert. Das Cash bleibt, es steckt im letzten Cash-Stand.'))
       .catch((e) => toast('Nicht storniert: ' + e.message))
   const delNote = (id: string) =>
     mutate([{ op: 'delete', coll: 'log', id }])

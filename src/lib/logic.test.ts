@@ -247,6 +247,21 @@ describe('Storno', () => {
     expect(back.dividends.d).toBeUndefined()
     expect(back.meta.settings!.cash).toBe(991.5)
   })
+  it('lässt das Cash, wenn die Buchung im letzten Cash-Stand schon enthalten ist', () => {
+    const db = empty()
+    const after = applyOps(db, planImport(db, parseImport('trades', 'Datum;Art;Ticker;Stück;Preis\n2025-01-02;Kauf;VTI;10;100\n2025-03-02;Kauf;VTI;5;120')).ops)
+    after.transactions.bal = { type: 'korrektur', date: '2025-02-15', cashDelta: 0 } as Tx
+    after.meta.settings = { ...after.meta.settings, cash: 500 }
+    const [early] = Object.entries(after.transactions).find(([, t]) => t.date === '2025-01-02')! as [string, Tx]
+    const [late, lateTx] = Object.entries(after.transactions).find(([, t]) => t.date === '2025-03-02')! as [string, Tx]
+    // Kauf vor dem Cash-Stand: Bestand zurück, Cash bleibt 500.
+    expect(applyOps(after, reverseTx(after, early, after.transactions[early])).meta.settings!.cash).toBe(500)
+    // Kauf nach dem Cash-Stand: Cash bekommt den Kaufbetrag zurück.
+    expect(applyOps(after, reverseTx(after, late, lateTx)).meta.settings!.cash).toBe(1100)
+    // Ein Cash-Stand selbst wird immer zurückgenommen.
+    after.transactions.bal.cashDelta = 200
+    expect(applyOps(after, reverseTx(after, 'bal', after.transactions.bal)).meta.settings!.cash).toBe(300)
+  })
 })
 
 describe('Wertverlauf', () => {

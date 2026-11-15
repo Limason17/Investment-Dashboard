@@ -6,6 +6,7 @@
 import { defaultCat } from './buckets'
 import type { ParseResult } from './bulk'
 import { quote, wht } from './calc'
+import { lastBalance } from './reverse'
 import { qty, r2, uid, usdRaw as usd } from './format'
 import type { Op } from './store'
 import type { Coll } from './cloud'
@@ -35,7 +36,6 @@ export interface Plan {
 
 /** Buchung eines Wertpapiers (Kauf, Verkauf, Split); Ein-/Auszahlungen, Gebühren und Cash-Stände sind Cash-Buchungen. */
 export const isTradeTx = (x: Tx) => x.type === 'kauf' || x.type === 'verkauf' || (x.type === 'korrektur' && !!x.ticker)
-const lastBalance = (db: DB) => Object.values(db.transactions).filter((x) => x.type === 'korrektur' && !x.ticker && x.date).map((x) => x.date).sort().at(-1) ?? null
 
 /**
  * Bereiche vor einem Import leeren («Bereiche ersetzen»). Cash-Buchungen und der Cash-Stand bleiben;
