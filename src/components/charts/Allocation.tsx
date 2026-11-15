@@ -53,7 +53,9 @@ export function Allocation({ c }: { c: Calc }) {
       const a0 = acc.length ? acc[acc.length - 1].a1 : 0
       return [...acc, { x, a0, a1: a0 + share(x) }]
     }, [])
-  const segs = cumulate(rows.filter((r) => r.w > 0.0005), (r) => r.w).map(({ x, a0, a1 }) => ({ r: x, a0, a1 }))
+  // Bei negativem Cash ergeben die übrigen Anteile mehr als 100 %: den Ring dann auf die positiven Anteile verteilen.
+  const posSum = rows.reduce((s, r) => s + Math.max(r.w, 0), 0)
+  const segs = cumulate(rows.filter((r) => r.w > 0.0005), (r) => r.w / Math.max(posSum, 1)).map(({ x, a0, a1 }) => ({ r: x, a0, a1 }))
   const tsegs = anyTarget ? cumulate(rows.filter((r) => (r.tgt ?? 0) > 0), (r) => r.tgt! / (tgtSum || 1)).map(({ x, a0, a1 }) => ({ r: x, a0, a1 })) : []
   const focus = rows.find((r) => r.b.id === hot)
   // Gemeinsame Skala der Balken, damit sie untereinander vergleichbar sind
@@ -111,7 +113,7 @@ export function Allocation({ c }: { c: Calc }) {
       {/* Liste */}
       <div className="min-w-0">
         {/* Je Kategorie: Name und Betrag, rechts Ist-Anteil; darunter Balken mit Zielstrich und die Abweichung in Worten */}
-        <ul className="grid gap-0.5">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-0.5">
           {rows.map((r) => {
             const pp = r.diff != null ? Math.abs(r.diff * 100).toFixed(1).replace('.0', '') : null
             const note = r.tgt == null ? 'kein Ziel'

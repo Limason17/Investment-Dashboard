@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { date, detectKind, num, parseImport, template, templateFile } from './bulk'
-import { planImport } from './bulk-plan'
+import { clearAreas, planImport } from './bulk-plan'
 import { projectedDividends } from './calc'
 import { cur, setDisplayCurrency, sUsd, usd, usdRaw } from './format'
 import { closeUpdates } from './closes'
 import { portfolioSeries, timeline } from './history'
 import { aggregate, newPortfolioId, portfolioList } from './portfolios'
-import { applyOps, reverseDividend, reverseTx } from './reverse'
+import { applyOps, replayOps, reverseDividend, reverseTx } from './reverse'
 import type { DB, Tx } from './types'
 
 const empty = (): DB => ({ positions: {}, prices: {}, watchlist: {}, pots: {}, events: {}, log: {}, transactions: {}, dividends: {}, snapshots: {}, meta: { settings: { cash: 1000, cashExcluded: false, withholding: 0.15 } }, market: {} })
@@ -119,6 +119,81 @@ describe('Import nach erfasstem Cash-Stand', () => {
   })
 })
 
+describe('Bereiche ersetzen', () => {
+  const history = 'Datum;Art;Ticker;Stück;Preis;Gebühren\n2025-01-02;Kauf;VTI;10;100;0\n2025-02-02;Kauf;VTI;10;120;2\n2025-03-02;Verkauf;VTI;5;150;1'
+  const divs = 'Zahltag;Ticker;Brutto;Steuer\n2025-03-26;VTI;10;1.5'
+  it('zählt einen erneut importierten Verlauf nicht doppelt ins Cash', () => {
+    const db = empty()
+    db.transactions.e = { type: 'einzahlung', date: '2024-12-30', cashDelta: 500 }
+    const once = applyOps(db, planImport(db, parseImport('trades', history)).ops)
+    const withDiv = applyOps(once, planImport(once, parseImport('dividenden', divs)).ops)
+    const cash = withDiv.meta.settings!.cash
+    const t = clearAreas(withDiv, ['positions', 'transactions', 'prices', 'snapshots'])
+    const again = applyOps(withDiv, [...t.ops, ...planImport(t.base, parseImport('trades', history)).ops])
+    expect(again.meta.settings!.cash).toBe(cash)
+    expect(again.positions.VTI).toMatchObject({ shares: 15, cost: 1651.5 })
+    // Einzahlung bleibt, Käufe und Verkäufe sind nicht doppelt
+    expect(again.transactions.e).toBeDefined()
+    expect(Object.values(again.transactions).filter((x) => x.type === 'kauf')).toHaveLength(2)
+    const d = clearAreas(again, ['dividends'])
+    const again2 = applyOps(again, [...d.ops, ...planImport(d.base, parseImport('dividenden', divs)).ops])
+    expect(again2.meta.settings!.cash).toBe(cash)
+  })
+  it('ändert das Cash nur um die Differenz, wenn der neue Verlauf abweicht', () => {
+    const db = empty()
+    const once = applyOps(db, planImport(db, parseImport('trades', history)).ops)
+    const cash = once.meta.settings!.cash
+    const t = clearAreas(once, ['positions', 'transactions', 'prices', 'snapshots'])
+    const fixed = history.replace('2025-02-02;Kauf;VTI;10;120;2', '2025-02-02;Kauf;VTI;10;110;2')
+    const after = applyOps(once, [...t.ops, ...planImport(t.base, parseImport('trades', fixed)).ops])
+    expect(after.meta.settings!.cash).toBe(cash + 100)
+  })
+  it('lässt Einträge vor dem letzten Cash-Stand aus dem Cash heraus', () => {
+    const db = empty()
+    const once = applyOps(db, planImport(db, parseImport('trades', history)).ops)
+    once.transactions.s = { type: 'korrektur', date: '2025-06-01', cashDelta: 0 }
+    once.meta.settings!.cash = 3000
+    const t = clearAreas(once, ['positions', 'transactions', 'prices', 'snapshots'])
+    expect(t.ops.some((o) => o.coll === 'meta')).toBe(false)
+    const after = applyOps(once, [...t.ops, ...planImport(t.base, parseImport('trades', history)).ops])
+    expect(after.meta.settings!.cash).toBe(3000)
+    expect(after.transactions.s).toBeDefined()
+  })
+})
+
+describe('Ältere Buchung ändern oder löschen', () => {
+  const base = () => {
+    const db = empty()
+    db.positions.KO = { ticker: 'KO', name: 'KO', shares: 10, bucket: 'aktien', cost: 2000 }
+    db.transactions.a = { type: 'kauf', date: '2026-02-02', ticker: 'KO', shares: 10, price: 100, fees: 0, cashDelta: -1000 }
+    db.transactions.b = { type: 'kauf', date: '2026-03-02', ticker: 'KO', shares: 10, price: 200, fees: 0, cashDelta: -2000 }
+    db.transactions.s = { type: 'verkauf', date: '2026-04-01', ticker: 'KO', shares: 10, price: 250, fees: 0, cashDelta: 2500, realized: 1000 }
+    db.positions.KO.cost = 1500
+    return db
+  }
+  it('rechnet Einstand und späteren Verkauf neu, wenn ein früher Kauf geändert wird', () => {
+    const db = base()
+    const ops = [...reverseTx(db, 'a', db.transactions.a), { op: 'set', coll: 'transactions', id: 'a', data: { ...db.transactions.a, price: 110, cashDelta: -1100 } } as const]
+    const after = applyOps(db, replayOps(db, ops, 'KO'))
+    expect(after.positions.KO).toMatchObject({ shares: 10, cost: 1550 })
+    expect(after.transactions.s.realized).toBe(950)
+  })
+  it('verhindert das Löschen eines Kaufs, dessen Stück schon verkauft sind', () => {
+    const db = base()
+    db.transactions.s.shares = 15
+    db.transactions.s.cashDelta = 3750
+    db.positions.KO.shares = 5
+    db.positions.KO.cost = 750
+    expect(() => replayOps(db, reverseTx(db, 'b', db.transactions.b), 'KO')).toThrow(/fehlen danach Stück/)
+  })
+  it('lässt Titel ohne vollständige Buchungen bei der einfachen Rechnung', () => {
+    const db = base()
+    db.positions.KO.shares = 30 // 20 Stück ohne Kaufdatum importiert
+    const ops = reverseTx(db, 'a', db.transactions.a)
+    expect(replayOps(db, ops, 'KO')).toEqual(ops)
+  })
+})
+
 describe('Dividenden-Schätzung', () => {
   it('schätzt die nächsten Monate aus Monaten und letztem Betrag, ohne erfasste doppelt zu zählen', () => {
     const db = empty()
@@ -218,6 +293,15 @@ describe('Wertverlauf gegen echte Zahlen', () => {
     expect(ps.value).toEqual([1500, 1600, 1700]) // Gesamtwert mit Cash, wie oben angezeigt
     expect(ps.invested).toEqual([1500, 1500, 1500])
     expect(ps.gain).toBeCloseTo(200) // nur der Kursgewinn, nicht das Cash
+  })
+
+  it('nur Cash, keine Titel: Verlauf beginnt mit dem ersten Cash-Eintrag', () => {
+    const db = empty()
+    db.meta.settings = { cash: 5000, cashExcluded: false }
+    db.transactions.c = { type: 'korrektur', date: days[1], cashDelta: 5000, cashStart: true }
+    const ps = portfolioSeries(db, timeline(db), chart([100, 110, 120]))!
+    expect(ps.value).toEqual([5000, 5000])
+    expect(ps.gain).toBeCloseTo(0)
   })
 
   it('Verkauf mit Cash: Erlös bleibt im Depot, kein Zu- oder Abfluss', () => {

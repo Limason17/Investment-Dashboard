@@ -47,3 +47,45 @@ export function applyOps(db: DB, ops: Op[]): DB {
   }
   return out as unknown as DB
 }
+
+/** Stückzahl, die die Buchungen eines Titels ergeben (Käufe, Verkäufe, Splits). */
+const bookedShares = (db: DB, ticker: string) =>
+  Object.values(db.transactions).reduce((n, x) => (x.ticker !== ticker ? n : x.type === 'kauf' ? n + (x.shares ?? 0) : x.type === 'verkauf' ? n - (x.shares ?? 0) : x.type === 'korrektur' ? n + (x.shares ?? 0) : n), 0)
+
+/**
+ * Nach dem Erfassen, Ändern oder Löschen einer Buchung den Titel neu durchrechnen (Durchschnittskosten):
+ * Bestand, Einstand und der realisierte Gewinn späterer Verkäufe. Gilt nur, wenn die Buchungen den Bestand
+ * vorher vollständig erklärten; sonst (z. B. Bestand ohne Kaufdatum importiert) bleibt es bei der einfachen Rechnung.
+ * Wirft einen Fehler, wenn danach für einen Verkauf Stück fehlen.
+ */
+export function replayOps(before: DB, ops: Op[], ticker: string): Op[] {
+  const p0 = before.positions[ticker]
+  const explained = (p0 ? p0.cost != null && Math.abs(bookedShares(before, ticker) - (p0.shares || 0)) < 1e-6 : bookedShares(before, ticker) === 0)
+  if (!explained) return ops
+  const after = applyOps(before, ops)
+  const list = Object.entries(after.transactions)
+    .filter(([, x]) => x.ticker === ticker && (x.type === 'kauf' || x.type === 'verkauf' || x.type === 'korrektur'))
+    .sort(([, a], [, b]) => a.date.localeCompare(b.date) || (a.type === 'korrektur' ? -1 : b.type === 'korrektur' ? 1 : 0) || (a.type === 'kauf' ? -1 : b.type === 'kauf' ? 1 : 0) || (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
+  let shares = 0, cost = 0
+  const extra: Op[] = []
+  for (const [id, x] of list) {
+    const sh = x.shares ?? 0
+    if (x.type === 'kauf') {
+      shares += sh
+      cost += sh * (x.price ?? 0) + (x.fees ?? 0)
+    } else if (x.type === 'korrektur') {
+      shares += sh
+    } else {
+      if (shares < sh - 1e-9) throw new Error(`Das geht nicht: Für den Verkauf von ${ticker} am ${x.date.split('-').reverse().join('.')} fehlen danach Stück. Ändere oder lösche zuerst diesen Verkauf.`)
+      const avg = shares ? cost / shares : 0
+      const realized = r2(x.cashDelta - avg * sh)
+      if (x.realized !== realized) extra.push({ op: 'merge', coll: 'transactions', id, data: { realized } })
+      cost -= avg * sh
+      shares -= sh
+    }
+  }
+  shares = +shares.toFixed(6)
+  const p = after.positions[ticker]
+  if (p) extra.push({ op: 'merge', coll: 'positions', id: ticker, data: { shares, cost: shares > 0 ? r2(cost) : 0 } })
+  return [...ops, ...extra]
+}

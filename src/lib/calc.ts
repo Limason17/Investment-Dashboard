@@ -118,7 +118,8 @@ export function compute(db: DB): Calc {
       w: 0,
     })
   }
-  const valuationComplete = rows.length > 0 && rows.every((r) => r.px != null)
+  // Ohne Titel ist die Bewertung vollständig: Der Gesamtwert ist dann das Cash.
+  const valuationComplete = rows.every((r) => r.px != null)
   const dailyComplete = valuationComplete && rows.every((r) => r.q?.prev != null)
   const cash = settings.cashExcluded ? 0 : Number(settings.cash) || 0
   const total = sec + cash

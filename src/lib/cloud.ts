@@ -81,7 +81,7 @@ export function authMessage(e: unknown): string {
   const map: Record<string, string> = {
     'auth/invalid-email': 'Die E-Mail-Adresse ist ungültig.',
     'auth/missing-password': 'Bitte ein Passwort eingeben.',
-    'auth/weak-password': 'Das Passwort braucht mindestens 8 Zeichen.',
+    'auth/weak-password': 'Das Passwort braucht mindestens 8 Zeichen, ohne Leerzeichen am Anfang und Ende.',
     'auth/email-already-in-use': 'Für diese E-Mail-Adresse gibt es schon ein Konto. Melde dich an.',
     'auth/invalid-credential': 'E-Mail oder Passwort stimmt nicht.',
     'auth/wrong-password': 'E-Mail oder Passwort stimmt nicht.',
@@ -112,7 +112,8 @@ async function withReturn(send: (s: { url: string } | undefined) => Promise<void
 }
 
 export async function signUp(email: string, password: string, name: string) {
-  if (password.length < PASSWORD_MIN) throw Object.assign(new Error(), { code: 'auth/weak-password' })
+  // Leerzeichen am Anfang und Ende zählen nicht: «        » wäre sonst ein gültiges Passwort.
+  if (password.trim().length < PASSWORD_MIN) throw Object.assign(new Error(), { code: 'auth/weak-password' })
   const x = await load()
   const cred = await x.a.createUserWithEmailAndPassword(x.auth, email.trim(), password)
   if (name.trim()) await x.a.updateProfile(cred.user, { displayName: name.trim().slice(0, 40) })

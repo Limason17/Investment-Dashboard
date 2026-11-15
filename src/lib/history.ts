@@ -178,7 +178,8 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   const cashTracked = !settings.cashExcluded
   const cashNow = cashTracked ? Number(settings.cash) || 0 : 0
   const firstCash = cashTracked ? (tl.cashStart ?? tl.cashMoves[0]?.date) : undefined
-  const first = tl.first && firstCash && firstCash < tl.first ? firstCash : tl.first
+  // Nur Cash, keine Titel: Der Verlauf beginnt mit dem ersten Cash-Eintrag, nicht am Anfang der Kursdaten.
+  const first = !tl.tickers.length ? (firstCash ?? null) : tl.first && firstCash && firstCash < tl.first ? firstCash : tl.first
   const s0 = first ? chart.d.findIndex((x) => x >= first) : 0
   if (s0 < 0) return null
   const start = chart.d[s0]

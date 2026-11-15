@@ -307,6 +307,8 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
       const n = parseNum(v)
       if (v.trim() && (n == null || n <= 0)) throw new Error(`${name} muss eine positive Zahl sein.`)
     }
+    const l = parseNum(limit), lc = parseNum(cautious)
+    if (l != null && lc != null && lc > l) throw new Error('Die vorsichtige Grenze liegt unter der Grenze oder ist gleich hoch.')
     await mutate([{ op: 'merge', coll: 'watchlist', id: ticker!, data: { limit: parseNum(limit), limitCautious: parseNum(cautious), condition: cond.trim(), conditionMet: met === 'offen' ? false : met === 'ja' ? true : null, pot: pot.trim() } }])
     return `${ticker} gespeichert.`
   }, () => setEdit(false))

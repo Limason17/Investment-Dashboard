@@ -6,7 +6,7 @@ import { withIds, yearStats } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
 import { addMonths, dfmt, pct, qty, sUsd, usd, weekday, cur, cur0, money } from '@/lib/format'
 import { TX_LABEL } from '@/lib/labels'
-import { reverseTx } from '@/lib/reverse'
+import { replayOps, reverseTx } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { Tx } from '@/lib/types'
@@ -47,7 +47,12 @@ export function Journal() {
 
   // Storno: Bestand, Einstand, Topf und Cash werden mit zurückgesetzt.
   const del = (id: string) =>
-    mutate(reverseTx(db, id, db.transactions[id]))
+    Promise.resolve()
+      .then(() => {
+        const x = db.transactions[id]
+        const ops = reverseTx(db, id, x)
+        return mutate(x.ticker && (x.type === 'kauf' || x.type === 'verkauf') ? replayOps(db, ops, x.ticker) : ops)
+      })
       .then(() => toast('Buchung storniert. Bestand und Cash sind zurückgesetzt.'))
       .catch((e) => toast('Nicht storniert: ' + e.message))
   const delNote = (id: string) =>
