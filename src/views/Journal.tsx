@@ -142,7 +142,7 @@ export function Journal() {
           <div className="hidden overflow-x-auto md:block">
             <table className="tbl min-w-[720px]">
               <thead>
-                <tr><th>Datum</th><th>Art</th><th>Titel</th><th className="r">Stück</th><th className="r">Preis {cur()}</th><th className="r">Betrag {cur()}</th><th>Notiz</th><th /></tr>
+                <tr><th>Datum</th><th>Art</th><th>Titel</th><th className="r">Stück</th><th className="r">Preis {cur()}</th><th className="r">Betrag {cur()}</th><th>Notiz</th><th><span className="sr-only">Aktion</span></th></tr>
               </thead>
               <tbody>
                 {shown.map((x) => (

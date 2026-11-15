@@ -6,7 +6,7 @@ import { initializeApp, deleteApp } from 'firebase/app'
 import { connectFirestoreEmulator, deleteDoc, doc, getDoc, getFirestore, updateDoc } from 'firebase/firestore/lite'
 import { connectAuthEmulator, getAuth, signInWithEmailAndPassword } from 'firebase/auth'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { checkVerified, cloudBatch, cloudLoad, cloudReplace, getAccount, initCloud, signUp } from '../src/lib/cloud'
+import { checkVerified, cloudBatch, cloudLoad, ConflictError, cloudReplace, getAccount, initCloud, signUp } from '../src/lib/cloud'
 import type { DB } from '../src/lib/types'
 
 const EMAIL = `cloud-${Date.now()}@example.test`, PW = 'Testpass-123'
@@ -48,13 +48,30 @@ describe('Speichern wie die App', () => {
     const fresh = await cloudLoad()
     expect(Object.keys(fresh.positions!).sort()).toEqual(['BRK.B', 'KO', 'MSFT', 'VTI', 'a/b c'])
   })
-  it('Sammlung auf dem anderen Gerät gelöscht: Speichern klappt trotzdem', async () => {
+  it('Sammlung auf dem anderen Gerät gelöscht: Hinweis statt Wiederbeleben, nach dem Neuladen klappt Speichern', async () => {
     const db = { ...empty(), ...(await cloudLoad()) }
     await deleteDoc(doc(other, 'depots', uid, 'data', 'positions'))
-    await cloudBatch(db, [{ op: 'merge', coll: 'positions', id: 'KO', data: { shares: 4 } }])
+    await expect(cloudBatch(db, [{ op: 'merge', coll: 'positions', id: 'KO', data: { shares: 4 } }])).rejects.toBeInstanceOf(ConflictError)
+    const fresh = { ...empty(), ...(await cloudLoad()) }
+    await cloudBatch(fresh, [{ op: 'set', coll: 'positions', id: 'KO', data: { ticker: 'KO', shares: 4 } }])
     const snap = await getDoc(doc(other, 'depots', uid, 'data', 'positions'))
     expect(snap.exists()).toBe(true)
     expect(snap.data()!.KO).toMatchObject({ shares: 4 })
+  })
+  it('anderes Gerät hat den Cash-Stand geändert: nichts wird überschrieben', async () => {
+    const db0 = { ...empty(), ...(await cloudLoad()) }
+    await cloudBatch(db0, [{ op: 'merge', coll: 'meta', id: 'settings', data: { cash: 1000 } }])
+    const stale = { ...empty(), ...(await cloudLoad()) }
+    // Gerät B bucht: Cash 1000 → 900
+    await updateDoc(doc(other, 'depots', uid, 'data', 'meta'), { settings: { ...stale.meta.settings, cash: 900 } })
+    // Dieses Gerät rechnet noch mit 1000 und will 950 schreiben
+    await expect(cloudBatch(stale, [{ op: 'merge', coll: 'meta', id: 'settings', data: { cash: 950 } }])).rejects.toBeInstanceOf(ConflictError)
+    const fresh = { ...empty(), ...(await cloudLoad()) }
+    expect(fresh.meta.settings!.cash).toBe(900)
+    // Andere Einträge derselben Sammlung stören nicht
+    await updateDoc(doc(other, 'depots', uid, 'data', 'meta'), { other: { x: 1 } })
+    await cloudBatch(fresh, [{ op: 'merge', coll: 'meta', id: 'settings', data: { cash: 850 } }])
+    expect((await cloudLoad()).meta!.settings!.cash).toBe(850)
   })
   it('«clear» leert eine Sammlung, folgende Einträge bauen darauf auf', async () => {
     const db = { ...empty(), ...(await cloudLoad()) }

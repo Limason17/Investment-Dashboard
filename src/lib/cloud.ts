@@ -181,6 +181,25 @@ const existingOf = (pid: string) => {
   return e
 }
 
+/**
+ * Stand der Einträge, wie er zuletzt gelesen oder geschrieben wurde, je Portfolio und Sammlung.
+ * Vor dem Schreiben wird verglichen: Hat ein anderes Gerät einen betroffenen Eintrag inzwischen geändert
+ * (z. B. den Cash-Stand), wird nicht überschrieben, sondern neu geladen.
+ */
+const rawBy = new Map<string, Record<string, Record<string, unknown>>>()
+const rawOf = (pid: string) => {
+  let r = rawBy.get(pid)
+  if (!r) rawBy.set(pid, (r = {}))
+  return r
+}
+/** JSON mit sortierten Schlüsseln: Firestore liefert Felder nicht in der geschriebenen Reihenfolge zurück. */
+const stable = (v: unknown) => JSON.stringify(v ?? null, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, (x as Record<string, unknown>)[k]])) : x))
+export class ConflictError extends Error {
+  constructor() {
+    super('Auf einem anderen Gerät wurde inzwischen etwas geändert. Die Daten sind neu geladen: Prüfe den Eintrag und speichere nochmals.')
+  }
+}
+
 /** Portfolio-Liste des Kontos (Dokument depots/{uid}). */
 export async function cloudPortfolios(): Promise<PortfolioInfo[]> {
   const x = await load()
@@ -198,6 +217,7 @@ export async function cloudDeletePortfolio(pid: string) {
   for (const c of COLLECTIONS) b.delete(x.f.doc(x.db, ...collPath(uidNow(), pid), c))
   await commit(b)
   existingBy.delete(pid)
+  rawBy.delete(pid)
 }
 /** Fehler beim Lesen und Schreiben in verständliche Sätze */
 export function writeError(e: unknown): Error {
@@ -227,12 +247,15 @@ export async function cloudLoad(pid = MAIN): Promise<Partial<DB>> {
   const snap = await x.f.getDocs(x.f.collection(x.db, ...collPath(uid, pid))).catch((e) => { throw writeError(e) })
   const existing = existingOf(pid)
   const out: Record<string, unknown> = {}
+  const raw: Record<string, Record<string, unknown>> = {}
   existing.clear()
   snap.forEach((d) => {
     if (!(COLLECTIONS as readonly string[]).includes(d.id)) return
     existing.add(d.id as Coll)
     out[d.id] = d.data()
+    raw[d.id] = d.data()
   })
+  rawBy.set(pid, raw)
   return out as Partial<DB>
 }
 
@@ -269,19 +292,41 @@ export async function cloudBatch(db: DB, ops: Op[], pid = MAIN): Promise<Partial
     touched.set(o.coll, data)
     fields.set(o.coll, f)
   }
-  const b = x.f.writeBatch(x.db)
-  for (const [c, data] of touched) {
-    const ref = x.f.doc(x.db, ...collPath(uid, pid), c)
-    if (!existingOf(pid).has(c) || full.has(c)) b.set(ref, data)
-    else {
-      // Nur die geänderten Einträge, jeweils ganz ersetzt. «set» mit mergeFields statt «update»: legt das Dokument
-      // neu an, falls ein anderes Gerät die Sammlung inzwischen gelöscht hat (update schlüge dann fehl).
-      const f = fields.get(c)!
-      if (f.size) b.set(ref, Object.fromEntries(f), { mergeFields: [...f.keys()].map((id) => new x.f.FieldPath(id)) })
+  const known = rawOf(pid)
+  const ref = (c: Coll) => x.f.doc(x.db, ...collPath(uid, pid), c)
+  // In einer Transaktion: zuerst prüfen, ob die betroffenen Einträge noch so sind wie zuletzt gelesen, dann schreiben.
+  await x.f.runTransaction(x.db, async (t) => {
+    for (const c of touched.keys()) {
+      if (full.has(c)) continue
+      const snap = await t.get(ref(c))
+      if (!existingOf(pid).has(c)) {
+        if (snap.exists()) throw new ConflictError()
+        continue
+      }
+      const server = (snap.exists() ? snap.data() : {}) as Record<string, unknown>
+      for (const id of fields.get(c)!.keys()) if (stable(server[id]) !== stable(known[c]?.[id])) throw new ConflictError()
     }
+    for (const [c, data] of touched) {
+      if (!existingOf(pid).has(c) || full.has(c)) t.set(ref(c), data)
+      else {
+        // Nur die geänderten Einträge, jeweils ganz ersetzt. «set» mit mergeFields statt «update»: legt das Dokument
+        // neu an, falls ein anderes Gerät die Sammlung inzwischen gelöscht hat (update schlüge dann fehl).
+        const f = fields.get(c)!
+        if (f.size) t.set(ref(c), Object.fromEntries(f), { mergeFields: [...f.keys()].map((id) => new x.f.FieldPath(id)) })
+      }
+    }
+  }).catch((e) => { throw e instanceof ConflictError ? e : writeError(e) })
+  for (const [c, data] of touched) {
+    if (!existingOf(pid).has(c) || full.has(c)) known[c] = clean(data) as Record<string, unknown>
+    else {
+      const k = (known[c] ??= {})
+      for (const id of fields.get(c)!.keys()) {
+        if (id in data) k[id] = clean(data[id])
+        else delete k[id]
+      }
+    }
+    existingOf(pid).add(c)
   }
-  await commit(b)
-  for (const c of touched.keys()) existingOf(pid).add(c)
   return Object.fromEntries(touched) as Partial<DB>
 }
 
@@ -296,9 +341,11 @@ export async function cloudReplace(all: Partial<DB>, pid = MAIN) {
     if (v && typeof v === 'object' && Object.keys(v).length) {
       b.set(ref, clean(v))
       existingOf(pid).add(c)
+      rawOf(pid)[c] = clean(v) as Record<string, unknown>
     } else {
       b.delete(ref)
       existingOf(pid).delete(c)
+      delete rawOf(pid)[c]
     }
   }
   await commit(b)
