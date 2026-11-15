@@ -104,7 +104,7 @@ export function Dividends() {
           <div className="hidden overflow-x-auto md:block">
             <table className="tbl">
               <thead>
-                <tr><th>Titel</th>{cols.ex && <th>Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r">je Stück</th>}{cols.shares && <th className="r">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th>Status</th><th /></tr>
+                <tr><th>Titel</th>{cols.ex && <th>Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r">je Stück</th>}{cols.shares && <th className="r">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th>Status</th><th><span className="sr-only">Aktion</span></th></tr>
               </thead>
               <tbody>
                 {all.map((d) => {

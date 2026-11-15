@@ -206,6 +206,9 @@ function parseNumber(raw: string | undefined, thousandsComma: boolean): number |
 }
 
 /** Datum als JJJJ-MM-TT aus «2026-06-23», «23.06.2026», «23.6.26» oder «06/23/2026» (US, auch «… as of …»). */
+/** Frühestes Buchungsdatum: schützt vor Tippfehlern im Jahr (z. B. 1026 statt 2026). */
+export const MIN_DATE = '1970-01-01'
+
 export function date(raw: string | undefined): string | null {
   if (!raw) return null
   const s = raw.trim().split(/\s+as of\s+/i)[0]
@@ -378,6 +381,7 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       const b = bucket(get(r, 'bucket'))
       if (!d) return void err(`Datum «${get(r, 'date')}» ungültig`)
       if (d > todayISO()) return void err(`Datum ${d} liegt in der Zukunft`)
+      if (d < MIN_DATE) return void err(`Datum ${d} liegt zu weit zurück`)
       if (!type) return void err(`Art «${get(r, 'type')}» unbekannt (Kauf oder Verkauf)`)
       if (!t) return void err(get(r, 'ticker') ? `Ticker «${get(r, 'ticker')}» ungültig` : 'Ticker fehlt')
       if (!shares || shares <= 0) return void err('Stück fehlt oder ungültig')
@@ -395,6 +399,7 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       if (!t) return void err(get(r, 'ticker') ? `Ticker «${get(r, 'ticker')}» ungültig` : 'Ticker fehlt')
       if (!gross || gross <= 0) return void err('Bruttobetrag fehlt oder ungültig')
       if (d > todayISO()) return void err(`Zahltag ${d} liegt in der Zukunft`)
+      if (d < MIN_DATE) return void err(`Zahltag ${d} liegt zu weit zurück`)
       if (taxRaw && tax == null) return void err(`Quellensteuer «${taxRaw}» ungültig`)
       if (tax != null && Math.abs(tax) > gross) return void err('Quellensteuer grösser als der Bruttobetrag (Betrag in USD, kein Prozentsatz)')
       if (exRaw && !ex) return void err(`Ex-Tag «${exRaw}» ungültig`)

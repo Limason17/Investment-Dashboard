@@ -43,8 +43,10 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
     <svg
       width={width}
       height={height}
-      role="img"
+      // Ohne Beschriftung nur Schmuck: Die Zeile daneben nennt die Zahlen schon.
+      role={label ? 'img' : undefined}
       aria-label={label}
+      aria-hidden={label ? undefined : true}
       className={`block overflow-visible ${onHover ? 'cursor-crosshair touch-pan-y' : ''}`}
       onPointerMove={onHover ? (e) => { const r = e.currentTarget.getBoundingClientRect(); onHover(Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left - 1) / (width - 6)) * (n - 1))))) } : undefined}
       onPointerDown={onHover ? (e) => { const r = e.currentTarget.getBoundingClientRect(); onHover(Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left - 1) / (width - 6)) * (n - 1))))) } : undefined}

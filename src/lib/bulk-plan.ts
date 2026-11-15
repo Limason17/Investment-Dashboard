@@ -8,7 +8,8 @@ import type { ParseResult } from './bulk'
 import { quote, wht } from './calc'
 import { qty, r2, uid, usdRaw as usd } from './format'
 import type { Op } from './store'
-import type { DB } from './types'
+import type { Coll } from './cloud'
+import type { DB, Tx } from './types'
 
 export type ItemState = 'neu' | 'ändert' | 'doppelt' | 'fehler'
 export interface PlanItem {
@@ -32,6 +33,48 @@ export interface Plan {
   count: number
 }
 
+/** Buchung eines Wertpapiers (Kauf, Verkauf, Split); Ein-/Auszahlungen, Gebühren und Cash-Stände sind Cash-Buchungen. */
+export const isTradeTx = (x: Tx) => x.type === 'kauf' || x.type === 'verkauf' || (x.type === 'korrektur' && !!x.ticker)
+const lastBalance = (db: DB) => Object.values(db.transactions).filter((x) => x.type === 'korrektur' && !x.ticker && x.date).map((x) => x.date).sort().at(-1) ?? null
+
+/**
+ * Bereiche vor einem Import leeren («Bereiche ersetzen»). Cash-Buchungen und der Cash-Stand bleiben;
+ * die Cash-Wirkung der gelöschten Käufe, Verkäufe und erhaltenen Dividenden nach dem letzten Cash-Stand
+ * wird zurückgenommen. So zählt ein erneut importierter Verlauf das Cash nicht doppelt.
+ */
+export function clearAreas(db: DB, colls: Coll[]): { base: DB; ops: Op[] } {
+  if (!colls.length) return { base: db, ops: [] }
+  const out = { ...db } as DB
+  const ops: Op[] = []
+  const bal = lastBalance(db)
+  const after = (d: string | undefined) => !bal || !d || d > bal
+  let undo = 0
+  for (const c of colls) {
+    if (c === 'transactions') {
+      const keep: DB['transactions'] = {}
+      for (const [id, x] of Object.entries(db.transactions)) {
+        if (!isTradeTx(x)) keep[id] = x
+        else {
+          ops.push({ op: 'delete', coll: 'transactions', id })
+          if (after(x.date)) undo += Number(x.cashDelta) || 0
+        }
+      }
+      out.transactions = keep
+      continue
+    }
+    if (c === 'dividends') for (const d of Object.values(db.dividends)) if (d.status === 'erhalten' && after(d.payDate)) undo += Number(d.net) || 0
+    ops.push({ op: 'clear', coll: c, id: '*' })
+    ;(out as unknown as Record<string, unknown>)[c] = {}
+  }
+  const s = db.meta.settings
+  if (undo && !s?.cashExcluded && !colls.includes('meta')) {
+    const cash = r2((Number(s?.cash) || 0) - undo)
+    out.meta = { ...db.meta, settings: { ...s, cash } }
+    ops.push({ op: 'merge', coll: 'meta', id: 'settings', data: { cash } })
+  }
+  return { base: out, ops }
+}
+
 const same = (a: number | null | undefined, b: number | null | undefined, eps = 0.005) => a != null && b != null && Math.abs(a - b) < eps
 const days = (a: string, b: string) => Math.abs(+new Date(a) - +new Date(b)) / 864e5
 
@@ -41,7 +84,7 @@ export function planImport(db: DB, p: ParseResult): Plan {
   let cashDelta = 0
   let cashBefore = 0
   // Letzter Cash-Stand (Saldo laut Broker): Was davor geschah, ist darin schon enthalten.
-  const balanceDate = Object.values(db.transactions).filter((x) => x.type === 'korrektur' && !x.ticker && x.date).map((x) => x.date).sort().at(-1) ?? null
+  const balanceDate = lastBalance(db)
   const addCash = (date: string, v: number) => {
     if (balanceDate && date <= balanceDate) cashBefore += v
     else cashDelta += v

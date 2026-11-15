@@ -72,12 +72,12 @@ export function Plan() {
                 return (
                   <li key={p.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 py-3.5">
                     <div className="min-w-0">
-                      <button type="button" title="Topf bearbeiten" className="text-left text-[13.5px] font-medium underline-offset-4 hover:underline" onClick={() => setPot({ id: p.id, n: Date.now() })}>{p.label}</button>
+                      <button type="button" title="Topf bearbeiten" className="text-left text-[13.5px] font-medium underline-offset-4 break-words hover:underline" onClick={() => setPot({ id: p.id, n: Date.now() })}>{p.label}</button>
                       {p.note && <div className="mt-0.5 text-[12.5px] text-muted">{p.note}</div>}
                     </div>
                     <div className="text-right leading-tight">
                       <div className="num text-[13.5px] font-medium">{usd(rest)}<Cur /> <span className="font-normal text-muted">frei</span></div>
-                      <div className="num mt-0.5 text-[12px] text-muted">von {money(p.budget)}{u > 0 && ` · ${pctPlain(u, 0)} eingesetzt`}</div>
+                      <div className="num mt-0.5 text-[12px] text-muted">von {money(p.budget)}{u > 0 && <span className="max-[420px]:block"><span className="max-[420px]:hidden"> · </span>{pctPlain(u, 0)} eingesetzt</span>}</div>
                     </div>
                     <Meter className="col-span-2" value={u} height={5} />
                   </li>

@@ -9,9 +9,9 @@ import { CLOUD } from '@/lib/config'
 import { useDepot, type EntryType } from '@/lib/context'
 import { normTicker } from '@/lib/ticker'
 import { dfmt, parseNum, pctPlain, qty, r2, today, uid, sUsdRaw as sUsd, usdRaw as usd } from '@/lib/format'
-import type { ImportKind } from '@/lib/bulk'
+import { MIN_DATE, type ImportKind } from '@/lib/bulk'
 import { ImportForm } from './ImportForm'
-import { applyOps, reverseTx } from '@/lib/reverse'
+import { applyOps, replayOps, reverseTx } from '@/lib/reverse'
 import { mutate, type Op } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DB } from '@/lib/types'
@@ -68,6 +68,7 @@ function useSubmit({ onSaved, setBusy }: FormProps, save: () => Promise<string>)
 function checkDate(d: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error('Datum eingeben.')
   if (d > today()) throw new Error('Das Datum liegt in der Zukunft.')
+  if (d < MIN_DATE) throw new Error('Das Datum liegt zu weit zurück. Stimmt das Jahr?')
 }
 const ErrorLine = ({ err }: { err: string }) => (err ? <div role="alert" className="text-[12.5px] text-down">{err}</div> : null)
 
@@ -96,6 +97,12 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
   const have = p?.shares || 0
   const avg = p && p.cost != null && have ? p.cost / have : null
   const amt = nSh && nPx ? nSh * nPx : null
+  // Titel neu durchrechnen (auch den alten Titel, wenn beim Bearbeiten der Ticker wechselt): spätere Verkäufe stimmen so weiter.
+  const replay = (ops: (Op | null | false)[]) => {
+    let out = ops.filter((o): o is Op => !!o)
+    for (const x of new Set([t, old?.ticker].filter((y): y is string => !!y))) out = replayOps(current, out, x)
+    return out
+  }
 
   const { err, onSubmit } = useSubmit(fp, async () => {
     if (tk.trim() && !t) throw new Error('Ticker ungültig, z. B. MSFT oder BRK-B.')
@@ -107,7 +114,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
     if (type === 'kauf') {
       const cashDelta = -(a + nFee)
       const usedPot = pot && db.pots[pot] ? pot : null
-      await commit([
+      await commit(replay([
         ...undo,
         { op: 'set', coll: 'transactions', id: fromId ?? uid(), data: { type, date, ticker: t, shares: nSh, price: nPx, fees: nFee, cashDelta: r2(cashDelta), pot: usedPot, note, createdAt: old?.createdAt ?? createdAt, by: 'Dashboard' } },
         p
@@ -116,18 +123,18 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
         cashOp(db, cashDelta),
         usedPot ? { op: 'merge', coll: 'pots', id: usedPot, data: { used: r2((db.pots[usedPot].used || 0) + a + nFee) } } : null,
         !quote(db, t) && { op: 'set', coll: 'prices', id: t, data: { close: nPx, prev: null, date, source: 'Kaufpreis' } },
-      ])
+      ]))
       return `Kauf ${t} gespeichert.`
     }
     if (!p || p.shares < nSh - 1e-9) throw new Error('So viele Stück sind nicht im Bestand.')
     const cashDelta = a - nFee
     const left = +(p.shares - nSh).toFixed(6)
-    await commit([
+    await commit(replay([
       ...undo,
       { op: 'set', coll: 'transactions', id: fromId ?? uid(), data: { type, date, ticker: t, shares: nSh, price: nPx, fees: nFee, cashDelta: r2(cashDelta), realized: avg != null ? r2(cashDelta - avg * nSh) : null, note, createdAt: old?.createdAt ?? createdAt, by: 'Dashboard' } },
       { op: 'merge', coll: 'positions', id: t, data: { shares: left, cost: avg != null ? r2(avg * left) : null } },
       cashOp(db, cashDelta),
-    ])
+    ]))
     return `Verkauf ${t} gespeichert.`
   })
 
@@ -187,7 +194,8 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
   const [tk, setTk] = useState(from?.ticker ?? '')
   const [gross, setGross] = useState(from?.gross != null ? from.gross.toFixed(2) : '')
   const [tax, setTax] = useState(from?.tax != null ? from.tax.toFixed(2) : '')
-  const [pay, setPay] = useState(from?.payDate ?? today())
+  // Erwartete Zahlung bestätigen, deren Zahltag noch kommt: heute vorschlagen (früher gutgeschrieben).
+  const [pay, setPay] = useState(from?.status === 'erwartet' && from.payDate > today() ? today() : from?.payDate ?? today())
   const [ex, setEx] = useState(from?.exDate ?? '')
   const [note, setNote] = useState(from?.note ?? '')
   const w = wht(db)

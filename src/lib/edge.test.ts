@@ -209,6 +209,13 @@ describe('Rechnen mit unvollständigen Daten', () => {
     expect(c.dayPct).toBeNull()
     expect(c.total).toBe(1060)
   })
+  it('nur Cash, keine Titel: Gesamtwert ist das Cash', () => {
+    const db = empty()
+    db.meta.settings = { cash: 5000, cashExcluded: false }
+    const c = compute(db)
+    expect(c.valuationComplete).toBe(true)
+    expect(c.total).toBe(5000)
+  })
   it('verkaufte Positionen (0 Stück) zählen nicht', () => {
     const db = empty()
     db.positions.A = { ticker: 'A', name: 'A', shares: 0, bucket: 'aktien', cost: 0 }
@@ -271,6 +278,11 @@ describe('Import: Plausibilität', () => {
     expect(t.errors[0].msg).toMatch(/Zukunft/)
     const d = parseImport('dividenden', 'Zahltag;Ticker;Brutto;Quellensteuer\n2025-06-26;KO;2.70;15\n2099-06-26;KO;2.70;0.4')
     expect(d.errors.map((e) => e.msg)).toEqual([expect.stringMatching(/grösser als der Bruttobetrag/), expect.stringMatching(/Zukunft/)])
+  })
+  it('lehnt Daten vor 1970 ab (Tippfehler im Jahr)', () => {
+    expect(parseImport('trades', 'Datum;Art;Ticker;Stück;Preis\n1026-01-02;Kauf;VTI;1;10').errors[0].msg).toMatch(/zu weit zurück/)
+    expect(parseImport('dividenden', 'Zahltag;Ticker;Brutto\n1900-06-26;KO;2.70').errors[0].msg).toMatch(/zu weit zurück/)
+    expect(parseImport('trades', 'Datum;Art;Ticker;Stück;Preis\n1970-01-02;Kauf;VTI;1;10').errors).toEqual([])
   })
 })
 

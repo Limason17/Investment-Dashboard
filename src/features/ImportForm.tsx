@@ -2,7 +2,7 @@ import { ClipboardCopy, Download, FileUp } from 'lucide-react'
 import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Chip, Segmented, Switch } from '@/components/ui'
 import { COLUMNS, detectKind, EXAMPLES, LIMITS, parseImport, template, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
-import { planImport, type ItemState } from '@/lib/bulk-plan'
+import { clearAreas, isTradeTx, planImport, type ItemState } from '@/lib/bulk-plan'
 import { downloadBackup } from '@/lib/backup'
 import { getPortfolio } from '@/lib/store'
 import type { Coll } from '@/lib/cloud'
@@ -27,7 +27,7 @@ type Part = 'trades' | 'dividends' | 'rest'
 const size = (o: object) => Object.keys(o).length
 /** Bereiche, die vor dem Hochladen geleert werden können. «rest» nur bei «Alles ersetzen». */
 const AREAS: { id: Part; label: string; colls: Coll[]; count: (db: DB) => number }[] = [
-  { id: 'trades', label: 'Positionen und Käufe/Verkäufe', colls: ['positions', 'transactions', 'prices', 'snapshots'], count: (db) => size(db.positions) + size(db.transactions) },
+  { id: 'trades', label: 'Positionen und Käufe/Verkäufe', colls: ['positions', 'transactions', 'prices', 'snapshots'], count: (db) => size(db.positions) + Object.values(db.transactions).filter(isTradeTx).length },
   { id: 'dividends', label: 'Dividenden', colls: ['dividends'], count: (db) => size(db.dividends) },
   { id: 'rest', label: 'Watchlist, Töpfe, Termine, Journal und Einstellungen', colls: ['watchlist', 'pots', 'events', 'log', 'meta', 'market'], count: (db) => size(db.watchlist) + size(db.pots) + size(db.events) + size(db.log) },
 ]
@@ -87,17 +87,19 @@ export function ImportForm({ formId, initial, initialText, initialWay, setBusy, 
   const [confirmed, setConfirmed] = useState(false)
   const hasData = AREAS.some((a) => a.count(db) > 0)
   const cleared = useMemo<Coll[]>(() => (mode === 'add' ? [] : mode === 'all' ? [...ALL] : [...new Set(AREAS.filter((a) => parts.includes(a.id)).flatMap((a) => a.colls))]), [mode, parts])
-  const base = useMemo<DB>(() => {
-    if (!cleared.length) return db
-    const out = { ...db, ...Object.fromEntries(cleared.map((c) => [c, {}])) } as DB
-    if (mode === 'all') out.meta = { settings: freshSettings(db) }
-    return out
+  // «Alles ersetzen» leert alles samt Cash; «Bereiche ersetzen» behält Cash-Buchungen und rechnet das Cash um.
+  const { base, pre } = useMemo<{ base: DB; pre: Op[] }>(() => {
+    if (mode === 'all') {
+      const out = { ...db, ...Object.fromEntries(cleared.map((c) => [c, {}])), meta: { settings: freshSettings(db) } } as DB
+      return { base: out, pre: [...cleared.map((c): Op => ({ op: 'clear', coll: c, id: '*' })), { op: 'set', coll: 'meta', id: 'settings', data: freshSettings(db) }] }
+    }
+    const r = clearAreas(db, cleared)
+    return { base: r.base, pre: r.ops }
   }, [db, cleared, mode])
   const plan = useMemo(() => {
     const p = planImport(base, parsed)
-    const pre: Op[] = [...cleared.map((c): Op => ({ op: 'clear', coll: c, id: '*' })), ...(mode === 'all' ? [{ op: 'set', coll: 'meta', id: 'settings', data: freshSettings(db) } as Op] : [])]
     return { ...p, ops: [...pre, ...p.ops] }
-  }, [base, parsed, cleared, mode, db])
+  }, [base, pre, parsed])
   const lost = AREAS.filter((a) => a.colls.some((c) => cleared.includes(c))).map((a) => ({ ...a, n: a.count(db) })).filter((a) => a.n > 0)
   const errors = [...parsed.errors, ...plan.items.filter((i) => i.state === 'fehler').map((i) => ({ line: i.line, msg: `${i.kind} ${i.ticker}: ${i.msg}` }))].sort((a, b) => a.line - b.line)
   const counts = plan.items.reduce<Record<ItemState, number>>((a, i) => ({ ...a, [i.state]: a[i.state] + 1 }), { neu: 0, ändert: 0, doppelt: 0, fehler: 0 })
@@ -294,6 +296,7 @@ export function ImportForm({ formId, initial, initialText, initialWay, setBusy, 
                   {AREAS.filter((a) => a.id !== 'rest').map((a) => (
                     <Switch key={a.id} className="w-fit" checked={parts.includes(a.id)} onChange={(v) => { setConfirmed(false); setParts((p) => (v ? [...p, a.id] : p.filter((x) => x !== a.id))) }} label={<>{a.label} <span className="text-muted">({a.count(db)})</span></>} />
                   ))}
+                  <p className="text-[12px] text-muted">Ein- und Auszahlungen und der Cash-Stand bleiben. Das Cash ändert sich nur um die Differenz zwischen alten und neuen Einträgen.</p>
                 </div>
               )}
               {lost.length > 0 && (

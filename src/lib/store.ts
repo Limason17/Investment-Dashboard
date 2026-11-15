@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { DEFAULT_CATEGORIES } from './buckets'
 import { closeUpdates } from './closes'
 import { sanitizeDb } from './sanitize'
-import { cloudBatch, cloudDeletePortfolio, cloudLoad, cloudPortfolios, cloudSavePortfolios, type Op as CloudOp } from './cloud'
+import { cloudBatch, ConflictError, cloudDeletePortfolio, cloudLoad, cloudPortfolios, cloudSavePortfolios, type Op as CloudOp } from './cloud'
 import { CLOUD, LEGAL_VERSION, QUOTES_URL } from './config'
 import { aggregate, ALL, MAIN, MAX_PORTFOLIOS, newPortfolioId, portfolioList, toMap, type PortfolioInfo } from './portfolios'
 import type { DB, LiveResult } from './types'
@@ -245,7 +245,11 @@ export async function mutate(ops: Op[]) {
   if (pid === ALL) throw new Error('In der Gesamtansicht lässt sich nichts ändern. Wähle oben ein Portfolio.')
   if (CLOUD) {
     if (!state.db) throw new Error('Daten noch nicht geladen')
-    const changed = await cloudBatch(state.db, ops, pid)
+    const changed = await cloudBatch(state.db, ops, pid).catch(async (e) => {
+      // Ein anderes Gerät hat dieselben Einträge geändert: neu laden, damit der nächste Versuch vom aktuellen Stand rechnet.
+      if (e instanceof ConflictError) await loadDb().catch(() => {})
+      throw e
+    })
     set({ db: { ...state.db, ...changed } })
     refetchQuotes(ops)
     return state.db!
