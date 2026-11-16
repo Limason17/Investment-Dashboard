@@ -295,7 +295,11 @@ function Dashboard() {
       if (anyDialog || e.ctrlKey || e.metaKey || e.altKey || (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return
       const n = Number(e.key)
       if (n >= 1 && n <= VIEWS.length) goto(VIEWS[n - 1].id)
-      else if (e.key === '+' || e.key.toLowerCase() === 'n') nav.openEntry('kauf')
+      else if (e.key === '+' || e.key.toLowerCase() === 'n') {
+        // Sonst landet das Zeichen im Ticker-Feld, das sich gleich darauf öffnet und den Fokus bekommt.
+        e.preventDefault()
+        nav.openEntry('kauf')
+      }
       else if (e.key.toLowerCase() === 'r') void refresh()
     }
     window.addEventListener('keydown', onKey)

@@ -352,6 +352,16 @@ describe('Wertverlauf gegen echte Zahlen', () => {
     expect(ps.mwr.at(-1)).toBeCloseTo(0.2) // seit Beginn: Ertrag / eingesetztes Geld
   })
 
+  it('Kauf kurz vor Ende des Zeitraums: Rendite wie seit Kauf, nicht aufgebläht', () => {
+    const db = empty()
+    db.meta.settings = { cash: 0, cashExcluded: true }
+    db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 10, bucket: 'etf', cost: 1000 }
+    db.transactions.k = { type: 'kauf', date: days[2], ticker: 'VTI', shares: 10, price: 100, cashDelta: -1000 }
+    const ps = portfolioSeries(db, timeline(db), { ...chart([90, 95, 110]), range: '1M' as 'MAX' })!
+    expect(ps.mwr.at(-1)).toBeCloseTo(0.1)
+    expect(ps.buckets.etf.mwr.at(-1)).toBeCloseTo(0.1)
+  })
+
   it('Cash erst später erfasst: zählt von Anfang an mit, Gewinn nur aus Kursen', () => {
     const db = empty()
     db.meta.settings = { cash: 500, cashExcluded: false }

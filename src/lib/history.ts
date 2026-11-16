@@ -290,7 +290,8 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
     pl.push(g)
     // Max (seit Beginn): Ertrag im Verhältnis zum eingesetzten Geld, wie beim Broker; sonst zeitgewichtetes Kapital (Simple Dietz)
     const paid = baseTotal + invested
-    const dn = chart.range === 'MAX' && paid > 1e-6 ? paid : cap > 1e-6 ? cap : 0
+    // Ohne Anfangswert (alles erst im Zeitraum gekauft) zählt wie bei Max das eingesetzte Geld; sonst bläht ein Kauf kurz vor Ende die Rendite auf.
+    const dn = (chart.range === 'MAX' || baseTotal < 1e-6) && paid > 1e-6 ? paid : cap > 1e-6 ? cap : 0
     mwr.push(dn ? g / dn : 0)
     den.push(dn)
     flowsAt.push(gainFlows)
@@ -313,7 +314,7 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
       let bcap = bBase[id]
       for (const fl of bSeen[id]) bcap += fl.amount * (span > 0 ? (chart.t[i] - fl.t) / span : 1)
       const bpaid = bBase[id] + bFlow[id]
-      const bden = chart.range === 'MAX' && bpaid > 1e-6 ? bpaid : bcap > 1e-6 ? bcap : bpaid > 1e-6 ? bpaid : 0
+      const bden = (chart.range === 'MAX' || bBase[id] < 1e-6) && bpaid > 1e-6 ? bpaid : bcap > 1e-6 ? bcap : bpaid > 1e-6 ? bpaid : 0
       buckets[id].pl.push(bg)
       buckets[id].mwr.push(bden ? bg / bden : 0)
     }
