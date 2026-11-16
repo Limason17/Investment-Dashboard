@@ -172,9 +172,10 @@ export function Positions() {
                 <Meter className="mt-2" value={w / 0.6} mark={tgt != null ? tgt / 0.6 : undefined} color={b.color} height={4} />
               </button>
                 <div className={`mt-3 flex items-center gap-3 transition-opacity ${pending ? 'opacity-40' : ''}`}>
-                  <span className="w-[62px] flex-none leading-tight">
+                  <span className="w-[74px] flex-none leading-tight">
                     <Delta value={at != null ? s!.mwr[at] : ret} digits={1} className="text-[12.5px] font-medium" />
-                    <span className="block text-[10.5px] text-muted">{at != null && ps ? (ps.kind === 'intraday' ? hhmm(ps.t[at]) : dshort(ps.d[at])) : RANGE_LABEL[range]}</span>
+                    {/* Beim Zeigen: im Tages-Chart die Uhrzeit, sonst immer das Datum (bei Stundenwerten mit Uhrzeit) */}
+                    <span className="block whitespace-nowrap text-[10.5px] text-muted">{at != null && ps ? (ps.kind === 'intraday' ? (range === '1T' ? hhmm(ps.t[at]) : `${dshort(new Date(ps.t[at]).toLocaleDateString('en-CA'))} ${hhmm(ps.t[at])}`) : dshort(ps.d[at])) : RANGE_LABEL[range]}</span>
                   </span>
                   <FluidSparkline className="min-w-0 flex-1" values={s?.mwr ?? []} tone={sign(ret)} baseline={0} height={34} hi={at} onHover={(i) => setHov(i == null ? null : { id: b.id, i })} label={`${b.name}: ${pct(ret, 1)} ${rangeText}`} />
                 </div>
