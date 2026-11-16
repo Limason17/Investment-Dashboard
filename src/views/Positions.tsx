@@ -51,7 +51,8 @@ export function Positions() {
       let move: Move
       // ref: Bezugswert der Zahl (Ø Einstand, Vortagesschluss oder Kurs zu Beginn); daran färbt sich auch der Mini-Chart
       let ref: number | null
-      if (range === 'MAX' || (start && firstBuy[r.t] && firstBuy[r.t] > start)) {
+      // Gekauft am ersten Tag des Zeitraums oder später (bei 1T: heute) → seit Kauf, wie die Kategorie darüber
+      if (range === 'MAX' || (start && firstBuy[r.t] && firstBuy[r.t] >= start)) {
         move = { abs: r.pl, pct: r.plPct, sinceBuy: true }
         ref = r.avg
       } else if (range === '1T') {
