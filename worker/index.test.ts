@@ -37,6 +37,12 @@ describe('Kurs-Dienst', () => {
     expect(r.headers.get('Access-Control-Allow-Origin')).toBeNull()
     expect(urls).toEqual([])
   })
+  it('weist Aufrufe ohne Herkunft ab (Skripte, fremde Server)', async () => {
+    const r = await call('/live?held=VTI')
+    expect(r.status).toBe(403)
+    expect(await r.json()).toEqual({ error: 'Herkunft fehlt' })
+    expect(urls).toEqual([])
+  })
   it('beantwortet die CORS-Vorabfrage und nur GET', async () => {
     const o = await call('/live', { origin: SITE, method: 'OPTIONS' })
     expect(o.status).toBe(204)
