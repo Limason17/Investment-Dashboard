@@ -1,10 +1,10 @@
 import { ClipboardCopy, Download, FileUp } from 'lucide-react'
-import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Chip, Segmented, Switch } from '@/components/ui'
 import { COLUMNS, detectKind, EXAMPLES, LIMITS, parseImport, template, TEMPLATE_NAME, templateFile, type ImportKind } from '@/lib/bulk'
 import { clearAreas, isTradeTx, planImport, type ItemState } from '@/lib/bulk-plan'
 import { downloadBackup } from '@/lib/backup'
-import { getPortfolio } from '@/lib/store'
+import { apiUrl, getPortfolio, useStore } from '@/lib/store'
 import type { Coll } from '@/lib/cloud'
 import { commit } from '@/lib/commit'
 import { useDepot } from '@/lib/context'
@@ -96,10 +96,33 @@ export function ImportForm({ formId, initial, initialText, initialWay, setBusy, 
     const r = clearAreas(db, cleared)
     return { base: r.base, pre: r.ops }
   }, [db, cleared, mode])
+  // Schwab-Kontoauszug: Dividenden nennen nur den Titelnamen. Namen der Titel aus dem Export bei der Kursquelle holen.
+  const { live } = useStore()
+  const [names, setNames] = useState<Record<string, string>>({})
+  const needNames = useMemo(() => {
+    if (!parsed.dividends.some((d) => !d.ticker)) return ''
+    const have = (t: string) => names[t] || live?.quotes[t]?.name || (db.positions[t]?.name && db.positions[t].name !== t)
+    return [...new Set(parsed.trades.map((t) => t.ticker))].filter((t) => !have(t)).sort().join(',')
+  }, [parsed, names, live, db])
+  useEffect(() => {
+    const url = needNames && apiUrl('live', { held: needNames, watch: '' })
+    if (!url) return
+    let gone = false
+    fetch(url, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { quotes?: Record<string, { name?: string }> } | null) => {
+        if (gone || !j?.quotes) return
+        // Auch Ticker ohne Namen eintragen, damit nicht erneut gefragt wird.
+        setNames((n) => ({ ...n, ...Object.fromEntries(needNames.split(',').map((t) => [t, j.quotes?.[t]?.name || t])) }))
+      })
+      .catch(() => {})
+    return () => { gone = true }
+  }, [needNames])
   const plan = useMemo(() => {
-    const p = planImport(base, parsed)
+    const known = { ...Object.fromEntries(Object.entries(live?.quotes ?? {}).flatMap(([t, q]) => (q.name ? [[t, q.name]] : []))), ...names }
+    const p = planImport(base, parsed, known)
     return { ...p, ops: [...pre, ...p.ops] }
-  }, [base, pre, parsed])
+  }, [base, pre, parsed, names, live])
   const lost = AREAS.filter((a) => a.colls.some((c) => cleared.includes(c))).map((a) => ({ ...a, n: a.count(db) })).filter((a) => a.n > 0)
   const errors = [...parsed.errors, ...plan.items.filter((i) => i.state === 'fehler').map((i) => ({ line: i.line, msg: `${i.kind} ${i.ticker}: ${i.msg}` }))].sort((a, b) => a.line - b.line)
   const counts = plan.items.reduce<Record<ItemState, number>>((a, i) => ({ ...a, [i.state]: a[i.state] + 1 }), { neu: 0, ändert: 0, doppelt: 0, fehler: 0 })

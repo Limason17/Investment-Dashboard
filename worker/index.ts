@@ -61,7 +61,8 @@ export default {
 
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...cors, 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '86400' } })
     if (req.method !== 'GET') return json(405, { error: 'nur GET' })
-    if (origin && !cors['Access-Control-Allow-Origin']) return json(403, { error: 'fremde Herkunft' })
+    // Nur das Dashboard selbst: Aufrufe ohne Herkunft (Skripte, fremde Server) oder von fremden Seiten ablehnen.
+    if (!cors['Access-Control-Allow-Origin']) return json(403, { error: origin ? 'fremde Herkunft' : 'Herkunft fehlt' })
 
     const url = new URL(req.url)
     try {

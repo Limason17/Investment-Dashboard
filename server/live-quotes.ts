@@ -172,6 +172,7 @@ function parseChart(r: any): YahooQuote {
     time: new Date(time).toISOString(),
     source: 'Yahoo Finance',
     ...(typeof (m.longName ?? m.shortName) === 'string' ? { name: String(m.longName ?? m.shortName).slice(0, 80) } : {}),
+    ...(typeof m.instrumentType === 'string' ? { kind: String(m.instrumentType).slice(0, 20) } : {}),
     periods,
   }
 }

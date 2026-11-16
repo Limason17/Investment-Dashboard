@@ -169,15 +169,26 @@ function tickerParams() {
   const fx = db.meta.settings?.fx ? [db.meta.settings.fx + '=X'] : []
   return { held: Object.values(db.positions).filter((p) => p.shares > 0).map((p) => p.ticker).join(','), watch: [...Object.keys(db.watchlist), ...fx].join(',') }
 }
-/** Namen von Titeln nachtragen, die nur mit Ticker erfasst sind (z. B. nach dem Hochladen). */
+/**
+ * Namen von Titeln nachtragen, die nur mit Ticker erfasst sind (z. B. nach dem Hochladen).
+ * Titel ohne gewählte Kategorie (catAuto) kommen als ETF laut Yahoo in die Kategorie «etf», falls es sie gibt.
+ */
 let naming = false
 async function fillNames() {
   const db = state.db, live = state.live
   if (!db || !live || naming || state.portfolio === ALL) return
   const ops: Op[] = []
+  const cats = db.meta.settings?.categories
+  const hasEtf = cats?.length ? cats.some((c) => c.id === 'etf') : true
   for (const [t, p] of Object.entries(db.positions)) {
-    const n = live.quotes[t]?.name
-    if (n && (!p.name || p.name === t)) ops.push({ op: 'merge', coll: 'positions', id: t, data: { name: n } })
+    const q = live.quotes[t]
+    const data: Record<string, unknown> = {}
+    if (q?.name && (!p.name || p.name === t)) data.name = q.name
+    if (p.catAuto && q?.kind) {
+      data.catAuto = null
+      if (q.kind === 'ETF' && hasEtf && p.bucket !== 'etf') data.bucket = 'etf'
+    }
+    if (Object.keys(data).length) ops.push({ op: 'merge', coll: 'positions', id: t, data })
   }
   for (const [t, w] of Object.entries(db.watchlist)) {
     const n = live.quotes[t]?.name

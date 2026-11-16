@@ -49,8 +49,10 @@ export const COLUMNS: Record<ImportKind, Col[]> = {
 }
 
 export interface PosRow { line: number; ticker: string; shares: number; cost: number | null; name: string; bucket?: HoldingBucket; note: string }
-export interface TradeRow { line: number; date: string; type: 'kauf' | 'verkauf'; ticker: string; shares: number; price: number; fees: number; bucket?: HoldingBucket; note: string }
-export interface DivRow { line: number; payDate: string; exDate: string | null; ticker: string; gross: number; tax: number | null; note: string }
+/** time/seq: Uhrzeit und Reihenfolge im Export, damit Käufe und Verkäufe am selben Tag in der richtigen Folge gelten. */
+export interface TradeRow { line: number; date: string; type: 'kauf' | 'verkauf'; ticker: string; shares: number; price: number; fees: number; bucket?: HoldingBucket; note: string; time?: string; seq?: number }
+/** name: Titelname aus dem Export, wenn der Ticker fehlt (Schwab-Kontoauszug); der Ticker wird beim Planen über den Namen gesucht. */
+export interface DivRow { line: number; payDate: string; exDate: string | null; ticker: string; gross: number; tax: number | null; note: string; name?: string }
 /** Aktiensplit aus dem Schwab-Export: zusätzliche Stück ohne Geldfluss (bei Zusammenlegung negativ). */
 export interface SplitRow { line: number; date: string; ticker: string; shares: number }
 export interface Issue { line: number; msg: string }
@@ -324,6 +326,134 @@ function parseSchwab(rows: string[][], headerRow: number): ParseResult {
   return res
 }
 
+/* ------------------------------------------------------------------ Schwab-Kontoauszug (Type / Description) */
+
+/** Wörter, die in Titelnamen nichts unterscheiden (Rechtsform, Fondsart, Zusätze). */
+const NAME_STOP = new Set(['THE', 'INC', 'INCLASS', 'CLASS', 'CL', 'A', 'B', 'C', 'CORP', 'CORPORATION', 'CO', 'COMPANY', 'LTD', 'PLC', 'SA', 'AG', 'NV', 'ETF', 'ETFS', 'SHARES', 'SHS', 'FUND', 'INDEX', 'TRUST', 'TR', 'MORNINGSTAR', 'HOLDINGS', 'HLDGS', 'US', 'USD'])
+const NAME_ALIAS: Record<string, string> = { SVCS: 'SERVICES', SVC: 'SERVICE', INTL: 'INTERNATIONAL', TECH: 'TECHNOLOGIES', GRP: 'GROUP', NASDAQ100: 'NASDAQ' }
+const nameWords = (s: string) =>
+  new Set(s.toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').split(/\s+/).map((w) => NAME_ALIAS[w] ?? w).filter((w) => w && !NAME_STOP.has(w)))
+
+/**
+ * Ticker zu einem Titelnamen aus dem Schwab-Kontoauszug, z. B. «VANGUARD TOTAL STOCK MARKET INDEX FUND ETF SHARES» → VTI.
+ * names: Ticker → Name (z. B. von Yahoo). Nimmt den Namen mit der grössten Wortüberdeckung, nur wenn er eindeutig ist.
+ */
+export function tickerForName(name: string, names: Record<string, string>): string | null {
+  const a = nameWords(name)
+  if (!a.size) return null
+  let best: { t: string; s: number } | null = null, tie = false
+  for (const [t, n] of Object.entries(names)) {
+    const b = nameWords(n)
+    if (!b.size || n.toUpperCase() === t) continue
+    let inter = 0
+    for (const w of a) if (b.has(w)) inter++
+    const s = inter / (a.size + b.size - inter)
+    if (best && Math.abs(s - best.s) < 1e-9) tie = tie || best.t !== t
+    else if (!best || s > best.s) { best = { t, s }; tie = false }
+  }
+  return best && best.s >= 0.5 && !tie ? best.t : null
+}
+
+const INTL_TRADE = /^(BOT|SOLD)\s+([+-]?[\d.,]+)\s+(.+?)\s+@\s*(-?[\d.,]*\d)(?:\s+\S+)?$/i
+const INTL_ASSIGN = /^(BOT|SOLD)\s+([+-]?[\d.,]+)\s+(\S+)\s+UPON\b/i
+const INTL_AMOUNT = /\s(-?[\d.,]+)\s+US\$$/i
+const INTL_REV_OLD = /REVERSE\s*SPLIT\s+EFF\s+(-?[\d.]+)\s+(\S+)$/i
+const INTL_REV_NEW = /^Reverse Split\s+([\d.]+)\s+(\S+)$/i
+
+/**
+ * Kontoauszug von Schwab (z. B. Schwab International): Spalten Date, Type, Description, Misc Fees, Commissions, Amount.
+ * Käufe/Verkäufe stehen in der Beschreibung («BOT +1 VXUS @82.62»), Dividenden mit Titelname statt Ticker
+ * («Qualified Dividend - INTUIT 0.97 US$»), die Quellensteuer als JRN-Zeile mit gleichem Namen.
+ */
+function parseSchwabStatement(rows: string[][], headerRow: number): ParseResult {
+  const h = rows[headerRow].map(norm)
+  const at = (k: string) => h.indexOf(k)
+  const c = { date: at('date'), type: at('type'), desc: at('description'), misc: at('miscfees'), comm: at('commissions'), amount: at('amount') }
+  const res: ParseResult = { format: 'schwab', positions: [], trades: [], dividends: [], splits: [], errors: [], skipped: [] }
+  const body = rows.slice(headerRow + 1).map((r, i) => ({ r, line: headerRow + i + 2 })).filter(({ r }) => r.length > 1)
+  const day = (r: string[]) => date((r[c.date] ?? '').trim().split(/\s+/)[0])
+  const money = (raw: string | undefined) => num(raw, true)
+
+  // Zusammenlegung (Reverse Split): alte Stück unter der Wertpapiernummer, neue unter dem Ticker, gleicher Tag.
+  const alias = new Map<string, string>()
+  const olds = new Map<string, { id: string; shares: number; line: number }>()
+  for (const { r, line } of body) {
+    const m = (r[c.desc] ?? '').trim().match(INTL_REV_OLD), d = day(r)
+    if (m && d) olds.set(d, { id: m[2].toUpperCase(), shares: Number(m[1]), line })
+  }
+  for (const { r, line } of body) {
+    const m = (r[c.desc] ?? '').trim().match(INTL_REV_NEW), d = day(r)
+    const t = m ? ticker(m[2]) : null
+    const old = d ? olds.get(d) : undefined
+    if (!m || !d || !t) continue
+    if (!old) {
+      res.skipped.push({ line, msg: `Reverse Split ${t}: alte Stück fehlen im Export` })
+      continue
+    }
+    if (old.id !== t) alias.set(old.id, t)
+    res.splits!.push({ line, date: d, ticker: t, shares: +(Number(m[1]) - Math.abs(old.shares)).toFixed(6) })
+    olds.delete(d)
+  }
+  const sym = (raw: string) => alias.get(raw.toUpperCase()) ?? ticker(raw)
+
+  const divs = new Map<string, DivRow>()
+  const taxes: { key: string; amt: number; line: number; name: string }[] = []
+  // Kontoauszüge stehen meist neueste zuerst; seq zählt in Zeitfolge.
+  const newestFirst = (day(body[0]?.r ?? []) ?? '') > (day(body.at(-1)?.r ?? []) ?? '')
+  for (const [bi, { r, line }] of body.entries()) {
+    const type = (r[c.type] ?? '').trim().toUpperCase()
+    const desc = (r[c.desc] ?? '').trim()
+    const d = day(r)
+    const amount = money(r[c.amount])
+    if (!d) {
+      res.skipped.push({ line, msg: 'Zeile ohne Datum' })
+      continue
+    }
+    const fees = Math.abs(money(r[c.misc]) ?? 0) + Math.abs(money(r[c.comm]) ?? 0)
+    if (type === 'TRD' || type === 'EXP') {
+      const m = desc.match(INTL_TRADE), a = desc.match(INTL_ASSIGN)
+      const what = m?.[3].trim() ?? a?.[3] ?? ''
+      // Optionen («STRADDLE SOFI 100 …», «BITO 100 (Weeklys) …») kann das Dashboard nicht abbilden.
+      if (!(m || a) || /\s/.test(what)) {
+        res.skipped.push({ line, msg: `Option oder Kombination: wird nicht importiert${amount ? ` (Cash ${amount > 0 ? '+' : ''}${amount.toFixed(2)} USD)` : ''}` })
+        continue
+      }
+      const t = sym(what)
+      const shares = Math.abs(num((m ?? a)![2], true) ?? NaN)
+      // Zuteilung aus Option: Preis = Betrag / Stück
+      const price = m ? num(m[4], true) : amount != null && shares ? Math.abs(amount) / shares : null
+      if (!t || !shares || !price || price <= 0) {
+        res.errors.push({ line, msg: `${desc.slice(0, 60)}: Ticker, Stück oder Preis nicht lesbar` })
+        continue
+      }
+      res.trades.push({ line, date: d, type: /^BOT/i.test(desc) ? 'kauf' : 'verkauf', ticker: t, shares, price: Math.round(price * 1e6) / 1e6, fees: Math.round(fees * 100) / 100, note: a ? 'Schwab-Export (Zuteilung)' : 'Schwab-Export', time: (r[c.date] ?? '').trim().split(/\s+/)[1] ?? '', seq: newestFirst ? body.length - bi : bi })
+    } else if ((type === 'DOI' || type === 'JRN') && amount != null) {
+      if (/\bINT(EREST)?\b/.test(desc) && /SCHWAB|INTEREST/i.test(desc)) {
+        res.skipped.push({ line, msg: `Zins ${amount.toFixed(2)} USD: wird nicht importiert` })
+        continue
+      }
+      const name = desc.replace(INTL_AMOUNT, '').replace(/^(non-)?qualified\s+div(idend)?\s*-\s*/i, '').trim()
+      const key = name.toUpperCase() + '|' + d
+      if (type === 'DOI' && amount > 0) {
+        const prev = divs.get(key)
+        if (prev) prev.gross = Math.round((prev.gross + amount) * 100) / 100
+        else divs.set(key, { line, payDate: d, exDate: null, ticker: '', name, gross: amount, tax: null, note: 'Schwab-Export' })
+      } else taxes.push({ key, amt: -amount, line, name })
+    } else if (type === 'RAD' && (INTL_REV_OLD.test(desc) || INTL_REV_NEW.test(desc))) {
+      /* oben als Split gelesen */
+    } else if (type === 'WIN' || type === 'WOUT' || /WIRED|TRANSFER/i.test(desc)) {
+      res.skipped.push({ line, msg: `Ein-/Auszahlung ${amount != null ? amount.toFixed(2) + ' USD' : ''}: als Cash-Eintrag erfassen` })
+    } else res.skipped.push({ line, msg: `${type || 'ohne Art'} ${desc.slice(0, 50)}: wird nicht importiert` })
+  }
+  for (const x of taxes) {
+    const div = divs.get(x.key)
+    if (div) div.tax = Math.max(0, Math.round(((div.tax ?? 0) + x.amt) * 100) / 100)
+    else res.skipped.push({ line: x.line, msg: `Buchung ${x.name} ${(-x.amt).toFixed(2)} USD ohne passende Dividende` })
+  }
+  res.dividends = [...divs.values()].map((v) => ({ ...v, tax: v.tax ?? 0 }))
+  return res
+}
+
 /* ------------------------------------------------------------------ Hauptfunktion */
 
 export function parseImport(kind: ImportKind, text: string): ParseResult {
@@ -344,6 +474,11 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
     return n.includes('date') && n.includes('action') && n.includes('symbol') && n.includes('amount')
   })
   if (schwabHeader >= 0) return parseSchwab(rows, schwabHeader)
+  const statementHeader = rows.slice(0, 25).findIndex((r) => {
+    const n = r.map(norm)
+    return n.includes('date') && n.includes('type') && n.includes('description') && n.includes('amount')
+  })
+  if (statementHeader >= 0) return parseSchwabStatement(rows, statementHeader)
 
   const cols = COLUMNS[kind]
   const { start, idx } = mapColumns(rows, cols)

@@ -4,8 +4,9 @@
  * und rechnet Einstand, realisierten Gewinn und Cash wie die Einzeleingabe.
  */
 import { defaultCat } from './buckets'
-import type { ParseResult } from './bulk'
+import { tickerForName, type ParseResult } from './bulk'
 import { quote, wht } from './calc'
+import { lastBalance } from './reverse'
 import { qty, r2, uid, usdRaw as usd } from './format'
 import type { Op } from './store'
 import type { Coll } from './cloud'
@@ -35,7 +36,6 @@ export interface Plan {
 
 /** Buchung eines Wertpapiers (Kauf, Verkauf, Split); Ein-/Auszahlungen, Gebühren und Cash-Stände sind Cash-Buchungen. */
 export const isTradeTx = (x: Tx) => x.type === 'kauf' || x.type === 'verkauf' || (x.type === 'korrektur' && !!x.ticker)
-const lastBalance = (db: DB) => Object.values(db.transactions).filter((x) => x.type === 'korrektur' && !x.ticker && x.date).map((x) => x.date).sort().at(-1) ?? null
 
 /**
  * Bereiche vor einem Import leeren («Bereiche ersetzen»). Cash-Buchungen und der Cash-Stand bleiben;
@@ -78,7 +78,8 @@ export function clearAreas(db: DB, colls: Coll[]): { base: DB; ops: Op[] } {
 const same = (a: number | null | undefined, b: number | null | undefined, eps = 0.005) => a != null && b != null && Math.abs(a - b) < eps
 const days = (a: string, b: string) => Math.abs(+new Date(a) - +new Date(b)) / 864e5
 
-export function planImport(db: DB, p: ParseResult): Plan {
+/** names: Ticker → Titelname (z. B. von Yahoo), um Dividenden ohne Ticker (Schwab-Kontoauszug) zuzuordnen. */
+export function planImport(db: DB, p: ParseResult, names: Record<string, string> = {}): Plan {
   const ops: Op[] = []
   const items: PlanItem[] = []
   let cashDelta = 0
@@ -101,15 +102,15 @@ export function planImport(db: DB, p: ParseResult): Plan {
     ops.push(
       old
         ? { op: 'merge', coll: 'positions', id: r.ticker, data: { shares: r.shares, ...(r.cost != null ? { cost: r2(r.cost) } : {}), ...(r.bucket ? { bucket: r.bucket } : {}), ...(r.name !== r.ticker ? { name: r.name } : {}), ...(r.note ? { note: r.note } : {}) } }
-        : { op: 'set', coll: 'positions', id: r.ticker, data: { ticker: r.ticker, name: r.name, shares: r.shares, bucket: r.bucket ?? defaultCat(), cost: r.cost == null ? null : r2(r.cost), status: 'Massen-Import', note: r.note } },
+        : { op: 'set', coll: 'positions', id: r.ticker, data: { ticker: r.ticker, name: r.name, shares: r.shares, bucket: r.bucket ?? defaultCat(), ...(r.bucket ? {} : { catAuto: true }), cost: r.cost == null ? null : r2(r.cost), status: 'Massen-Import', note: r.note } },
     )
   }
 
   // Käufe und Verkäufe: in Datumsfolge auf den Bestand anwenden.
-  const pos = new Map(Object.entries(db.positions).map(([t, x]) => [t, { shares: x.shares, cost: x.cost, isNew: false, name: x.name, bucket: x.bucket }]))
+  const pos = new Map(Object.entries(db.positions).map(([t, x]) => [t, { shares: x.shares, cost: x.cost, isNew: false, name: x.name, bucket: x.bucket, catAuto: false }]))
   const existing = Object.values(db.transactions)
   const priced = new Set<string>()
-  const trades = [...p.trades].sort((a, b) => a.date.localeCompare(b.date) || a.line - b.line)
+  const trades = [...p.trades].sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? '') || (a.seq ?? a.line) - (b.seq ?? b.line))
   // Splits in die Datumsfolge einreihen: am selben Tag vor den Käufen und Verkäufen (Schwab bucht sie zum Handelsbeginn).
   const splits = [...(p.splits ?? [])].sort((a, b) => a.date.localeCompare(b.date) || a.line - b.line)
   let si = 0
@@ -149,7 +150,7 @@ export function planImport(db: DB, p: ParseResult): Plan {
       if (cur) {
         cur.shares = +(cur.shares + r.shares).toFixed(6)
         cur.cost = cur.cost != null ? r2(cur.cost + amt + r.fees) : null
-      } else pos.set(r.ticker, { shares: r.shares, cost: r2(amt + r.fees), isNew: true, name: r.ticker, bucket: r.bucket ?? defaultCat() })
+      } else pos.set(r.ticker, { shares: r.shares, cost: r2(amt + r.fees), isNew: true, name: r.ticker, bucket: r.bucket ?? defaultCat(), catAuto: !r.bucket })
       ops.push({ op: 'set', coll: 'transactions', id: uid(), data: { type: 'kauf', date: r.date, ticker: r.ticker, shares: r.shares, price: r.price, fees: r.fees, cashDelta: r2(cashD), pot: null, note: r.note, createdAt, by } })
       addCash(r.date, cashD)
       if (!quote(db, r.ticker)) priced.add(r.ticker)
@@ -173,7 +174,7 @@ export function planImport(db: DB, p: ParseResult): Plan {
     const cur = pos.get(t)
     if (!cur) continue
     const old = db.positions[t]
-    if (cur.isNew) ops.push({ op: 'set', coll: 'positions', id: t, data: { ticker: t, name: db.watchlist[t]?.name || t, shares: cur.shares, bucket: cur.bucket, cost: cur.cost, status: 'Massen-Import', note: '' } })
+    if (cur.isNew) ops.push({ op: 'set', coll: 'positions', id: t, data: { ticker: t, name: db.watchlist[t]?.name || t, shares: cur.shares, bucket: cur.bucket, ...(cur.catAuto ? { catAuto: true } : {}), cost: cur.cost, status: 'Massen-Import', note: '' } })
     else if (old && (old.shares !== cur.shares || old.cost !== cur.cost)) ops.push({ op: 'merge', coll: 'positions', id: t, data: { shares: cur.shares, cost: cur.cost } })
   }
   // Neue Titel ohne Kurs: letzten Kaufpreis als vorläufigen Kurs, bis die Live-Kurse kommen.
@@ -186,11 +187,20 @@ export function planImport(db: DB, p: ParseResult): Plan {
   const w = wht(db)
   const divs = Object.entries(db.dividends)
   const used = new Set<string>()
-  for (const r of p.dividends) {
+  const known: Record<string, string> = { ...names }
+  for (const [t, x] of Object.entries(db.watchlist)) if (x.name) known[t] = x.name
+  for (const [t, x] of Object.entries(db.positions)) if (x.name) known[t] = x.name
+  for (const d of p.dividends) {
+    const r = d.ticker ? d : { ...d, ticker: (d.name && tickerForName(d.name, known)) || '' }
     const tax = r.tax ?? r2(r.gross * w)
     const net = r2(r.gross - tax)
-    const item: PlanItem = { line: r.line, kind: 'Dividende', ticker: r.ticker, date: r.payDate, detail: `brutto ${usd(r.gross)}, Steuer ${usd(tax)}`, amount: net, state: 'neu' }
+    const item: PlanItem = { line: r.line, kind: 'Dividende', ticker: r.ticker || r.name || '?', date: r.payDate, detail: `brutto ${usd(r.gross)}, Steuer ${usd(tax)}`, amount: net, state: 'neu' }
     items.push(item)
+    if (!r.ticker) {
+      item.state = 'fehler'
+      item.msg = 'Titel nicht erkannt; Dividende einzeln erfassen'
+      continue
+    }
     if (divs.some(([, d]) => d.status === 'erhalten' && d.ticker === r.ticker && d.payDate === r.payDate && same(d.gross, r.gross))) {
       item.state = 'doppelt'
       continue
