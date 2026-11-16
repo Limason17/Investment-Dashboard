@@ -12,6 +12,8 @@ export interface Position {
   status?: string
   note?: string
   costDemo?: boolean
+  /** Kategorie ohne Angabe gesetzt: darf nach dem Typ bei Yahoo (ETF) noch angepasst werden */
+  catAuto?: boolean | null
 }
 
 export interface Quote {
@@ -212,6 +214,8 @@ export type ViewId = 'uebersicht' | 'positionen' | 'limits' | 'dividenden' | 'pl
 export type LiveSession = 'pre' | 'regular' | 'post' | 'overnight' | 'closed'
 export interface LiveQuote {
   name?: string
+  /** Typ laut Yahoo, z. B. ETF, EQUITY */
+  kind?: string
   price: number
   ref: number | null
   regular: number

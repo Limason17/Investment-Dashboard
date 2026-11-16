@@ -86,6 +86,8 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
   const [fee, setFee] = useState(old?.fees != null ? String(old.fees) : '0')
   const [date, setDate] = useState(old?.date ?? today())
   const [bucket, setBucket] = useState(defaultCat)
+  // Kategorie nicht selbst gewählt: ETFs kommen nach dem ersten Kurs von selbst zu «ETFs».
+  const [bucketPicked, setBucketPicked] = useState(false)
   const [pot, setPot] = useState(old?.pot ?? '')
   const [note, setNote] = useState(old?.note ?? '')
   const listId = useId()
@@ -123,7 +125,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
         { op: 'set', coll: 'transactions', id: fromId ?? uid(), data: { type, date, ticker: t, shares: nSh, price: nPx, fees: nFee, cashDelta: r2(cashDelta), pot: usedPot, note, createdAt: old?.createdAt ?? createdAt, by: 'Dashboard' } },
         p
           ? { op: 'merge', coll: 'positions', id: t, data: { shares: +(p.shares + nSh).toFixed(6), cost: p.cost != null ? r2(p.cost + a + nFee) : null } }
-          : { op: 'set', coll: 'positions', id: t, data: { ticker: t, name: db.watchlist[t]?.name || t, shares: nSh, bucket, cost: r2(a + nFee), status: 'Neu gekauft ' + dfmt(date), note: '' } },
+          : { op: 'set', coll: 'positions', id: t, data: { ticker: t, name: db.watchlist[t]?.name || t, shares: nSh, bucket, ...(bucketPicked ? {} : { catAuto: true }), cost: r2(a + nFee), status: 'Neu gekauft ' + dfmt(date), note: '' } },
         cashOp(db, cashDelta, date),
         usedPot ? { op: 'merge', coll: 'pots', id: usedPot, data: { used: r2((db.pots[usedPot].used || 0) + a + nFee) } } : null,
         !quote(db, t) && { op: 'set', coll: 'prices', id: t, data: { close: nPx, prev: null, date, source: 'Kaufpreis' } },
@@ -156,7 +158,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
         <>
           {!p && (
             <Field label="Kategorie (neuer Titel)">{(id) => (
-              <select id={id} className="input" value={bucket} onChange={(e) => setBucket(e.target.value)}>
+              <select id={id} className="input" value={bucket} onChange={(e) => (setBucket(e.target.value), setBucketPicked(true))}>
                 {HOLDING_BUCKETS.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             )}</Field>

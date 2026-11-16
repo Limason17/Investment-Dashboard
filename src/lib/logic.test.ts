@@ -68,6 +68,54 @@ describe('Import lesen', () => {
     expect(r.dividends).toEqual([expect.objectContaining({ ticker: 'VTI', gross: 4.12, tax: 0.62, payDate: '2026-10-30' })])
     expect(r.skipped).toHaveLength(1)
   })
+  it('liest den Schwab-Kontoauszug mit Type und Description', () => {
+    // Erfundene Zeilen im Aufbau des Kontoauszugs (neueste zuerst).
+    const csv = [
+      'Date, Type, Description, Ref Num, Misc Fees, Commissions, Amount, Balance',
+      '03.11.2026 18:00,TRD,SOLD -2 KO @70.50,11,-0.01,0.00,$141.00,"$1,000.00"',
+      '03.11.2026 15:00,TRD,BOT +5 KO @68.00,12,-,0.00,($340.00),"$860.00"',
+      '02.11.2026 10:15,JRN,THE COCA-COLA COMPANY -0.30 US$,13,-,0.00,($0.30),"$1,200.00"',
+      '02.11.2026 10:15,DOI,Qualified Dividend - THE COCA-COLA COMPANY 2.00 US$,14,-,0.00,$2.00,"$1,200.30"',
+      '01.11.2026 16:00,TRD,SOLD -1 STRADDLE KO 100 20 NOV 26 70 CALL/PUT @1.95 CBOE,15,-0.02,-1.30,$195.00,"$1,198.30"',
+      '01.11.2026 15:00,TRD,BOT +3 123456AB9 @10.00,16,-,0.00,($30.00),"$1,003.30"',
+      '31.10.2026 08:00,RAD,SOME TRUSTXXXREVERSE SPLIT EFF -3.0 123456AB9,17,-,0.00,$0.00,"$1,033.30"',
+      '31.10.2026 08:00,RAD,Reverse Split 1.0 ABCD,18,-,0.00,$0.00,"$1,033.30"',
+      '30.10.2026 15:00,WIN,WIRED FUNDS RECEIVED 1000.0 US$,19,-,0.00,"$1,000.00","$1,033.30"',
+      '29.10.2026 02:00,DOI,SCHWAB1 INT 09/28-10/28 0.17 US$,20,-,0.00,$0.17,"$33.30"',
+      '28.10.2026 15:00,TRD,BOT +3 ABCD @11.00,21,-,0.00,($33.00),"$33.13"',
+    ].join('\n')
+    const r = parseImport('trades', csv)
+    expect(r.format).toBe('schwab')
+    expect(r.errors).toEqual([])
+    // Optionen, Zins und Einzahlung werden übersprungen
+    expect(r.skipped.map((s) => s.line)).toEqual([6, 10, 11])
+    // Wertpapiernummer aus dem Reverse Split wird zum Ticker
+    expect(r.trades.map((t) => [t.type, t.ticker, t.shares, t.price, t.fees])).toEqual([
+      ['verkauf', 'KO', 2, 70.5, 0.01],
+      ['kauf', 'KO', 5, 68, 0],
+      ['kauf', 'ABCD', 3, 10, 0],
+      ['kauf', 'ABCD', 3, 11, 0],
+    ])
+    expect(r.splits).toEqual([expect.objectContaining({ ticker: 'ABCD', shares: -2, date: '2026-10-31' })])
+    expect(r.dividends).toEqual([expect.objectContaining({ ticker: '', name: 'THE COCA-COLA COMPANY', gross: 2, tax: 0.3, payDate: '2026-11-02' })])
+    // Planen: Dividende über den Namen, Kauf vor Verkauf am selben Tag (Uhrzeit)
+    const db = empty()
+    const p = planImport(db, r, { KO: 'The Coca-Cola Company', PEP: 'PepsiCo, Inc.' })
+    expect(p.items.filter((i) => i.state === 'fehler')).toEqual([])
+    const after = applyOps(db, p.ops)
+    expect(after.positions.KO.shares).toBe(3)
+    expect(after.positions.ABCD.shares).toBe(4)
+    expect(Object.values(after.dividends)[0]).toMatchObject({ ticker: 'KO', net: 1.7 })
+  })
+  it('ordnet Titelnamen nur eindeutig einem Ticker zu', async () => {
+    const { tickerForName } = await import('./bulk')
+    const names = { VTI: 'Vanguard Total Stock Market Index Fund ETF Shares', VXUS: 'Vanguard Total International Stock Index Fund ETF Shares', VTV: 'Vanguard Value Index Fund ETF Shares', UHS: 'Universal Health Services, Inc.' }
+    expect(tickerForName('VANGUARD MORNINGSTAR TOTAL STOCK MARKET ETF', names)).toBe('VTI')
+    expect(tickerForName('VANGUARD TOTAL INTERNATIONAL STOCK INDEX FUND ETF SHARES', names)).toBe('VXUS')
+    expect(tickerForName('VANGUARD MORNINGSTAR VALUE ETF', names)).toBe('VTV')
+    expect(tickerForName('UNIVERSAL HEALTH SVCS INCLASS B', names)).toBe('UHS')
+    expect(tickerForName('APPLE INC', names)).toBeNull()
+  })
   it('erkennt die Art an der Kopfzeile', () => {
     expect(detectKind(template('dividenden'))).toBe('dividenden')
     expect(detectKind(template('bestand'))).toBe('bestand')
@@ -105,6 +153,12 @@ describe('Import planen', () => {
     const after = applyOps(db, p.ops)
     expect(Object.keys(after.dividends)).toEqual(['x'])
     expect(after.dividends.x).toMatchObject({ status: 'erhalten', gross: 2.1 })
+  })
+  it('merkt sich neue Titel ohne Kategorie, damit ETFs später zu «ETFs» kommen', () => {
+    const db = empty()
+    const after = applyOps(db, planImport(db, parseImport('trades', 'Datum;Art;Ticker;Stück;Preis;Gebühren;Kategorie\n2025-01-02;Kauf;VTI;1;100;0;\n2025-01-02;Kauf;MSFT;1;100;0;aktien')).ops)
+    expect(after.positions.VTI.catAuto).toBe(true)
+    expect(after.positions.MSFT.catAuto).toBeUndefined()
   })
 })
 
