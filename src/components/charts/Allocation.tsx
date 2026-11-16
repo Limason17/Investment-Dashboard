@@ -33,7 +33,8 @@ export function Allocation({ c }: { c: Calc }) {
   if (!c.valuationComplete) return <Empty>Aktuelle Kurse fehlen. Die Allokation bleibt offen.</Empty>
   if (!total) return <Empty>Die Allokation erscheint mit den Positionen.</Empty>
 
-  const rows = BUCKETS.filter((b) => !noCash || b.id !== 'cash').map((b) => {
+  // Leere Kategorien ohne Ziel weglassen: sie sagen nichts aus.
+  const rows = BUCKETS.filter((b) => (!noCash || b.id !== 'cash') && (Math.abs(c.b[b.id] || 0) > 0.005 || (targetOf(c.settings, b.id) ?? 0) > 0)).map((b) => {
     const v = c.b[b.id] || 0
     const w = v / total
     const tgt = targetOf(c.settings, b.id)

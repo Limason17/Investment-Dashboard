@@ -92,6 +92,9 @@ export function Positions() {
   const onSort = (k: SortKey) => setSort((s) => (s.k === k ? { k, d: s.d === 1 ? -1 : 1 } : { k, d: k === 't' ? 1 : -1 }))
   const rangeSwitch = <Segmented label="Zeitraum" value={range} onChange={setRange} options={ranges.map((r) => ({ value: r, label: RANGE_LABEL[r], title: RANGE_TITLE[r] }))} />
   const bucketName = HOLDING_BUCKETS.find((b) => b.id === bucket)?.name
+  // Nur Kategorien mit Titeln zeigen (eine leere, aber gefilterte bleibt sichtbar, damit der Filter aufhebbar ist)
+  const cats = HOLDING_BUCKETS.filter((b) => b.id === bucket || c.rows.some((r) => catOf(r.p.bucket) === b.id))
+  const catCols = cats.length >= 4 ? 'lg:grid-cols-4' : cats.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'
 
   const th = (k: SortKey | null, label: string, right?: boolean, hint?: string, className?: string) => (
     <th className={`${right ? 'r' : ''} ${className ?? ''}`} aria-sort={k && sort.k === k ? (sort.d === 1 ? 'ascending' : 'descending') : undefined} title={hint}>
@@ -136,12 +139,12 @@ export function Positions() {
         action={rangeSwitch}
       >
         {c.sec > 0 && (
-          <div className="mb-4 flex h-2 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={'Aufteilung: ' + HOLDING_BUCKETS.map((b) => `${b.name} ${pctPlain((c.b[b.id] || 0) / c.sec)}`).join(', ')}>
+          <div className="mb-4 flex h-2 gap-[2px] overflow-hidden rounded-full" role="img" aria-label={'Aufteilung: ' + cats.map((b) => `${b.name} ${pctPlain((c.b[b.id] || 0) / c.sec)}`).join(', ')}>
             {HOLDING_BUCKETS.filter((b) => c.b[b.id] > 0).map((b) => <div key={b.id} className="basis-0" style={{ background: b.color, flexGrow: c.b[b.id] }} title={`${b.name}: ${money(c.b[b.id])}`} />)}
           </div>
         )}
-        <div className="grid grid-cols-2 gap-x-5 gap-y-5 lg:grid-cols-4 lg:gap-x-7">
-          {HOLDING_BUCKETS.map((b) => {
+        <div className={`grid grid-cols-2 gap-x-5 gap-y-5 ${catCols} lg:gap-x-7`}>
+          {cats.map((b) => {
             const v = c.b[b.id] || 0
             const w = c.total ? v / c.total : 0
             const tgt = targetOf(c.settings, b.id)
@@ -169,9 +172,10 @@ export function Positions() {
                 <Meter className="mt-2" value={w / 0.6} mark={tgt != null ? tgt / 0.6 : undefined} color={b.color} height={4} />
               </button>
                 <div className={`mt-3 flex items-center gap-3 transition-opacity ${pending ? 'opacity-40' : ''}`}>
-                  <span className="w-[62px] flex-none leading-tight">
+                  <span className="w-[74px] flex-none leading-tight">
                     <Delta value={at != null ? s!.mwr[at] : ret} digits={1} className="text-[12.5px] font-medium" />
-                    <span className="block text-[10.5px] text-muted">{at != null && ps ? (ps.kind === 'intraday' ? hhmm(ps.t[at]) : dshort(ps.d[at])) : RANGE_LABEL[range]}</span>
+                    {/* Beim Zeigen: im Tages-Chart die Uhrzeit, sonst immer das Datum (bei Stundenwerten mit Uhrzeit) */}
+                    <span className="block whitespace-nowrap text-[10.5px] text-muted">{at != null && ps ? (ps.kind === 'intraday' ? (range === '1T' ? hhmm(ps.t[at]) : `${dshort(new Date(ps.t[at]).toLocaleDateString('en-CA'))} ${hhmm(ps.t[at])}`) : dshort(ps.d[at])) : RANGE_LABEL[range]}</span>
                   </span>
                   <FluidSparkline className="min-w-0 flex-1" values={s?.mwr ?? []} tone={sign(ret)} baseline={0} height={34} hi={at} onHover={(i) => setHov(i == null ? null : { id: b.id, i })} label={`${b.name}: ${pct(ret, 1)} ${rangeText}`} />
                 </div>

@@ -114,7 +114,7 @@ export function Plan() {
 
       <Card className="col-span-12" title="Regeln des Plans" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(true)}><Pencil /> Bearbeiten</button>}>
         <div className="mb-4 flex flex-wrap gap-2">
-          {BUCKETS.map((b) => (
+          {BUCKETS.filter((b) => targetOf(c.settings, b.id) != null || Math.abs(c.b[b.id] || 0) > 0.005).map((b) => (
             <span key={b.id} className="inline-flex items-center gap-2 rounded-full border border-line bg-white/[0.025] py-1 pl-2.5 pr-3 text-[12.5px]">
               <i className="swatch" style={{ background: b.color }} />
               <span className="text-ink-2">{b.name}</span>
