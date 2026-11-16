@@ -97,8 +97,9 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
   const t = normTicker(tk) ?? ''
   const nSh = parseNum(sh), nPx = parseNum(px), nFee = parseNum(fee) || 0
   const p = db.positions[t]
-  const have = p?.shares || 0
-  const avg = p && p.cost != null && have ? p.cost / have : null
+  // Beim Bearbeiten: heutiger Bestand ohne die alte Buchung (ungekürzt, auch wenn spätere Verkäufe folgen)
+  const have = old && old.ticker === t ? (current.positions[t]?.shares || 0) - (old.type === 'kauf' ? 1 : -1) * (old.shares ?? 0) : p?.shares || 0
+  const avg = p && p.cost != null && p.shares ? p.cost / p.shares : null
   const amt = nSh && nPx ? nSh * nPx : null
   // Buchung am oder vor dem letzten Cash-Stand: im erfassten Saldo schon enthalten, Cash bleibt.
   const moves = !cashOff(db) && movesCash(db, date)
