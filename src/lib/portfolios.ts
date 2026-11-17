@@ -3,7 +3,7 @@
  * «main» ist das erste Portfolio und liegt am bisherigen Ort; weitere liegen daneben.
  * «all» ist die Gesamtansicht: alle Portfolios zusammengezählt, nur zum Ansehen.
  */
-import type { DB, Position, Quote, Settings, Snapshot } from './types'
+import type { DB, Position, Quote, Settings, Snapshot, Tx } from './types'
 
 export interface PortfolioInfo { id: string; name: string; order: number }
 export type PortfolioMap = Record<string, { name: string; order: number }>
@@ -33,13 +33,43 @@ export function newPortfolioId(name: string, list: PortfolioInfo[]) {
 
 const r2 = (v: number) => Math.round(v * 100) / 100
 
+/**
+ * Wie zählt jede Buchung eines Portfolios im Gesamtverlauf? Jedes Portfolio hat seinen eigenen Start-Cash-Stand;
+ * im Gesamtverlauf ist der eines zweiten Portfolios kein Gewinn, sondern Geld, das an diesem Tag dazukommt.
+ * Gleiche Regeln wie timeline() für ein einzelnes Portfolio.
+ */
+function flowMarks(db: DB, cashTracked: boolean): Record<string, Tx['agg']> {
+  const marks: Record<string, Tx['agg']> = {}
+  const list = Object.entries(db.transactions).filter(([, x]) => x?.date).sort(([, a], [, b]) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  const isTrade = (x: Tx) => !!x.ticker && !!x.shares && (x.type === 'kauf' || x.type === 'verkauf' || (x.type === 'korrektur' && !!x.cashDelta))
+  if (!cashTracked) {
+    for (const [id, x] of list) marks[id] = isTrade(x) ? 'pre' : !x.ticker && x.cashDelta ? 'skip' : undefined
+    return marks
+  }
+  let sawFlow = false
+  let start: string | null = null
+  for (const [id, x] of list) {
+    if (start == null && !x.ticker && x.type === 'korrektur' && (x.cashStart || !sawFlow)) {
+      start = x.date
+      marks[id] = 'start'
+    }
+    if (x.type === 'einzahlung' || x.type === 'auszahlung') sawFlow = true
+  }
+  if (start) for (const [id, x] of list) if (x.date <= start && isTrade(x)) marks[id] = 'pre'
+  return marks
+}
+
 /** Gesamtansicht: Positionen je Ticker addiert, Buchungen und Termine aller Portfolios, Cash summiert. */
 export function aggregate(parts: { info: PortfolioInfo; db: DB }[]): DB {
   const out: DB = { positions: {}, prices: {}, watchlist: {}, pots: {}, events: {}, log: {}, transactions: {}, dividends: {}, snapshots: {}, meta: {}, market: {} }
   const tag = (pid: string, id: string) => `${pid}:${id}`
   const quotes: Record<string, Quote> = {}
   let cash = 0, anyCash = false
+  const anyTracked = parts.some(({ db }) => db.meta.settings && !db.meta.settings.cashExcluded)
   for (const { info, db } of parts) {
+    const tracked = !!db.meta.settings && !db.meta.settings.cashExcluded
+    // Nur nötig, wenn irgendein Portfolio Cash erfasst; sonst zählen ohnehin die Käufe und Verkäufe.
+    const marks = anyTracked ? flowMarks(db, tracked) : {}
     for (const [t, p] of Object.entries(db.positions)) {
       const o: Position | undefined = out.positions[t]
       out.positions[t] = o
@@ -52,8 +82,8 @@ export function aggregate(parts: { info: PortfolioInfo; db: DB }[]): DB {
     for (const [id, x] of Object.entries(db.pots)) out.pots[tag(info.id, id)] = { ...x, label: `${x.label} · ${info.name}` }
     for (const [id, x] of Object.entries(db.events)) out.events[tag(info.id, id)] = x
     for (const [id, x] of Object.entries(db.log)) out.log[tag(info.id, id)] = { ...x, by: x.by ? `${x.by} · ${info.name}` : info.name }
-    for (const [id, x] of Object.entries(db.transactions)) out.transactions[tag(info.id, id)] = { ...x, note: x.note ? `${info.name}: ${x.note}` : info.name }
-    for (const [id, x] of Object.entries(db.dividends)) out.dividends[tag(info.id, id)] = x
+    for (const [id, x] of Object.entries(db.transactions)) out.transactions[tag(info.id, id)] = { ...x, note: x.note ? `${info.name}: ${x.note}` : info.name, ...(marks[id] ? { agg: marks[id] } : {}) }
+    for (const [id, x] of Object.entries(db.dividends)) out.dividends[tag(info.id, id)] = anyTracked && !tracked ? { ...x, aggNoCash: true } : x
     for (const [d, s] of Object.entries(db.snapshots)) {
       const o: Snapshot | undefined = out.snapshots[d]
       out.snapshots[d] = o

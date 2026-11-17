@@ -51,6 +51,25 @@ export function timeline(db: DB): Timeline {
   for (const x of tx) {
     const t = x.ticker
     const cd = x.cashDelta ?? 0
+    // «Alle Portfolios»: Start-Cash-Stand eines Portfolios = Zufluss; Buchungen ohne erfasstes Cash = Geld von aussen.
+    if (x.agg === 'skip') continue
+    if (x.agg === 'pre' && t && x.shares) {
+      if (x.type === 'kauf' || x.type === 'verkauf') raw[t] = (raw[t] ?? 0) + (x.type === 'kauf' ? x.shares : -x.shares)
+      else raw[t] = (raw[t] ?? 0) + x.shares
+      mark(t, x.date)
+      const amount = cd ? -cd : (x.type === 'verkauf' ? -1 : 1) * x.shares * (x.price ?? 0)
+      trades.push({ date: x.date, ticker: t, amount })
+      external.push({ date: x.date, amount })
+      continue
+    }
+    if (x.agg === 'start') {
+      sawFlow = true
+      if (cd) {
+        cashMoves.push({ date: x.date, amount: cd })
+        external.push({ date: x.date, amount: cd })
+      }
+      continue
+    }
     if (t && x.shares) {
       if (x.type === 'kauf' || x.type === 'verkauf') {
         raw[t] = (raw[t] ?? 0) + (x.type === 'kauf' ? x.shares : -x.shares)
@@ -74,7 +93,7 @@ export function timeline(db: DB): Timeline {
       if (x.type === 'einzahlung' || x.type === 'auszahlung' || (x.type === 'korrektur' && !t && !isStart)) external.push({ date: x.date, amount: cd })
     }
   }
-  for (const d of Object.values(db.dividends)) if (d.status === 'erhalten' && d.payDate && d.net) cashMoves.push({ date: d.payDate, amount: d.net })
+  for (const d of Object.values(db.dividends)) if (d.status === 'erhalten' && d.payDate && d.net && !d.aggNoCash) cashMoves.push({ date: d.payDate, amount: d.net })
   cashMoves.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
 
   // Abgleich mit dem Bestand: Was die Buchungen nicht erklären, gilt als durchgehend gehalten.

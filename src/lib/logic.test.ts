@@ -525,3 +525,52 @@ describe('Portfolios', () => {
     expect(all.meta.settings).toMatchObject({ cash: 1050, cashExcluded: false })
   })
 })
+
+describe('Alle Portfolios: Start-Cash eines weiteren Portfolios ist Einsatz, kein Gewinn', () => {
+  const days = ['2026-09-30', '2026-10-01', '2026-11-01', '2026-11-02']
+  const chart = { range: 'MAX' as const, kind: 'daily' as const, interval: '1d', at: '', t: days.map((d) => Date.parse(d + 'T21:00:00Z')), d: days, series: { VOO: [500, 500, 520, 550], KO: [60, 60, 60, 70] }, prev: {}, failures: [] }
+  const main = (): DB => {
+    const db = empty()
+    db.meta.settings = { cash: 8500, cashExcluded: false }
+    db.transactions.c = { type: 'korrektur', date: days[0], cashDelta: 0, cashStart: true }
+    db.transactions.e = { type: 'einzahlung', date: days[1], cashDelta: 10000 }
+    db.transactions.k = { type: 'kauf', date: days[1], ticker: 'VOO', shares: 3, price: 500, cashDelta: -1500 }
+    db.positions.VOO = { ticker: 'VOO', name: 'VOO', shares: 3, bucket: 'etf', cost: 1500 }
+    return db
+  }
+  const second = (): DB => {
+    const db = empty()
+    db.meta.settings = { cash: 880, cashExcluded: false }
+    db.transactions.c = { type: 'korrektur', date: days[2], cashDelta: 1000, cashStart: true }
+    db.transactions.k = { type: 'kauf', date: days[3], ticker: 'KO', shares: 2, price: 60, cashDelta: -120 }
+    db.positions.KO = { ticker: 'KO', name: 'KO', shares: 2, bucket: 'aktien', cost: 120 }
+    return db
+  }
+  const info = (id: string) => ({ id, name: id, order: 0 })
+
+  it('Gewinn gesamt = Summe der Gewinne der einzelnen Portfolios', () => {
+    const a = portfolioSeries(main(), timeline(main()), chart)!
+    const b = portfolioSeries(second(), timeline(second()), chart)!
+    const all = aggregate([{ info: info('main'), db: main() }, { info: info('zwei'), db: second() }])
+    const s = portfolioSeries(all, timeline(all), chart)!
+    expect(a.gain).toBeCloseTo(3 * 50)
+    expect(b.gain).toBeCloseTo(2 * 10)
+    expect(s.gain).toBeCloseTo(a.gain + b.gain) // vorher +1000 zu viel
+    expect(s.value.at(-1)).toBeCloseTo(8500 + 3 * 550 + 880 + 2 * 70)
+    expect(s.invested.at(-1)).toBeCloseTo(11000)
+    expect(s.mwr.at(-1)).toBeCloseTo(170 / 11000)
+    // kein Sprung am Tag, an dem das zweite Portfolio startet
+    expect(s.pl[s.d.indexOf(days[2])]).toBeCloseTo(3 * 20)
+  })
+
+  it('Portfolio ohne erfasstes Cash: Käufe sind Geld von aussen, Dividenden bewegen kein Cash', () => {
+    const b = second()
+    b.meta.settings = { cash: 0, cashExcluded: true }
+    delete b.transactions.c
+    b.dividends.d = { ticker: 'KO', exDate: null, payDate: days[3], perShare: 0.5, shares: 2, gross: 1, tax: 0, net: 1, status: 'erhalten' }
+    const all = aggregate([{ info: info('main'), db: main() }, { info: info('zwei'), db: b }])
+    const s = portfolioSeries(all, timeline(all), chart)!
+    expect(s.value.at(-1)).toBeCloseTo(8500 + 3 * 550 + 2 * 70)
+    expect(s.gain).toBeCloseTo(150 + 20)
+  })
+})

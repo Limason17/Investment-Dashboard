@@ -91,6 +91,13 @@ export interface Tx {
   realizedDemo?: boolean
   /** Erster Cash-Stand (vorher war Cash nicht erfasst): Startwert, keine Einzahlung */
   cashStart?: boolean
+  /**
+   * Nur in «Alle Portfolios» (wird nie gespeichert): wie die Buchung im Gesamtverlauf zählt.
+   * 'start' = Start-Cash-Stand eines Portfolios → Zufluss an diesem Tag.
+   * 'pre' = Kauf/Verkauf, als das Cash des Portfolios noch nicht erfasst war → Geld von aussen, bewegt kein Cash.
+   * 'skip' = Cash-Buchung eines Portfolios ohne erfasstes Cash → zählt nicht.
+   */
+  agg?: 'start' | 'pre' | 'skip'
   demo?: boolean
   createdAt?: string
 }
@@ -111,6 +118,8 @@ export interface Dividend {
   payDateEstimated?: boolean
   /** Geschätzt aus den bisherigen Ausschüttungen, nicht erfasst (wird nicht gespeichert) */
   estimate?: boolean
+  /** Nur in «Alle Portfolios»: Portfolio ohne erfasstes Cash, die Dividende bewegt kein Cash */
+  aggNoCash?: boolean
 }
 
 export interface Snapshot {
