@@ -4,7 +4,7 @@ import { DIV_EXPECTED, DIV_RECEIVED, DividendBars, type DivMonth } from '@/compo
 import { Card, Chip, ConfirmDelete, DemoTag, Empty, Stat, Cur } from '@/components/ui'
 import { divAnnual, dividendsList, projectedDividends, wht } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
-import { addMonths, dfmt, pctPlain, qty, usd, cur, money } from '@/lib/format'
+import { addMonths, dfmt, pctPlain, qty, usd, cur, curRate, money } from '@/lib/format'
 import { movesCash, reverseDividend } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -150,13 +150,13 @@ export function Dividends() {
           <div className="overflow-x-auto">
             <table className="tbl">
               <thead>
-                <tr><th>Titel</th><th className="r">Rate pro Jahr</th><th className="r">Rendite</th><th className="r">Netto pro Jahr {cur()}</th></tr>
+                <tr><th>Titel</th><th className="r">Rate pro Jahr {cur()}</th><th className="r">Rendite</th><th className="r">Netto pro Jahr {cur()}</th></tr>
               </thead>
               <tbody>
                 {a.per.map((r) => (
                   <tr key={r.t} className="row-click" tabIndex={0} onClick={() => nav.openPosition(r.t)} onKeyDown={(e) => e.key === 'Enter' && nav.openPosition(r.t)}>
                     <td><div className="tk">{r.t}</div><div className="text-[12px] leading-4 text-muted">{r.freq}</div></td>
-                    <td className="r num">{r.rate.toFixed(4)}</td>
+                    <td className="r num">{(r.rate * curRate()).toFixed(4)}</td>
                     <td className="r num text-ink-2">{r.px ? pctPlain(r.rate / r.px, 2) : '–'}</td>
                     <td className="r num font-medium">{usd(r.v * (1 - w))}</td>
                   </tr>
