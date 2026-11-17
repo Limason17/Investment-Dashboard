@@ -97,6 +97,8 @@ export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => voi
   const [broker, setBroker] = useState(s.broker ?? '')
   const [fx, setFx] = useState<'' | 'CHF' | 'EUR'>(s.fx ?? '')
   const [rules, setRules] = useState(() => (s.rules ?? []).map((r) => ({ ...r })))
+  // Neu hinzugefügte Regel bekommt den Fokus, damit man gleich tippen kann
+  const [added, setAdded] = useState(-1)
   const ids = [...cats.map((x) => x.id), 'cash']
   const sum = ids.reduce((t, id) => t + (parseNum(targets[id] ?? '') ?? 0), 0)
   const filled = ids.some((id) => (targets[id] ?? '').trim() !== '')
@@ -173,14 +175,14 @@ export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => voi
       <div className="grid gap-2 border-t border-line pt-4">
         <div className="flex items-center justify-between">
           <span className="text-[13px] font-semibold">Regeln</span>
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setRules((r) => [...r, { title: '', tag: '', detail: '' }])}><Plus />Regel</button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setAdded(rules.length); setRules((r) => [...r, { title: '', tag: '', detail: '' }]) }}><Plus />Regel</button>
         </div>
         {rules.length === 0 && <p className="text-[12.5px] text-muted">Noch keine Regeln. Beispiel: «Nie mehr als 5 % in einen Einzeltitel».</p>}
         {rules.map((r, i) => (
           <div key={i} className="grid gap-2 rounded-xl border border-line p-3">
             <div className="grid grid-cols-[96px_minmax(0,1fr)_auto] gap-2">
               <input aria-label="Stichwort" className="input input-sm" placeholder="Stichwort" maxLength={20} value={r.tag ?? ''} onChange={(e) => setRules((x) => x.map((y, j) => (j === i ? { ...y, tag: e.target.value } : y)))} />
-              <input aria-label="Regel" className="input input-sm" placeholder="Regel" maxLength={120} value={r.title} onChange={(e) => setRules((x) => x.map((y, j) => (j === i ? { ...y, title: e.target.value } : y)))} />
+              <input aria-label="Regel" className="input input-sm" placeholder="Regel" maxLength={120} autoFocus={i === added} value={r.title} onChange={(e) => setRules((x) => x.map((y, j) => (j === i ? { ...y, title: e.target.value } : y)))} />
               <button type="button" className="btn btn-ghost btn-sm" aria-label="Regel entfernen" onClick={() => setRules((x) => x.filter((_, j) => j !== i))}><Trash2 /></button>
             </div>
             <input aria-label="Erklärung" className="input input-sm" placeholder="Erklärung (optional)" maxLength={400} value={r.detail ?? ''} onChange={(e) => setRules((x) => x.map((y, j) => (j === i ? { ...y, detail: e.target.value } : y)))} />

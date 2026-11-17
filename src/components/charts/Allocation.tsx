@@ -117,11 +117,13 @@ export function Allocation({ c }: { c: Calc }) {
         <ul className="grid grid-cols-[minmax(0,1fr)] gap-0.5">
           {rows.map((r) => {
             const pp = r.diff != null ? Math.abs(r.diff * 100).toFixed(1).replace('.0', '') : null
+            // Abweichung auch als Betrag: so viel fehlt bis zum Ziel bzw. ist zu viel (beim heutigen Gesamtwert)
+            const amt = r.diff != null ? `${usd(Math.abs(r.diff) * total)} ${cur()}` : ''
             const note = r.tgt == null ? 'kein Ziel'
-              : r.state === 'over' ? `${pp} Pp über der Obergrenze`
-              : r.cap ? `${pp} Pp Spielraum bis max ${pctPlain(r.tgt, 0)}`
+              : r.state === 'over' ? `${pp} Pp über der Obergrenze · ${amt} zu viel`
+              : r.cap ? `${pp} Pp Spielraum bis max ${pctPlain(r.tgt, 0)} · noch ${amt}`
               : Math.abs(r.diff!) < 0.0005 ? `genau im Ziel ${pctPlain(r.tgt, 0)}`
-              : `${pp} Pp ${r.diff! > 0 ? 'über' : 'unter'} Ziel ${pctPlain(r.tgt, 0)}`
+              : `${pp} Pp ${r.diff! > 0 ? 'über' : 'unter'} Ziel ${pctPlain(r.tgt, 0)} · ${r.diff! > 0 ? amt + ' zu viel' : 'fehlen ' + amt}`
             return (
               <li
                 key={r.b.id}
