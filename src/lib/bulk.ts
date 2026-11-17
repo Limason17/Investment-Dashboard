@@ -53,6 +53,8 @@ export interface PosRow { line: number; ticker: string; shares: number; cost: nu
 export interface TradeRow { line: number; date: string; type: 'kauf' | 'verkauf'; ticker: string; shares: number; price: number; fees: number; bucket?: HoldingBucket; note: string; time?: string; seq?: number }
 /** name: Titelname aus dem Export, wenn der Ticker fehlt (Schwab-Kontoauszug); der Ticker wird beim Planen über den Namen gesucht. */
 export interface DivRow { line: number; payDate: string; exDate: string | null; ticker: string; gross: number; tax: number | null; note: string; name?: string }
+/** Ein- oder Auszahlung aus dem Schwab-Export (Betrag positiv = Einzahlung). */
+export interface CashRow { line: number; date: string; amount: number; note: string }
 /** Aktiensplit aus dem Schwab-Export: zusätzliche Stück ohne Geldfluss (bei Zusammenlegung negativ). */
 export interface SplitRow { line: number; date: string; ticker: string; shares: number }
 export interface Issue { line: number; msg: string }
@@ -63,6 +65,7 @@ export interface ParseResult {
   trades: TradeRow[]
   dividends: DivRow[]
   splits?: SplitRow[]
+  cash?: CashRow[]
   errors: Issue[]
   skipped: Issue[]
 }
@@ -276,12 +279,30 @@ const SCHWAB_DIV = /dividend|div reinvest|cap gain|qual div|non-qual/i
 const SCHWAB_TAX = /nra|withholding|foreign tax/i
 const SCHWAB_SPLIT = /stock split|reverse split/i
 
+/**
+ * Zahlenformat einer Schwab-Datei: US («1,234.56») oder europäisch («1.234,56», «150,25»).
+ * Europäisch, wenn Zahlen mit Komma und 1–2 Nachkommastellen oder «Punkt vor Komma» überwiegen.
+ * Gibt zurück, ob das Komma Tausendertrenner ist (US).
+ */
+function usNumbers(cells: string[]): boolean {
+  let eu = 0, us = 0
+  for (const raw of cells) {
+    const v = (raw ?? '').replace(/[\s'’$€]|USD|US\$/gi, '')
+    if (/\d\.\d{3},\d/.test(v) || /^[-−(]?\d+,\d{1,2}\)?$/.test(v)) eu++
+    else if (/\d,\d{3}\.\d/.test(v) || /^[-−(]?\d+\.\d{1,2}\)?$/.test(v)) us++
+  }
+  return !(eu > us)
+}
+const NUM_IN_TEXT = /-?\d[\d.,]*\d|\d/g
+
 /** Transaktions-Export von Schwab: Spalten Date, Action, Symbol, Quantity, Price, Fees & Comm, Amount. */
 function parseSchwab(rows: string[][], headerRow: number): ParseResult {
   const h = rows[headerRow].map(norm)
   const at = (k: string) => h.indexOf(k)
   const c = { date: at('date'), action: at('action'), symbol: at('symbol'), qty: at('quantity'), price: at('price'), fees: at('feescomm'), amount: at('amount'), desc: at('description') }
-  const res: ParseResult = { format: 'schwab', positions: [], trades: [], dividends: [], splits: [], errors: [], skipped: [] }
+  const res: ParseResult = { format: 'schwab', positions: [], trades: [], dividends: [], splits: [], cash: [], errors: [], skipped: [] }
+  const us = usNumbers(rows.slice(headerRow + 1).flatMap((r) => [r[c.qty], r[c.price], r[c.fees], r[c.amount]]))
+  const n = (raw: string | undefined) => num(raw, us)
   const divs = new Map<string, DivRow>()
   const taxes: { key: string; t: string; d: string; amt: number; line: number }[] = []
   rows.slice(headerRow + 1).forEach((r, i) => {
@@ -290,18 +311,18 @@ function parseSchwab(rows: string[][], headerRow: number): ParseResult {
     const action = r[c.action] ?? ''
     const d = date(r[c.date])
     const t = ticker(r[c.symbol])
-    const amount = num(r[c.amount], true)
+    const amount = n(r[c.amount])
     if (!d) {
       if (!/total/i.test(r.join(' '))) res.skipped.push({ line, msg: 'Zeile ohne Datum' })
       return
     }
     const type = tradeType(action)
     if (type) {
-      const shares = Math.abs(num(r[c.qty], true) ?? NaN), price = num(r[c.price], true)
+      const shares = Math.abs(n(r[c.qty]) ?? NaN), price = n(r[c.price])
       if (!t || !shares || !price) return void res.errors.push({ line, msg: `${action}: Ticker, Stück oder Preis fehlt` })
-      res.trades.push({ line, date: d, type, ticker: t, shares, price, fees: Math.abs(num(r[c.fees], true) ?? 0), note: 'Schwab-Export' })
-    } else if (SCHWAB_SPLIT.test(action) && t && num(r[c.qty], true)) {
-      res.splits!.push({ line, date: d, ticker: t, shares: num(r[c.qty], true)! })
+      res.trades.push({ line, date: d, type, ticker: t, shares, price, fees: Math.abs(n(r[c.fees]) ?? 0), note: 'Schwab-Export' })
+    } else if (SCHWAB_SPLIT.test(action) && t && n(r[c.qty])) {
+      res.splits!.push({ line, date: d, ticker: t, shares: n(r[c.qty])! })
     } else if (SCHWAB_TAX.test(action) && t && amount != null) {
       // Abzug negativ, Rückerstattung (z. B. «NRA Tax Adj» mit positivem Betrag) positiv
       taxes.push({ key: t + d, t, d, amt: -amount, line })
@@ -310,6 +331,8 @@ function parseSchwab(rows: string[][], headerRow: number): ParseResult {
       const prev = divs.get(key)
       if (prev) prev.gross = Math.round((prev.gross + amount) * 100) / 100
       else divs.set(key, { line, payDate: d, exDate: null, ticker: t, gross: amount, tax: null, note: 'Schwab-Export' })
+    } else if (!t && amount && /moneylink|wire|funds (received|paid|sent)|deposit|withdraw|ach (in|out)/i.test(action)) {
+      res.cash!.push({ line, date: d, amount, note: 'Schwab-Export: ' + action })
     } else res.skipped.push({ line, msg: `${action || 'ohne Art'}${t ? ' ' + t : ''}: wird nicht importiert` })
   })
   // Quellensteuer der Dividende zuordnen: gleicher Titel, gleicher Tag, sonst nächste Zahlung innert 10 Tagen.
@@ -319,10 +342,11 @@ function parseSchwab(rows: string[][], headerRow: number): ParseResult {
       const near = [...divs.values()].filter((v) => v.ticker === x.t && Math.abs(+new Date(v.payDate) - +new Date(x.d)) <= 10 * 864e5)
       div = near.sort((a, b) => Math.abs(+new Date(a.payDate) - +new Date(x.d)) - Math.abs(+new Date(b.payDate) - +new Date(x.d)))[0]
     }
-    if (div) div.tax = Math.max(0, Math.round(((div.tax ?? 0) + x.amt) * 100) / 100)
+    // Erst alle Abzüge und Rückerstattungen addieren, dann begrenzen: Die Reihenfolge im Export spielt keine Rolle.
+    if (div) div.tax = Math.round(((div.tax ?? 0) + x.amt) * 100) / 100
     else res.skipped.push({ line: x.line, msg: `Quellensteuer ${x.t} ohne passende Dividende` })
   }
-  res.dividends = [...divs.values()].map((v) => ({ ...v, tax: v.tax ?? 0 }))
+  res.dividends = [...divs.values()].map((v) => ({ ...v, tax: Math.min(v.gross, Math.max(0, v.tax ?? 0)) }))
   return res
 }
 
@@ -369,10 +393,12 @@ function parseSchwabStatement(rows: string[][], headerRow: number): ParseResult 
   const h = rows[headerRow].map(norm)
   const at = (k: string) => h.indexOf(k)
   const c = { date: at('date'), type: at('type'), desc: at('description'), misc: at('miscfees'), comm: at('commissions'), amount: at('amount') }
-  const res: ParseResult = { format: 'schwab', positions: [], trades: [], dividends: [], splits: [], errors: [], skipped: [] }
+  const res: ParseResult = { format: 'schwab', positions: [], trades: [], dividends: [], splits: [], cash: [], errors: [], skipped: [] }
   const body = rows.slice(headerRow + 1).map((r, i) => ({ r, line: headerRow + i + 2 })).filter(({ r }) => r.length > 1)
   const day = (r: string[]) => date((r[c.date] ?? '').trim().split(/\s+/)[0])
-  const money = (raw: string | undefined) => num(raw, true)
+  // Zahlenformat aus den Betragsspalten und den Zahlen in der Beschreibung («BOT +2 PEP @150,25»)
+  const us = usNumbers(body.flatMap(({ r }) => [r[c.misc], r[c.comm], r[c.amount], ...((r[c.desc] ?? '').match(NUM_IN_TEXT) ?? [])]))
+  const money = (raw: string | undefined) => num(raw, us)
 
   // Zusammenlegung (Reverse Split): alte Stück unter der Wertpapiernummer, neue unter dem Ticker, gleicher Tag.
   const alias = new Map<string, string>()
@@ -419,9 +445,9 @@ function parseSchwabStatement(rows: string[][], headerRow: number): ParseResult 
         continue
       }
       const t = sym(what)
-      const shares = Math.abs(num((m ?? a)![2], true) ?? NaN)
+      const shares = Math.abs(num((m ?? a)![2], us) ?? NaN)
       // Zuteilung aus Option: Preis = Betrag / Stück
-      const price = m ? num(m[4], true) : amount != null && shares ? Math.abs(amount) / shares : null
+      const price = m ? num(m[4], us) : amount != null && shares ? Math.abs(amount) / shares : null
       if (!t || !shares || !price || price <= 0) {
         res.errors.push({ line, msg: `${desc.slice(0, 60)}: Ticker, Stück oder Preis nicht lesbar` })
         continue
@@ -441,16 +467,17 @@ function parseSchwabStatement(rows: string[][], headerRow: number): ParseResult 
       } else taxes.push({ key, amt: -amount, line, name })
     } else if (type === 'RAD' && (INTL_REV_OLD.test(desc) || INTL_REV_NEW.test(desc))) {
       /* oben als Split gelesen */
-    } else if (type === 'WIN' || type === 'WOUT' || /WIRED|TRANSFER/i.test(desc)) {
-      res.skipped.push({ line, msg: `Ein-/Auszahlung ${amount != null ? amount.toFixed(2) + ' USD' : ''}: als Cash-Eintrag erfassen` })
+    } else if (type === 'WIN' || type === 'WOUT' || /WIRED|TRANSFER|MONEYLINK/i.test(desc)) {
+      if (amount) res.cash!.push({ line, date: d, amount, note: 'Schwab-Export: ' + desc.slice(0, 60) })
+      else res.skipped.push({ line, msg: `Ein-/Auszahlung ohne Betrag: wird nicht importiert` })
     } else res.skipped.push({ line, msg: `${type || 'ohne Art'} ${desc.slice(0, 50)}: wird nicht importiert` })
   }
   for (const x of taxes) {
     const div = divs.get(x.key)
-    if (div) div.tax = Math.max(0, Math.round(((div.tax ?? 0) + x.amt) * 100) / 100)
+    if (div) div.tax = Math.round(((div.tax ?? 0) + x.amt) * 100) / 100
     else res.skipped.push({ line: x.line, msg: `Buchung ${x.name} ${(-x.amt).toFixed(2)} USD ohne passende Dividende` })
   }
-  res.dividends = [...divs.values()].map((v) => ({ ...v, tax: v.tax ?? 0 }))
+  res.dividends = [...divs.values()].map((v) => ({ ...v, tax: Math.min(v.gross, Math.max(0, v.tax ?? 0)) }))
   return res
 }
 
@@ -521,8 +548,10 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       if (!t) return void err(get(r, 'ticker') ? `Ticker «${get(r, 'ticker')}» ungültig` : 'Ticker fehlt')
       if (!shares || shares <= 0) return void err('Stück fehlt oder ungültig')
       if (!price || price <= 0) return void err('Preis fehlt oder ungültig')
+      if (get(r, 'fees') && num(get(r, 'fees')) == null) return void err(`Gebühr «${get(r, 'fees')}» ungültig`)
+      if (fees < 0) return void err('Gebühr darf nicht negativ sein')
       if (b === null) return void err(`Kategorie «${get(r, 'bucket')}» unbekannt`)
-      res.trades.push({ line, date: d, type, ticker: t, shares: Math.abs(shares), price, fees: Math.abs(fees), bucket: b, note: get(r, 'note') })
+      res.trades.push({ line, date: d, type, ticker: t, shares: Math.abs(shares), price, fees, bucket: b, note: get(r, 'note') })
     } else {
       const d = date(get(r, 'payDate'))
       const gross = num(get(r, 'gross'))

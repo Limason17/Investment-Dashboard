@@ -66,7 +66,8 @@ describe('Import lesen', () => {
     expect(r.format).toBe('schwab')
     expect(r.trades).toHaveLength(1)
     expect(r.dividends).toEqual([expect.objectContaining({ ticker: 'VTI', gross: 4.12, tax: 0.62, payDate: '2026-10-30' })])
-    expect(r.skipped).toHaveLength(1)
+    expect(r.skipped).toHaveLength(0)
+    expect(r.cash).toEqual([expect.objectContaining({ date: '2026-10-28', amount: 1000 })])
   })
   it('liest den Schwab-Kontoauszug mit Type und Description', () => {
     // Erfundene Zeilen im Aufbau des Kontoauszugs (neueste zuerst).
@@ -88,7 +89,8 @@ describe('Import lesen', () => {
     expect(r.format).toBe('schwab')
     expect(r.errors).toEqual([])
     // Optionen, Zins und Einzahlung werden übersprungen
-    expect(r.skipped.map((s) => s.line)).toEqual([6, 10, 11])
+    expect(r.skipped.map((s) => s.line)).toEqual([6, 11])
+    expect(r.cash).toEqual([expect.objectContaining({ line: 10, date: '2026-10-30', amount: 1000 })])
     // Wertpapiernummer aus dem Reverse Split wird zum Ticker
     expect(r.trades.map((t) => [t.type, t.ticker, t.shares, t.price, t.fees])).toEqual([
       ['verkauf', 'KO', 2, 70.5, 0.01],
@@ -572,5 +574,63 @@ describe('Alle Portfolios: Start-Cash eines weiteren Portfolios ist Einsatz, kei
     const s = portfolioSeries(all, timeline(all), chart)!
     expect(s.value.at(-1)).toBeCloseTo(8500 + 3 * 550 + 2 * 70)
     expect(s.gain).toBeCloseTo(150 + 20)
+  })
+})
+
+describe('Import: Live-Test 17.11.', () => {
+  const head = '"Date","Action","Symbol","Description","Quantity","Price","Fees & Comm","Amount"'
+  it('negative Gebühr in der Vorlage wird gemeldet, nicht still umgedreht', () => {
+    const r = parseImport('trades', 'Datum;Art;Ticker;Stück;Preis;Gebühr\n2026-10-01;Kauf;AMD;1;100;−2')
+    expect(r.trades).toHaveLength(0)
+    expect(r.errors[0].msg).toBe('Gebühr darf nicht negativ sein')
+  })
+  it('Steuerrückerstattung zählt unabhängig von der Reihenfolge im Export', () => {
+    const csv = [head,
+      '"11/05/2026","NRA Tax Adj","KO","COCA COLA","","","","$0.26"',
+      '"11/01/2026","NRA Tax Adj","KO","COCA COLA","","","","-$0.77"',
+      '"11/01/2026","Qualified Dividend","KO","COCA COLA","","","","$5.10"',
+    ].join('\n')
+    const r = parseImport('trades', csv)
+    expect(r.dividends).toEqual([expect.objectContaining({ ticker: 'KO', gross: 5.1, tax: 0.51 })])
+  })
+  it('Schwab-Export im europäischen Zahlenformat', () => {
+    const csv = [head.replace(/,/g, ';'),
+      '"03.11.2026";"Buy";"PEP";"PEPSICO";"2";"150,25";"0,50";"-301,00"',
+      '"02.11.2026";"Qualified Dividend";"KO";"COCA COLA";"";"";"";"2,71"',
+      '"01.11.2026";"Sell";"MSFT";"MICROSOFT";"1";"1.150,00";"";"1.150,00"',
+    ].join('\n')
+    const r = parseImport('trades', csv)
+    expect(r.trades.map((t) => [t.ticker, t.price, t.fees])).toEqual([['PEP', 150.25, 0.5], ['MSFT', 1150, 0]])
+    expect(r.dividends[0].gross).toBe(2.71)
+  })
+  it('US-Format bleibt US, auch mit Tausendertrenner', () => {
+    const csv = [head, '"11/03/2026","Buy","MSFT","MICROSOFT","2","$1,410.50","$0.50","-$2,821.50"'].join('\n')
+    expect(parseImport('trades', csv).trades[0]).toMatchObject({ price: 1410.5, fees: 0.5 })
+  })
+  it('Schwab-Kontoauszug im europäischen Zahlenformat', () => {
+    const csv = [
+      'Date; Type; Description; Ref Num; Misc Fees; Commissions; Amount; Balance',
+      '03.11.2026 15:00;TRD;BOT +2 PEP @150,25;12;-0,50;0,00;-301,00;699,00',
+      '02.11.2026 10:15;WIN;WIRED FUNDS RECEIVED 1.000,00 US$;19;-;0,00;1.000,00;1.000,00',
+    ].join('\n')
+    const r = parseImport('trades', csv)
+    expect(r.trades[0]).toMatchObject({ ticker: 'PEP', shares: 2, price: 150.25, fees: 0.5 })
+    expect(r.cash).toEqual([expect.objectContaining({ amount: 1000 })])
+  })
+  it('Einzahlungen aus dem Export werden zu Cash-Buchungen, beim zweiten Import nicht doppelt', () => {
+    const csv = [head,
+      '"10/28/2026","MoneyLink Transfer","","","","","","$1,000.00"',
+      '"10/29/2026","Wire Funds Received","","","","","","$500.00"',
+      '"10/30/2026","MoneyLink Transfer","","","","","","-$200.00"',
+    ].join('\n')
+    const db = empty()
+    const plan = planImport(db, parseImport('trades', csv))
+    expect(plan.cashDelta).toBe(1300)
+    expect(plan.items.map((i) => i.kind)).toEqual(['Einzahlung', 'Einzahlung', 'Auszahlung'])
+    const after = applyOps(db, plan.ops)
+    expect(after.meta.settings!.cash).toBe(2300)
+    const again = planImport(after, parseImport('trades', csv))
+    expect(again.count).toBe(0)
+    expect(again.cashDelta).toBe(0)
   })
 })

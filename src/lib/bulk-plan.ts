@@ -15,7 +15,7 @@ import type { DB, Tx } from './types'
 export type ItemState = 'neu' | 'ändert' | 'doppelt' | 'fehler'
 export interface PlanItem {
   line: number
-  kind: 'Bestand' | 'Kauf' | 'Verkauf' | 'Dividende' | 'Split'
+  kind: 'Bestand' | 'Kauf' | 'Verkauf' | 'Dividende' | 'Split' | 'Einzahlung' | 'Auszahlung'
   ticker: string
   date?: string
   detail: string
@@ -217,6 +217,19 @@ export function planImport(db: DB, p: ParseResult, names: Record<string, string>
       data: { ticker: r.ticker, exDate: r.exDate ?? from?.exDate ?? null, payDate: r.payDate, perShare: from?.perShare ?? null, shares: from?.shares ?? db.positions[r.ticker]?.shares ?? null, gross: r2(r.gross), tax: r2(tax), net, status: 'erhalten', source: by, note: r.note },
     })
     addCash(r.payDate, net)
+  }
+
+  // Ein- und Auszahlungen (Schwab): als Cash-Buchung, sonst fehlt das Geld im Cash.
+  for (const r of p.cash ?? []) {
+    const type = r.amount > 0 ? 'einzahlung' : 'auszahlung'
+    const item: PlanItem = { line: r.line, kind: r.amount > 0 ? 'Einzahlung' : 'Auszahlung', ticker: 'Cash', date: r.date, detail: r.note, amount: r.amount, state: 'neu' }
+    items.push(item)
+    if (existing.some((x) => x.type === type && x.date === r.date && same(x.cashDelta, r.amount))) {
+      item.state = 'doppelt'
+      continue
+    }
+    ops.push({ op: 'set', coll: 'transactions', id: uid(), data: { type, date: r.date, cashDelta: r2(r.amount), note: r.note, createdAt, by } })
+    addCash(r.date, r.amount)
   }
 
   // Cash einmal nachführen; entfällt, solange Cash nicht erfasst wird.

@@ -312,7 +312,7 @@ describe('Schwab-Export: weitere Arten', () => {
     ].join('\n')
     expect(parseImport('trades', csv).dividends[0]).toMatchObject({ gross: 10, tax: 1.5 })
   })
-  it('Optionen, Leerverkäufe und Überweisungen werden übersprungen, nicht falsch gebucht', () => {
+  it('Optionen und Leerverkäufe werden übersprungen, Überweisungen als Cash-Eintrag gelesen', () => {
     const csv = [head,
       '"10/01/2026","Buy to Open","AAPL 12/20/2026 200.00 C","CALL","1","$5.00","$0.65","-$500.65"',
       '"10/02/2026","Sell Short","TSLA","TESLA","1","$200.00","","$200.00"',
@@ -322,7 +322,8 @@ describe('Schwab-Export: weitere Arten', () => {
     const r = parseImport('trades', csv)
     expect(r.trades).toEqual([])
     expect(r.dividends).toEqual([])
-    expect(r.skipped).toHaveLength(4)
+    expect(r.skipped).toHaveLength(3)
+    expect(r.cash).toEqual([expect.objectContaining({ date: '2026-10-03', amount: 5000 })])
   })
 })
 
