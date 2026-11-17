@@ -24,7 +24,7 @@ export function Card({ title, sub, action, children, className, bodyClassName, f
             <h2 className="card-title">{title}</h2>
             {sub && <span className="card-sub">{sub}</span>}
           </div>
-          {action && <div className="ml-auto flex max-w-full flex-none items-center gap-2 overflow-x-auto [scrollbar-width:none]">{action}</div>}
+          {action && <div className="ml-auto flex max-w-full flex-none items-center gap-2 overflow-x-auto [scrollbar-width:none] max-sm:has-[.seg-wide]:w-full">{action}</div>}
         </header>
       )}
       <div className={clsx(flush ? 'px-2 pb-2 pt-2' : 'card-body', 'min-w-0 flex-1', bodyClassName)}>{children}</div>
@@ -98,13 +98,13 @@ export function Segmented<T extends string>({ value, onChange, options, label, c
 /* ------------------------------------------------------------------ Kennzahl */
 export function Stat({ label, value, sub, right, className }: { label: ReactNode; value: ReactNode; sub?: ReactNode; right?: ReactNode; className?: string }) {
   return (
-    <div className={clsx('min-w-0 px-5 py-4', className)}>
-      <div className="label flex items-center gap-1.5">{label}</div>
-      <div className="mt-1.5 flex items-end justify-between gap-3">
-        <div className="min-w-0 truncate text-[22px] font-semibold leading-7 tracking-[-0.025em]">{value}</div>
+    <div className={clsx('min-w-0 px-4 py-3 sm:px-5 sm:py-4', className)}>
+      <div className="label flex items-center gap-1.5 max-sm:text-[11.5px]">{label}</div>
+      <div className="mt-1 flex items-end justify-between gap-3 sm:mt-1.5">
+        <div className="min-w-0 truncate text-[19px] font-semibold leading-6 tracking-[-0.025em] sm:text-[22px] sm:leading-7">{value}</div>
         {right}
       </div>
-      {sub && <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-muted">{sub}</div>}
+      {sub && <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] leading-[1.4] text-muted sm:mt-1 sm:text-[12.5px]">{sub}</div>}
     </div>
   )
 }

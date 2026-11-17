@@ -16,25 +16,46 @@ import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { RangeId, Tx, WithId } from '@/lib/types'
 
-const RANGES: RangeId[] = ['1T', '1W', '1M', '3M', '1J', '5J']
+/** Zeiträume im Kurschart eines Titels: «Max» ab dem ersten Kauf; ohne Kauf (Watchlist) stattdessen 5 Jahre. */
+const RANGES_HELD: RangeId[] = ['1T', '1W', '1M', '3M', '1J', 'MAX']
+const RANGES_NEW: RangeId[] = ['1T', '1W', '1M', '3M', '1J', '5J']
 
 /* ------------------------------------------------------------------ Kursverlauf eines Titels */
 function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: RefLine[]; txs?: WithId<Tx>[] }) {
   const { db, c } = useDepot()
-  const [range, setRange] = useStored<RangeId>('depot.range.titel', '3M', RANGES)
+  // Erster Kauf dieses Titels (auch ein später ganz verkaufter zählt): Beginn der Ansicht «Max»
+  const firstBuy = useMemo(() => {
+    let m: string | null = null
+    for (const x of Object.values(db.transactions)) if (x.type === 'kauf' && x.ticker === t && (!m || x.date < m)) m = x.date
+    return m
+  }, [db.transactions, t])
+  const RANGES = firstBuy ? RANGES_HELD : RANGES_NEW
+  const [stored, setRange] = useStored<RangeId>('depot.range.titel', '3M', [...RANGES_NEW, 'MAX'])
+  // Früher gewähltes «5J» wird bei gekauften Titeln zu «Max» und umgekehrt
+  const range: RangeId = stored === '5J' && firstBuy ? 'MAX' : stored === 'MAX' && !firstBuy ? '5J' : stored
   // Käufe und Verkäufe im Chart ein- oder ausblenden (gilt für alle Titel, bleibt gespeichert)
   const [tradesPref, setTradesPref] = useStored<'an' | 'aus'>('depot.trades.titel', 'an', ['an', 'aus'])
   const showTrades = tradesPref === 'an'
   const tickers = useMemo(() => [t], [t])
-  const { data, pending, error } = useChart(range, tickers)
-  const chart = useMemo(() => (data ? withNow(db, data) : null), [db, data])
+  const { data, pending, error } = useChart(range, tickers, range === 'MAX' ? firstBuy : null)
+  const chart = useMemo(() => {
+    if (!data) return null
+    const full = withNow(db, data)
+    // «Max»: genau ab dem Tag des ersten Kaufs; der Kurs davor wird zur Vergleichsbasis.
+    if (full.range !== 'MAX' || !firstBuy) return full
+    const cut = full.d.findIndex((d) => d >= firstBuy)
+    const values = full.series[t]
+    if (cut <= 0 || !values || full.d.length - cut < 2) return full
+    return { ...full, t: full.t.slice(cut), d: full.d.slice(cut), series: { ...full.series, [t]: values.slice(cut) }, prev: { ...full.prev, [t]: values[cut - 1] ?? full.prev[t] } }
+  }, [db, data, firstBuy, t])
   const view = useMemo(() => {
     const values = chart?.series[t]
     if (!chart || !values || values.length < 2) return null
     const markers: Marker[] = []
     const byIndex = new Map<number, WithId<Tx>[]>()
     for (const x of txs) {
-      if ((x.type !== 'kauf' && x.type !== 'verkauf') || x.date < chart.d[0]) continue
+      // Bei «Max» zählt auch ein Kauf an einem Tag ohne Handel (er erscheint am nächsten Handelstag)
+      if ((x.type !== 'kauf' && x.type !== 'verkauf') || x.date < (chart.range === 'MAX' && firstBuy ? firstBuy : chart.d[0])) continue
       const i = chart.d.findIndex((d) => d >= x.date)
       if (i < 0) continue
       const mk = markers.find((m) => m.i === i && m.type === x.type)
@@ -59,15 +80,15 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
     }
     const shown: RefLine[] = near
     return { values, markers, byIndex, base, chg: base > 0 ? values[values.length - 1] / base - 1 : null, refs: shown, away: refs.filter((r) => !near.includes(r)), vlines }
-  }, [chart, t, txs, refs])
+  }, [chart, t, txs, refs, firstBuy])
 
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-[12.5px] text-muted">
-          {view && chart ? <><Delta value={view.chg} digits={1} className="font-medium" /> {chart.range === '1T' && !c.live ? 'letzter Handelstag' : RANGE_TEXT[chart.range]}</> : <span>Kursverlauf</span>}
+          {view && chart ? <><Delta value={view.chg} digits={1} className="font-medium" /> {chart.range === '1T' && !c.live ? 'letzter Handelstag' : chart.range === 'MAX' && firstBuy ? `seit erstem Kauf (${dfmt(firstBuy)})` : RANGE_TEXT[chart.range]}</> : <span>Kursverlauf</span>}
         </div>
-        <Segmented className="max-sm:flex max-sm:w-full [&>button]:max-sm:flex-1" label="Zeitraum" value={range} onChange={setRange} options={RANGES.map((r) => ({ value: r, label: RANGE_LABEL[r], title: RANGE_TITLE[r] }))} />
+        <Segmented className="max-sm:flex max-sm:w-full [&>button]:max-sm:flex-1" label="Zeitraum" value={range} onChange={setRange} options={RANGES.map((r) => ({ value: r, label: RANGE_LABEL[r], title: r === 'MAX' && firstBuy ? `seit dem ersten Kauf am ${dfmt(firstBuy)}` : RANGE_TITLE[r] }))} />
       </div>
       {view && chart ? (
         <div className="-mx-2">
@@ -132,9 +153,9 @@ const NO_TXS: WithId<Tx>[] = []
 const NO_MARKERS: Marker[] = []
 
 const Fact = ({ label, children }: { label: ReactNode; children: ReactNode }) => (
-  <div className="min-w-0 rounded-xl border border-line bg-white/[0.02] px-3.5 py-3">
-    <div className="label flex items-center gap-1.5">{label}</div>
-    <div className="num mt-1 truncate text-[15px] font-medium tracking-[-0.01em]">{children}</div>
+  <div className="min-w-0 rounded-xl border border-line bg-white/[0.02] px-3 py-2 sm:px-3.5 sm:py-3">
+    <div className="label flex items-center gap-1.5 max-sm:text-[11.5px]">{label}</div>
+    <div className="num mt-0.5 truncate text-[14px] font-medium tracking-[-0.01em] sm:mt-1 sm:text-[15px]">{children}</div>
   </div>
 )
 const Block = ({ title, children }: { title: string; children: ReactNode }) => (
@@ -233,7 +254,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
 
           <PriceChart t={ticker!} refs={refs} txs={txs} />
 
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
             <Fact label="Stück">{qty(p.shares)}</Fact>
             <Fact label="Anteil am Depot">{pctPlain(r?.w)}</Fact>
             <Fact label={<>Ø Einstand {p.costDemo && <DemoTag />}</>}>{money(r?.avg)}</Fact>
@@ -360,7 +381,7 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
 
           <PriceChart t={ticker!} refs={refs} />
 
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
             <Fact label="Grenze">{w.limit ? money(w.limit) : '–'}</Fact>
             <Fact label="Vorsichtige Grenze">{w.limitCautious != null ? money(w.limitCautious) : <span className="text-muted">–</span>}</Fact>
             <Fact label="Bis zur Grenze">{px != null && w.limit ? (px <= w.limit ? <span className="text-up">erreicht</span> : money(px - w.limit)) : '–'}</Fact>

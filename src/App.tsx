@@ -348,28 +348,28 @@ function Dashboard() {
           </aside>
 
           <div className="lg:pl-[252px]">
-            {/* Kopf für Handy und Tablet: Marke, Datenstand, Suche, Aktualisieren */}
-            <div className="flex items-center justify-between gap-3 px-4 pt-[max(12px,env(safe-area-inset-top))] sm:px-6 lg:hidden">
-              <PortfolioSwitcher compact sub={shortDate} className="min-w-0 max-w-[62%]" onManage={() => setPortfoliosOpen(true)} />
-              <div className="flex min-w-0 items-center gap-1">
-                <span className="mr-0.5 inline-flex min-w-0 items-center gap-1.5 text-[11.5px] text-muted" title={statusText(c, now, live) ?? undefined}>
-                  <StatusDot stale={stale} live={c.live} />
-                  <span className="truncate max-[400px]:hidden">{statusText(c, now, live)}</span>
-                </span>
-                <button type="button" data-tour="account" className="btn btn-ghost btn-icon" onClick={() => setAccountOpen(true)} aria-label={CLOUD ? 'Konto und Daten' : 'Daten'}><CircleUser /></button>
-                <button type="button" data-tour="refresh" className="btn btn-ghost btn-icon" onClick={() => void refresh()} disabled={refreshing} aria-label="Kurse und Daten aktualisieren"><RefreshCw className={clsx(refreshing && 'animate-spin')} /></button>
+            {/* Kopf für Handy und Tablet: eine kompakte Zeile mit Seitentitel, darunter Portfolio und Datum; rechts Datenstand, Konto, Aktualisieren */}
+            <div className="flex items-center gap-2 px-4 pb-1 pt-[max(10px,env(safe-area-inset-top))] sm:px-6 lg:hidden">
+              <div className="min-w-0 flex-1">
+                <h1 className="flex items-center gap-2 text-[20px] font-semibold leading-[26px] tracking-[-0.025em]">
+                  <span className="truncate">{meta.label}</span>
+                  {c.settings.demo && <span className="inline-flex h-4 flex-none items-center rounded-[4px] border border-warn/25 bg-warn/10 px-1 text-[9px] font-medium uppercase tracking-[0.06em] text-warn">Test</span>}
+                </h1>
+                <PortfolioSwitcher mini sub={shortDate} className="-ml-1 w-fit max-w-[calc(100%+4px)]" onManage={() => setPortfoliosOpen(true)} />
               </div>
+              <span className="grid size-6 flex-none place-items-center" title={statusText(c, now, live) ?? undefined} aria-label={statusText(c, now, live) ?? undefined} role="img">
+                <StatusDot stale={stale} live={c.live} />
+              </span>
+              <button type="button" data-tour="account" className="btn btn-ghost btn-icon -mr-1" onClick={() => setAccountOpen(true)} aria-label={CLOUD ? 'Konto und Daten' : 'Daten'}><CircleUser /></button>
+              <button type="button" data-tour="refresh" className="btn btn-ghost btn-icon -mr-2" onClick={() => void refresh()} disabled={refreshing} aria-label="Kurse und Daten aktualisieren"><RefreshCw className={clsx(refreshing && 'animate-spin')} /></button>
             </div>
 
-            <main className="mx-auto max-w-[1440px] px-3 pb-[calc(104px+env(safe-area-inset-bottom))] sm:px-6 lg:px-9 lg:pb-14">
-              <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-1 pb-4 pt-5 sm:px-0 sm:pb-6 lg:pt-8 [@media(max-height:800px)]:lg:pb-4 [@media(max-height:800px)]:lg:pt-5">
+            <main className="mx-auto max-w-[1440px] px-3 pt-2.5 pb-[calc(104px+env(safe-area-inset-bottom))] sm:px-6 lg:px-9 lg:pb-14 lg:pt-0">
+              <header className={clsx('flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-1 pb-3 sm:px-0 lg:pb-6 lg:pt-8 [@media(max-height:800px)]:lg:pb-4 [@media(max-height:800px)]:lg:pt-5', !allView && 'max-lg:hidden')}>
                 <div className="min-w-0">
-                  {allView && <div className="mb-2 inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/[0.08] px-2.5 py-1 text-[12px] text-ink-2">Gesamtansicht aller Portfolios · nur ansehen</div>}
-                  <h1 className="flex items-center gap-2.5 text-[24px] font-semibold leading-8 tracking-[-0.03em] sm:text-[26px]">
-                    {meta.label}
-                    {c.settings.demo && <span className="inline-flex h-[18px] items-center rounded-[5px] border border-warn/25 bg-warn/10 px-1.5 text-[10px] font-medium uppercase tracking-[0.06em] text-warn lg:hidden">Testdaten</span>}
-                  </h1>
-                  <p className="mt-1 text-[13.5px] text-muted max-sm:hidden [@media(max-height:800px)]:hidden">{meta.sub}</p>
+                  {allView && <div className="inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/[0.08] px-2.5 py-1 text-[12px] text-ink-2 lg:mb-2">Gesamtansicht aller Portfolios · nur ansehen</div>}
+                  <h1 className="hidden items-center gap-2.5 text-[26px] font-semibold leading-8 tracking-[-0.03em] lg:flex">{meta.label}</h1>
+                  <p className="mt-1 hidden text-[13.5px] text-muted lg:block [@media(max-height:800px)]:hidden">{meta.sub}</p>
                 </div>
                 <div className="hidden items-center gap-2 lg:flex">
                   <span className="mr-2 text-[12.5px] text-muted">{dateLine}</span>

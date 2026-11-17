@@ -18,7 +18,7 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2)
  * Portfolio-Wechsel als eigenes Aufklappmenü: aktuelles Portfolio mit Häkchen, Gesamtansicht,
  * Neu anlegen und Verwalten. Schliesst bei Klick daneben und mit Esc; Pfeiltasten wählen.
  */
-export function PortfolioSwitcher({ onManage, className, compact, sub }: { onManage: () => void; className?: string; compact?: boolean; sub?: string }) {
+export function PortfolioSwitcher({ onManage, className, compact, mini, sub }: { onManage: () => void; className?: string; compact?: boolean; /** nur eine Textzeile unter dem Seitentitel (Handy) */ mini?: boolean; sub?: string }) {
   const { portfolios, portfolio } = useStore()
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
@@ -60,6 +60,21 @@ export function PortfolioSwitcher({ onManage, className, compact, sub }: { onMan
 
   return (
     <div ref={root} data-tour="portfolio" className={clsx('relative', className)}>
+      {mini ? (
+        <button
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-controls={listId}
+          onClick={() => setOpen((o) => !o)}
+          title="Portfolio wechseln"
+          className="flex min-h-6 max-w-full items-center gap-1 rounded-md px-1 text-left text-[12px] leading-4 text-muted transition-colors active:bg-white/[0.06]"
+        >
+          {portfolio === ALL && <Layers className="size-3 flex-none text-accent-2" />}
+          <span className="truncate"><span className="font-medium text-ink-2">{current?.name}</span>{sub ? ' · ' + sub : ''}</span>
+          <ChevronsUpDown className="size-3 flex-none" />
+        </button>
+      ) : (
       <button
         type="button"
         aria-haspopup="menu"
@@ -77,6 +92,7 @@ export function PortfolioSwitcher({ onManage, className, compact, sub }: { onMan
         </span>
         <ChevronsUpDown className="size-3.5 flex-none text-muted" />
       </button>
+      )}
 
       <AnimatePresence>
         {open && (

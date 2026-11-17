@@ -683,6 +683,20 @@
   color: var(--color-muted);
 }
 
+/* Handy: Karten etwas enger, damit mehr Inhalt auf den Bildschirm passt */
+@media (max-width: 639px) {
+  .card {
+    border-radius: 14px;
+  }
+  .card-head {
+    padding: 13px 16px 0;
+    min-height: 40px;
+  }
+  .card-body {
+    padding: 12px 16px 16px;
+  }
+}
+
 /* Touch-Geräte (Handy, Tablet): grössere Tippziele, gleiches Aussehen.
    Eingabefelder mit 16px Schrift, sonst zoomt iOS beim Antippen in die Seite. */
 @media (pointer: coarse) {

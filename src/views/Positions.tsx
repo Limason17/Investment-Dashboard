@@ -91,7 +91,7 @@ export function Positions() {
   const rangeText = range === '1T' && !c.live ? 'letzter Handelstag' : RANGE_TEXT[range]
   const glTitle = range === 'MAX' ? 'seit Kauf' : rangeText
   const onSort = (k: SortKey) => setSort((s) => (s.k === k ? { k, d: s.d === 1 ? -1 : 1 } : { k, d: k === 't' ? 1 : -1 }))
-  const rangeSwitch = <Segmented label="Zeitraum" value={range} onChange={setRange} options={ranges.map((r) => ({ value: r, label: RANGE_LABEL[r], title: RANGE_TITLE[r] }))} />
+  const rangeSwitch = <Segmented className="seg-wide max-sm:flex max-sm:w-full [&>button]:max-sm:flex-1" label="Zeitraum" value={range} onChange={setRange} options={ranges.map((r) => ({ value: r, label: RANGE_LABEL[r], title: RANGE_TITLE[r] }))} />
   const bucketName = HOLDING_BUCKETS.find((b) => b.id === bucket)?.name
   // Nur Kategorien mit Titeln zeigen (eine leere, aber gefilterte bleibt sichtbar, damit der Filter aufhebbar ist)
   const cats = HOLDING_BUCKETS.filter((b) => b.id === bucket || c.rows.some((r) => catOf(r.p.bucket) === b.id))
@@ -192,25 +192,25 @@ export function Positions() {
         title="Alle Positionen"
         sub={`${c.rows.length} Titel · ${c.valuationComplete ? usd(c.sec) + ' ' + cur() : 'Marktwert offen'}`}
         flush
-        action={<div className="flex gap-1"><button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'trades' })}><Upload /> Hochladen</button><button type="button" className="btn btn-ghost btn-sm" onClick={() => exportCsv(c)}><Download /> CSV</button></div>}
+        action={<div className="flex gap-1 max-sm:-mr-2"><button type="button" className="btn btn-ghost btn-sm max-sm:!px-2.5" onClick={() => nav.openEntry('import', { kind: 'trades' })} aria-label="Positionen hochladen" title="Positionen hochladen"><Upload /><span className="max-sm:hidden">Hochladen</span></button><button type="button" className="btn btn-ghost btn-sm max-sm:!px-2.5" onClick={() => exportCsv(c)} aria-label="Als CSV herunterladen" title="Als CSV herunterladen"><Download /><span className="max-sm:hidden">CSV</span></button></div>}
       >
+        {/* Handy: Suche und Sortierung in einer Zeile, darunter Gruppieren und Filter */}
         <div className="flex flex-wrap items-center gap-2 px-2 pb-2 sm:px-3">
-          <label className="relative min-w-[150px] flex-1 sm:max-w-[240px]">
+          <label className="relative min-w-0 flex-1 basis-[150px] sm:max-w-[240px]">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
             <input className="input input-sm !pl-8" placeholder="Titel suchen" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Titel suchen" />
           </label>
-          {bucketName && (
-            <button type="button" className="chip chip-mute !h-7 gap-1.5" onClick={() => setBucket('alle')} title="Filter aufheben">
-              {bucketName} <X className="size-3" />
-            </button>
-          )}
-          <Switch checked={grouped === 'an'} onChange={(v) => setGrouped(v ? 'an' : 'aus')} label="Nach Kategorie" />
-          <label className="ml-auto flex items-center gap-2 text-[12px] text-muted md:hidden">
-            Sortiert nach
-            <select className="input input-sm !w-auto" value={sort.k} onChange={(e) => setSort({ k: e.target.value as SortKey, d: e.target.value === 't' ? 1 : -1 })}>
-              {SORTS.map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}
-            </select>
-          </label>
+          <select className="input input-sm !w-auto flex-none md:hidden" value={sort.k} onChange={(e) => setSort({ k: e.target.value as SortKey, d: e.target.value === 't' ? 1 : -1 })} aria-label="Sortieren nach">
+            {SORTS.map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}
+          </select>
+          <div className="flex items-center gap-2 max-md:w-full max-md:px-0.5">
+            <Switch checked={grouped === 'an'} onChange={(v) => setGrouped(v ? 'an' : 'aus')} label="Nach Kategorie" />
+            {bucketName && (
+              <button type="button" className="chip chip-mute !h-7 gap-1.5 max-md:ml-auto" onClick={() => setBucket('alle')} title="Filter aufheben">
+                {bucketName} <X className="size-3" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Ab Tablet: Tabelle */}
@@ -257,9 +257,9 @@ export function Positions() {
                           <td className="r num">{usd(r.px)}</td>
                           <td className="r">{d?.move.abs != null ? <Delta value={d.move.abs} kind="usd" icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
                           <td className="r" title={d?.move.sinceBuy ? 'seit Kauf' : undefined}>{d?.move.pct != null ? <Delta value={d.move.pct} digits={2} icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
-                          <td className="r leading-tight max-lg:hidden">
-                            <div className="num text-ink-2">{qty(r.p.shares)}</div>
-                            <div className="num text-[11.5px] text-muted">{usd(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}</div>
+                          {/* genau wie die Überschrift: Stück · Ø Einstand auf einer Zeile */}
+                          <td className="r num whitespace-nowrap text-ink-2 max-lg:hidden">
+                            {qty(r.p.shares)} <span className="text-muted">·</span> Ø {usd(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}
                           </td>
                           <td className="r num font-medium">{usd(r.val)}</td>
                           <td className="r num text-ink-2">{share(r.val)}</td>
@@ -286,9 +286,9 @@ export function Positions() {
 
         {/* Handy: Liste zum Antippen */}
         <div className="md:hidden">
-          <div className="flex justify-between border-b border-line px-3 pb-2 text-[11.5px] text-faint">
-            <span>Titel · Verlauf {RANGE_LABEL[range]}</span>
-            <span>Wert · Gewinn/Verlust in {cur()}</span>
+          <div className="flex justify-between gap-3 whitespace-nowrap border-b border-line px-3 pb-2 text-[11.5px] text-faint">
+            <span>Titel · Stück · Ø Einstand</span>
+            <span>Wert · G/V {RANGE_LABEL[range]} in {cur()}</span>
           </div>
           {groups.map(({ b, rs }) => {
             const sum = rs.every((r) => r.val != null) ? rs.reduce((s, r) => s + r.val!, 0) : null
@@ -306,7 +306,13 @@ export function Positions() {
                     return (
                       <li key={r.t} className="border-b border-white/[0.04] last:border-b-0">
                         <button type="button" onClick={() => nav.openPosition(r.t)} className="grid min-h-[58px] w-full grid-cols-[minmax(0,1fr)_56px_auto] items-center gap-3 px-3 py-2 text-left active:bg-white/[0.04]">
-                          <Ticker t={r.t} name={r.p.name} />
+                          <span className="min-w-0">
+                            <span className="flex min-w-0 items-baseline gap-2">
+                              <span className="tk flex-none">{r.t}</span>
+                              <span className="num truncate text-[11.5px] text-muted">{qty(r.p.shares)} · Ø {usd(r.avg)}</span>
+                            </span>
+                            <span className="block truncate text-[12px] leading-4 text-muted">{r.p.name}</span>
+                          </span>
                           <span className={pending ? 'opacity-40' : ''}><Sparkline width={56} height={26} values={d?.values ?? []} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} /></span>
                           <span className="min-w-[96px] text-right leading-tight">
                             <span className="num block text-[13.5px] font-medium">{usd(r.val)}<Cur /></span>
