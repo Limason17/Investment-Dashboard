@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Command } from 'cmdk'
+import { Command, defaultFilter } from 'cmdk'
 import { CircleUser, Download, Plus, Sparkles, RefreshCw, Search, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useDepot, useNav, type EntryType } from '@/lib/context'
@@ -13,6 +13,23 @@ const ENTRIES: { type: EntryType; label: string }[] = [
   { type: 'notiz', label: 'Notiz schreiben' },
   { type: 'import', label: 'Positionen hochladen (Vorlage, Excel, Schwab-CSV)' },
 ]
+
+/**
+ * Trefferliste: Ein Ticker, der genau passt, steht zuoberst (Enter öffnet ihn), dann Ticker, die so beginnen,
+ * dann Einträge, die das Gesuchte als Wortteil enthalten; erst danach die unscharfen Treffer.
+ */
+export function paletteFilter(value: string, search: string, keywords?: string[]) {
+  const q = search.trim().toLowerCase()
+  const base = defaultFilter ? defaultFilter(value, search, keywords) : 0
+  if (!q || !base) return base
+  const v = value.toLowerCase()
+  const tk = /^(position|watchlist) (\S+)/.exec(v)?.[2]
+  if (tk === q) return 4
+  if (tk?.startsWith(q)) return 3
+  if (v.split(/\s+/).some((w) => w.startsWith(q))) return 2 + base / 10
+  if (v.includes(q)) return 1 + base / 10
+  return base / 10
+}
 
 const Item = ({ value, onSelect, children }: { value: string; onSelect: () => void; children: ReactNode }) => (
   <Command.Item value={value} onSelect={onSelect}>{children}</Command.Item>
@@ -41,7 +58,7 @@ export function CommandPalette({ open, onOpenChange, views, onExport, onRefresh,
         <Dialog.Overlay className="fixed inset-0 z-[60] animate-[overlay-in_.15s_ease-out] bg-black/55 backdrop-blur-[3px]" />
         <Dialog.Content aria-describedby={undefined} className="fixed inset-x-0 top-[16vh] z-[61] mx-auto w-[min(620px,calc(100vw-24px))] animate-[pop-in_.18s_var(--ease-out-soft)] overflow-hidden rounded-2xl border border-line-2 bg-[#101216] shadow-[0_30px_80px_-10px_rgb(0_0_0/0.85),inset_0_1px_0_rgb(255_255_255/0.05)] outline-none">
           <Dialog.Title className="sr-only">Suchen und springen</Dialog.Title>
-          <Command loop>
+          <Command loop filter={paletteFilter}>
             <div className="relative">
               <Search className="pointer-events-none absolute left-[18px] top-1/2 size-4 -translate-y-1/2 text-muted" />
               <Command.Input placeholder="Titel, Ansicht oder Aktion suchen" />

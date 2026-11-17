@@ -356,3 +356,15 @@ describe('Kalender: Monatsende, Jahreswechsel, Zeitumstellung', () => {
     expect(weekday('2026-11-14')).toBe(weekday('2026-11-21'))
   })
 })
+
+describe('Befehlspalette', () => {
+  it('genauer Ticker steht vor unscharfen Treffern', async () => {
+    const { paletteFilter } = await import('../features/CommandPalette')
+    const plan = paletteFilter('ansicht Plan & Termine', 'aapl')
+    const aapl = paletteFilter('position AAPL Apple Inc.', 'aapl')
+    const aap = paletteFilter('position AAP Advance Auto Parts', 'aap')
+    expect(aapl).toBeGreaterThan(plan)
+    expect(aap).toBeGreaterThan(paletteFilter('ansicht Plan & Termine', 'aap'))
+    expect(paletteFilter('position MSFT Microsoft', 'xyz')).toBe(0)
+  })
+})
