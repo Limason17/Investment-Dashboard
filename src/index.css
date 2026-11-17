@@ -598,6 +598,16 @@
     opacity: 1;
   }
 }
+@keyframes view-in {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
 @keyframes pop-in {
   from {
     transform: translateY(8px) scale(0.985);

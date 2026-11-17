@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import { Briefcase, CalendarRange, CircleUser, Coins, LayoutDashboard, NotebookPen, Plus, RefreshCw, Target, type LucideIcon } from 'lucide-react'
-import { AnimatePresence, motion, MotionConfig } from 'motion/react'
+import { motion, MotionConfig } from 'motion/react'
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { Toaster } from '@/components/Sheet'
 import { AccountSheet, AuthScreen, VerifyScreen } from '@/features/Account'
@@ -378,8 +378,8 @@ function Dashboard() {
                 </div>
               </header>
 
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div key={view} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
+              {/* Neue Ansicht sofort zeigen (kein Warten auf das Ausblenden der alten): wirkt schneller, besonders auf langsamen Geräten */}
+              <div key={view} className="animate-[view-in_.16s_var(--ease-out-soft)]">
                   <ErrorBoundary scope="view" key={view + ':' + portfolio}>
                     {view === 'uebersicht' && <Overview />}
                     {view === 'positionen' && <Positions />}
@@ -388,8 +388,7 @@ function Dashboard() {
                     {view === 'plan' && <Plan />}
                     {view === 'journal' && <Journal />}
                   </ErrorBoundary>
-                </motion.div>
-              </AnimatePresence>
+              </div>
 
               <footer className="mx-auto mt-10 max-w-3xl px-2 text-center text-[12px] leading-[1.6] text-faint sm:mt-12">
                 Analyse-Werkzeug, keine Anlageberatung und keine Orderausführung. Massgebend sind die Kontoauszüge deines Brokers.
