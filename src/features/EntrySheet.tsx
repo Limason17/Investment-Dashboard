@@ -365,6 +365,8 @@ function NoteForm(fp: FormProps) {
 export function EntrySheet({ open, type: initial, fromId, ticker, kind, text, onClose }: { open: boolean; type: EntryType; fromId?: string; ticker?: string; kind?: ImportKind; text?: string; onClose: () => void }) {
   // Das Blatt wird bei jedem Öffnen neu aufgebaut (key in App), darum genügt der Startwert.
   const [type, setType] = useState<EntryType>(initial)
+  // Aus einem Titel heraus (Kauf / Verkauf): nur diese zwei Arten zur Wahl
+  const tradeOnly = !!ticker && !fromId && (initial === 'kauf' || initial === 'verkauf')
   const [busy, setBusy] = useState(false)
   const formId = useId()
   const fp: FormProps = {
@@ -382,7 +384,7 @@ export function EntrySheet({ open, type: initial, fromId, ticker, kind, text, on
     <Sheet
       open={open}
       onClose={onClose}
-      title={type === 'import' ? 'Positionen hochladen' : confirming ? 'Dividende bestätigen' : editing ? 'Eintrag bearbeiten' : 'Neuer Eintrag'}
+      title={type === 'import' ? 'Positionen hochladen' : confirming ? 'Dividende bestätigen' : editing ? 'Eintrag bearbeiten' : tradeOnly ? `${ticker} kaufen oder verkaufen` : 'Neuer Eintrag'}
       sub={CLOUD ? 'Wird in deinem Konto gespeichert. Es werden nie Orders platziert.' : 'Wird nur lokal auf diesem Rechner gespeichert. Es werden nie Orders platziert.'}
       footer={
         <>
@@ -391,7 +393,7 @@ export function EntrySheet({ open, type: initial, fromId, ticker, kind, text, on
         </>
       }
     >
-      {!confirming && !editing && type !== 'import' && <Segmented className="mb-5 flex w-full [&>button]:flex-1 [&>button]:px-1" label="Art des Eintrags" value={type} onChange={setType} options={TYPES} />}
+      {!confirming && !editing && type !== 'import' && <Segmented className="mb-5 flex w-full [&>button]:flex-1 [&>button]:px-1" label="Art des Eintrags" value={type} onChange={setType} options={tradeOnly ? TYPES.slice(0, 2) : TYPES} />}
       {type === 'kauf' && <TradeForm key="kauf" type="kauf" ticker={ticker} fromId={fromId} {...fp} />}
       {type === 'verkauf' && <TradeForm key="verkauf" type="verkauf" ticker={ticker} fromId={fromId} {...fp} />}
       {type === 'dividende' && <DividendForm key={fromId ?? 'neu'} fromId={fromId} {...fp} />}

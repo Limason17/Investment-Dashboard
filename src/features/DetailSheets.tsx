@@ -1,4 +1,4 @@
-import { Pencil, RefreshCw, ShoppingCart, TrendingDown } from 'lucide-react'
+import { Pencil, RefreshCw } from 'lucide-react'
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { LimitTrack } from '@/components/charts/Small'
 import { TimeChart, TradeGlyph, type Marker, type RefLine, type VLine } from '@/components/charts/TimeChart'
@@ -21,13 +21,16 @@ const RANGES_HELD: RangeId[] = ['1T', '1W', '1M', '3M', '1J', 'MAX']
 const RANGES_NEW: RangeId[] = ['1T', '1W', '1M', '3M', '1J', '5J']
 
 /* ------------------------------------------------------------------ Kursverlauf eines Titels */
-function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: RefLine[]; txs?: WithId<Tx>[] }) {
+function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?: RefLine[]; txs?: WithId<Tx>[]; /** Ø Einstand: Bezugslinie der Ansicht «Max» */ avg?: number | null }) {
   const { db, c } = useDepot()
   // Erster Kauf dieses Titels (auch ein später ganz verkaufter zählt): Beginn der Ansicht «Max»
-  const firstBuy = useMemo(() => {
-    let m: string | null = null
-    for (const x of Object.values(db.transactions)) if (x.type === 'kauf' && x.ticker === t && (!m || x.date < m)) m = x.date
-    return m
+  // Dazu der Preis dieses Kaufs (mehrere Käufe am ersten Tag: gewichtet) und die Zahl der Käufe.
+  const { firstBuy, firstPx, buys } = useMemo(() => {
+    const list = Object.values(db.transactions).filter((x) => x.type === 'kauf' && x.ticker === t)
+    const m = list.reduce<string | null>((a, x) => (!a || x.date < a ? x.date : a), null)
+    const day = list.filter((x) => x.date === m && (x.shares ?? 0) > 0 && x.price != null)
+    const n = day.reduce((a, x) => a + x.shares!, 0)
+    return { firstBuy: m, firstPx: n > 0 ? day.reduce((a, x) => a + x.shares! * x.price!, 0) / n : null, buys: list.length }
   }, [db.transactions, t])
   const RANGES = firstBuy ? RANGES_HELD : RANGES_NEW
   const [stored, setRange] = useStored<RangeId>('depot.range.titel', '3M', [...RANGES_NEW, 'MAX'])
@@ -66,7 +69,9 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
       byIndex.set(i, [...(byIndex.get(i) ?? []), x])
     }
     markers.sort((a, b) => a.i - b.i).forEach((m, k) => (m.seq = k + 1))
-    const base = chart.prev[t] ?? values[0]
+    // «Max»: Startlinie = Preis des ersten Kaufs. Gab es nur einen Kauf, ist das der Ø Einstand (gleiche Linie).
+    const buyBase = chart.range === 'MAX' && firstBuy ? (buys === 1 && avg != null && avg > 0 ? avg : firstPx) : null
+    const base = buyBase ?? chart.prev[t] ?? values[0]
     // Schwellen nur zeigen, wenn sie den Kursverlauf nicht zur flachen Linie drücken.
     const lo = Math.min(...values), hi = Math.max(...values)
     const span = Math.max(hi - lo, hi * 0.02)
@@ -80,7 +85,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
     }
     const shown: RefLine[] = near
     return { values, markers, byIndex, base, chg: base > 0 ? values[values.length - 1] / base - 1 : null, refs: shown, away: refs.filter((r) => !near.includes(r)), vlines }
-  }, [chart, t, txs, refs, firstBuy])
+  }, [chart, t, txs, refs, firstBuy, firstPx, buys, avg])
 
   return (
     <div>
@@ -108,7 +113,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
             ariaLabel={`Kursverlauf ${t}`}
             tooltipExtra={(i) => (
               <>
-                {view.base > 0 && <div className="tip-row"><span>im Zeitraum</span><b className={view.values[i] >= view.base ? '!text-up' : '!text-down'}>{pct(view.values[i] / view.base - 1, 1)}</b></div>}
+                {view.base > 0 && <div className="tip-row"><span>{chart.range === 'MAX' && firstBuy ? 'seit erstem Kauf' : 'im Zeitraum'}</span><b className={view.values[i] >= view.base ? '!text-up' : '!text-down'}>{pct(view.values[i] / view.base - 1, 1)}</b></div>}
                 {showTrades && view.byIndex.get(i)?.map((x) => (
                   <div key={x.id} className="mt-2 border-t border-line pt-2 text-[11.5px]">
                     <div className="flex items-center justify-between gap-3">
@@ -136,10 +141,12 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS }: { t: string; refs?: Ref
           )}
         </div>
       )}
-      {view && (view.markers.length > 0 || view.refs.length > 0 || view.away.length > 0) && (
+      {view && (view.markers.length > 0 || view.refs.length > 0 || view.away.length > 0 || chart?.range === 'MAX') && (
         <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11.5px] text-muted">
           {showTrades && view.markers.some((m) => m.type === 'kauf') && <span className="inline-flex items-center gap-1.5"><TradeGlyph type="kauf" />Kauf</span>}
           {showTrades && view.markers.some((m) => m.type === 'verkauf') && <span className="inline-flex items-center gap-1.5"><TradeGlyph type="verkauf" />Verkauf</span>}
+          {/* «Max» mit mehreren Käufen: die graue Startlinie ist der Preis des ersten Kaufs */}
+          {chart?.range === 'MAX' && firstBuy && !view.refs.some((r) => Math.abs(r.y - view.base) < 1e-6) && <span className="num inline-flex items-center gap-1.5"><i className="inline-block w-4 border-t border-dashed border-[#4f5668]" />1. Kauf {money(view.base)}</span>}
           {view.refs.map((r) => <span key={r.label} className="num inline-flex items-center gap-1.5"><i className="inline-block w-4 border-t border-dashed" style={{ borderColor: r.color }} />{r.name === 'Ø Einstand' ? r.label.replace('Ø Einstand ', 'Ø ') : r.label}</span>)}
           {view.away.length > 0 && <span>{view.away.map((r) => r.label).join(' · ')}: ausserhalb des Ausschnitts</span>}
           {view.markers.length > 0 && <Switch className="ml-auto !text-[11.5px] !text-muted" checked={showTrades} onChange={(v) => setTradesPref(v ? 'an' : 'aus')} label="Käufe/Verkäufe" title="Käufe und Verkäufe im Chart zeigen" />}
@@ -230,8 +237,8 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
         ) : (
           <>
             <button type="button" className="btn btn-ghost mr-auto" onClick={() => setEdit(true)}><Pencil /> Bearbeiten</button>
-            <button type="button" className="btn" onClick={() => { onClose(); nav.openEntry('verkauf', { ticker: ticker! }) }}><TrendingDown /> Verkauf</button>
-            <button type="button" className="btn btn-primary" onClick={() => { onClose(); nav.openEntry('kauf', { ticker: ticker! }) }}><ShoppingCart /> Kauf</button>
+            {/* Ein Knopf für beide Richtungen: Kauf oder Verkauf wählt man im Eintrag oben */}
+            <button type="button" className="btn btn-primary min-w-[148px]" onClick={() => { onClose(); nav.openEntry('kauf', { ticker: ticker! }) }} title="Kauf oder Verkauf erfassen">Kauf / Verkauf</button>
           </>
         )
       }
@@ -252,7 +259,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
             </div>
           </div>
 
-          <PriceChart t={ticker!} refs={refs} txs={txs} />
+          <PriceChart t={ticker!} refs={refs} txs={txs} avg={r?.avg} />
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
             <Fact label="Stück">{qty(p.shares)}</Fact>
@@ -355,7 +362,7 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
         ) : (
           <>
             <button type="button" className="btn btn-ghost mr-auto" onClick={() => setEdit(true)}><Pencil /> Bearbeiten</button>
-            <button type="button" className="btn btn-primary" onClick={() => { onClose(); nav.openEntry('kauf', { ticker: ticker! }) }}><ShoppingCart /> Kauf erfassen</button>
+            <button type="button" className="btn btn-primary min-w-[148px]" onClick={() => { onClose(); nav.openEntry('kauf', { ticker: ticker! }) }}>Kauf erfassen</button>
           </>
         )
       }

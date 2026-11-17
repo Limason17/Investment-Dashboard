@@ -126,8 +126,9 @@ function timeTicks(t: number[], d: string[], kind: 'intraday' | 'daily', iw: num
  * ein Tooltip für alle Reihen. Pfeiltasten bewegen das Fadenkreuz; auf dem Handy liest der Finger ab.
  */
 const NO_REFS: RefLine[] = []
+const NO_MARKERS: Marker[] = []
 
-export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260, refs: refsIn = NO_REFS, markers = [], vlines = [], baseline: baselineIn, split: splitIn, signs, format: formatIn = usd, tickFormat, onHover, tooltipExtra, ariaLabel, animateKey, pending, live, empty }: {
+export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260, refs: refsIn = NO_REFS, markers = NO_MARKERS, vlines = [], baseline: baselineIn, split: splitIn, signs, format: formatIn = usd, tickFormat, onHover, tooltipExtra, ariaLabel, animateKey, pending, live, empty }: {
   /** Zeitpunkt je Punkt, Millisekunden */
   t: number[]
   /** Handelstag je Punkt, JJJJ-MM-TT */
@@ -180,7 +181,7 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
   const sv = split == null || split === false ? undefined : typeof split === 'number' ? split : (baseline ?? series[0]?.values.find(Number.isFinite))
 
   const { y, ticks, tickFmt } = useMemo(() => {
-    const all = series.flatMap((s) => s.values).concat(refs.map((r) => r.y), baseline != null ? [baseline] : [], sv != null ? [sv] : []).filter(Number.isFinite)
+    const all = series.flatMap((s) => s.values).concat(refs.map((r) => r.y), baseline != null ? [baseline] : [], sv != null ? [sv] : [], markers.map((m) => (m.price != null && m.price > 0 ? m.price * k : NaN))).filter(Number.isFinite)
     let lo = Math.min(...all), hi2 = Math.max(...all)
     if (!Number.isFinite(lo)) { lo = 0; hi2 = 1 }
     const pad = (hi2 - lo) * 0.1 || Math.abs(hi2) * 0.02 || 1
@@ -188,7 +189,7 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
     const sc = scaleLinear().domain([lo >= 0 ? Math.max(0, lo - pad) : lo - pad, hi2 <= 0 ? Math.min(0, hi2 + pad) : hi2 + pad]).range([T + ih, T]).nice(5)
     const tk = sc.ticks(5)
     return { y: sc, ticks: tk, tickFmt: tickFormat ?? axisFormatter(tk) }
-  }, [series, refs, baseline, sv, ih, tickFormat])
+  }, [series, refs, baseline, sv, ih, tickFormat, markers, k])
 
   const axis = useMemo(() => timeTicks(t, d, kind, iw), [t, d, kind, iw])
 
@@ -276,7 +277,8 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
   // Etiketten für Käufe/Verkäufe; überlappende rücken weiter vom Kurs weg.
   const tradeTags: { m: Marker; c: string; cx: number; cy: number; px: number; by: number; w: number; below: boolean; sign: string; rest: string }[] = []
   for (const m of [...markers].sort((a, b) => a.i - b.i)) {
-    const cx = x(m.i), cy = y(main.values[m.i])
+    // Punkt auf dem bezahlten Preis (nicht dem Schlusskurs des Tages): so liegt ein einzelner Kauf genau auf seiner Einstandslinie
+    const cx = x(m.i), cy = y(m.price != null && m.price > 0 ? m.price * k : main.values[m.i])
     const buy = m.type === 'kauf'
     const sign = (buy ? '+' : MINUS_SIGN) + (m.shares != null ? qty(m.shares) : '')
     const rest = m.price != null ? ` × ${usdRaw(m.price * k)}` : ''
@@ -362,8 +364,9 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
               {!tickHidden(v) && <text x={L - 9} y={y(v) + 3.5} textAnchor="end" className={`num fill-muted ${narrow ? 'text-[10.5px]' : 'text-[11px]'}`}>{tickFmt(v)}</text>}
             </g>
           ))}
+          {/* Liegt der Bezugswert auf einer Schwelle (z. B. Ø Einstand), zeigt nur die Schwelle die Linie */}
           {sv != null ? (
-            <line x1={L} x2={L + iw} y1={y(sv)} y2={y(sv)} stroke="#4f5668" strokeWidth="1" strokeDasharray="3 4" />
+            !refs.some((r) => Math.abs(r.y - sv) < 1e-6) && <line x1={L} x2={L + iw} y1={y(sv)} y2={y(sv)} stroke="#4f5668" strokeWidth="1" strokeDasharray="3 4" />
           ) : baseline != null && <line x1={L} x2={L + iw} y1={y(baseline)} y2={y(baseline)} stroke="#343a47" strokeWidth="1" shapeRendering="crispEdges" />}
           {axis.seps.map((s) => (
             <line key={s} x1={x(s)} x2={x(s)} y1={T} y2={T + ih} stroke="var(--color-grid)" strokeWidth="1" shapeRendering="crispEdges" />
