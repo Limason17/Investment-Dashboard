@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
 import { Segmented } from '@/components/ui'
 import { defaultCat, HOLDING_BUCKETS } from '@/lib/buckets'
@@ -12,7 +12,7 @@ import { dfmt, parseNum, pctPlain, qty, r2, today, uid, sUsdRaw as sUsd, usdRaw 
 import { MIN_DATE, type ImportKind } from '@/lib/bulk'
 import { ImportForm } from './ImportForm'
 import { applyOps, emptyDepot, movesCash, replayOps, reverseTx } from '@/lib/reverse'
-import { mutate, type Op } from '@/lib/store'
+import { lookupTicker, mutate, type Op } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DB } from '@/lib/types'
 
@@ -107,6 +107,19 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
   const moves = !cashOff(db) && movesCash(db, date)
   const inBalance = !cashOff(db) && !moves
   // Titel neu durchrechnen (auch den alten Titel, wenn beim Bearbeiten der Ticker wechselt): spätere Verkäufe stimmen so weiter.
+  // Neuer Titel ohne Kurs: beim Kurs-Dienst nachfragen, ob es den Ticker gibt (Tippfehler früh erkennen).
+  const [look, setLook] = useState<{ t: string; r: Awaited<ReturnType<typeof lookupTicker>> } | null>(null)
+  const needLook = type === 'kauf' && !!t && !p && !quote(db, t)
+  useEffect(() => {
+    if (!needLook) return
+    let alive = true
+    const id = setTimeout(() => void lookupTicker(t).then((r) => alive && setLook({ t, r })), 600)
+    return () => {
+      alive = false
+      clearTimeout(id)
+    }
+  }, [needLook, t])
+  const lookNow = needLook && look?.t === t ? look.r : null
   const replay = (ops: (Op | null | false)[]) => {
     let out = ops.filter((o): o is Op => !!o)
     for (const x of new Set([t, old?.ticker].filter((y): y is string => !!y))) out = replayOps(current, out, x)
@@ -115,7 +128,9 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
 
   const { err, clearErr, onSubmit } = useSubmit(fp, async () => {
     if (tk.trim() && !t) throw new Error('Ticker ungültig, z. B. MSFT oder BRK-B.')
-    if (!t || !nSh || !nPx || nSh <= 0 || nPx <= 0) throw new Error('Titel, Stück und Preis müssen ausgefüllt sein.')
+    if (!t || nSh == null || nPx == null) throw new Error('Titel, Stück und Preis müssen ausgefüllt sein.')
+    if (nSh <= 0) throw new Error('Stück müssen grösser als 0 sein.')
+    if (nPx <= 0) throw new Error('Preis muss grösser als 0 sein.')
     if (fee.trim() && (parseNum(fee) == null || nFee < 0)) throw new Error('Gebühren prüfen: eine Zahl ab 0.')
     checkDate(date)
     const a = nSh * nPx
@@ -183,6 +198,8 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
             Kaufwert <b className="num">{usd(amt)}</b> + Gebühren {usd(nFee)} = <b className="num">{usd(amt + nFee)} USD</b>{moves ? ' aus dem Cash' : ''}.
             <br />Bestand danach: {qty(have + nSh!)} {t}{p ? '' : ' (neue Position)'}.{moves && <> Cash danach: <span className="num">{usd(cashOf(db) - amt - nFee)}</span>.</>}
             {inBalance && <><br />{balanceNote}</>}
+            {lookNow?.found && <><br />Gefunden: {lookNow.name || t}{lookNow.price != null ? <>, Kurs <span className="num">{usd(lookNow.price)}</span> USD</> : ''}.</>}
+            {lookNow && !lookNow.found && <><br /><span className="font-medium text-warn">Zu «{t}» findet der Kurs-Dienst keinen Kurs. Ticker prüfen; ohne Kurs gilt der Kaufpreis als Bewertung.</span></>}
           </>
         ) : (
           <>

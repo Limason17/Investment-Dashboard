@@ -157,6 +157,25 @@ export async function loadLive(force = false) {
   }
 }
 
+/**
+ * Gibt es zu diesem Ticker einen Kurs? Für die Kauf-Erfassung eines neuen Titels.
+ * null = unbekannt (kein Kurs-Dienst oder Netzfehler), sonst gefunden ja/nein mit Name und Kurs.
+ */
+export async function lookupTicker(t: string): Promise<{ found: boolean; name?: string; price?: number } | null> {
+  try {
+    const url = apiUrl('live', { held: '', watch: t })
+    if (!url) return null
+    const r = await fetch(url, { cache: 'no-store' })
+    if (!r.ok) return null
+    const live = (await r.json()) as LiveResult
+    const q = live.quotes?.[t]
+    if (q) return { found: true, name: q.name, price: q.price }
+    return live.failures?.some((f) => f.startsWith(t + ' ')) ? { found: false } : null
+  } catch {
+    return null
+  }
+}
+
 /** Adresse einer Kurs-Abfrage (live, chart); null, wenn online kein Kurs-Dienst eingerichtet ist. */
 export function apiUrl(path: 'live' | 'chart', params: Record<string, string>) {
   const q = new URLSearchParams(params).toString()
