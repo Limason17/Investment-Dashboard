@@ -184,7 +184,8 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
     let lo = Math.min(...all), hi2 = Math.max(...all)
     if (!Number.isFinite(lo)) { lo = 0; hi2 = 1 }
     const pad = (hi2 - lo) * 0.1 || Math.abs(hi2) * 0.02 || 1
-    const sc = scaleLinear().domain([lo - pad, hi2 + pad]).range([T + ih, T]).nice(5)
+    // Der Rand oben/unten überschreitet die Null nicht: Ohne negative Werte endet die Achse bei 0 (kein leeres «−5K»).
+    const sc = scaleLinear().domain([lo >= 0 ? Math.max(0, lo - pad) : lo - pad, hi2 <= 0 ? Math.min(0, hi2 + pad) : hi2 + pad]).range([T + ih, T]).nice(5)
     const tk = sc.ticks(5)
     return { y: sc, ticks: tk, tickFmt: tickFormat ?? axisFormatter(tk) }
   }, [series, refs, baseline, sv, ih, tickFormat])

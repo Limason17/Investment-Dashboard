@@ -280,7 +280,8 @@ function KeyFigures() {
   const div = useMemo(() => divAnnual(db), [db])
   const cashOff = !!c.settings.cashExcluded
   return (
-    <section className={clsx('card grid overflow-hidden [&>*]:border-line [&>*+*]:border-l', cashOff ? 'grid-cols-2' : 'grid-cols-3')}>
+    // Handy: untereinander (Name links, Betrag rechts), damit grosse Beträge nie abgeschnitten werden
+    <section className={clsx('card grid overflow-hidden [&>*]:border-line max-sm:[&>*+*]:border-t sm:[&>*+*]:border-l', cashOff ? 'sm:grid-cols-2' : 'sm:grid-cols-3')}>
       {!cashOff && <Figure label="Cash" value={<>{usd(c.cash)}<Cur /></>} sub={<span>{c.total ? pctPlain(c.cash / c.total) : '–'} vom Depot</span>} />}
       <Figure
         label="Realisiert"
@@ -298,9 +299,9 @@ function KeyFigures() {
 
 function Figure({ label, value, sub }: { label: string; value: ReactNode; sub: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col px-4 py-3.5 sm:px-6">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-3 sm:flex sm:flex-col sm:items-stretch sm:px-6 sm:py-3.5">
       <span className="label block truncate">{label}</span>
-      <span className="num mt-1 block truncate text-[17px] font-semibold leading-6 tracking-[-0.02em] sm:text-[19px]">{value}</span>
+      <span className="num row-span-2 block whitespace-nowrap text-right text-[17px] font-semibold leading-6 tracking-[-0.02em] sm:mt-1 sm:truncate sm:text-left sm:text-[19px]">{value}</span>
       <span className="mt-0.5 block text-[12px] leading-[1.4] text-muted">{sub}</span>
     </div>
   )

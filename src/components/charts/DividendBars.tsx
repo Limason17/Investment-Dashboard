@@ -46,6 +46,10 @@ export function DividendBars({ months, current, height = 236 }: { months: DivMon
     e.preventDefault()
   }
   const label = (k: string) => MONTHS[+k.slice(5) - 1] + (k.slice(5) === '01' ? ' ' + k.slice(2, 4) : '')
+  // Schmale Bildschirme: nur jeden 2. oder 3. Monat beschriften (immer inkl. aktuellem Monat), sonst überlappen die Namen.
+  const cur = Math.max(0, months.findIndex((m) => m.key === current))
+  const step = band >= 34 ? 1 : band >= 19 ? 2 : 3
+  const showLabel = (i: number) => (i - cur) % step === 0
   const h = hi != null ? months[hi] : null
   const tipRight = hi != null && hi > months.length / 2
 
@@ -74,7 +78,7 @@ export function DividendBars({ months, current, height = 236 }: { months: DivMon
                 {total > 0 && (i === peak || m.key === current) && (
                   <text x={cx} y={ye - 7} textAnchor="middle" className="num fill-ink-2 text-[11px]">{usd(total)}</text>
                 )}
-                <text x={cx} y={height - 8} textAnchor="middle" className={`text-[11px] ${m.key === current ? 'fill-ink font-medium' : 'fill-muted'}`}>{label(m.key)}</text>
+                {showLabel(i) && <text x={cx} y={height - 8} textAnchor="middle" className={`text-[11px] ${m.key === current ? 'fill-ink font-medium' : 'fill-muted'}`}>{label(m.key)}</text>}
                 <rect x={L + i * band} y={T - 8} width={band} height={ih + 8 + B} fill="transparent" onPointerEnter={() => setHi(i)} onPointerMove={() => setHi(i)} />
               </g>
             )

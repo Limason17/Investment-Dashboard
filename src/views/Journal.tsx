@@ -105,19 +105,21 @@ export function Journal() {
                     {x.ticker && <button type="button" className="tk" onClick={() => db.positions[x.ticker!] && nav.openPosition(x.ticker!)}>{x.ticker}</button>}
                     {x.demo && <DemoTag />}
                   </div>
-                  <div className="num mt-1 truncate text-[12px] text-muted">
-                    {dfmt(x.date)}
-                    {x.shares != null && x.price != null && <> · {qty(x.shares)} × {money(x.price)}</>}
-                    {x.note && !x.demo && <span className="font-sans"> · {x.note}</span>}
+                  {/* Datum und Stück × Preis brechen als Ganzes um statt abgeschnitten zu werden; nur die Notiz wird gekürzt */}
+                  <div className="num mt-1 text-[12px] text-muted">
+                    <span className="whitespace-nowrap">{dfmt(x.date)}</span>
+                    {x.shares != null && x.price != null && <> · <span className="whitespace-nowrap">{qty(x.shares)} × {money(x.price)}</span></>}
                   </div>
+                  {x.note && !x.demo && <div className="truncate text-[12px] text-muted">{x.note}</div>}
                 </div>
                 <div className="flex items-start gap-0.5">
                   <div className="pt-0.5 text-right leading-tight">
                     <span className="num text-[13.5px] font-medium text-ink">{sUsd(x.cashDelta)}<Cur /></span>
-                    {x.type === 'verkauf' && x.realized != null && <Result tx={x} />}
                   </div>
                   <span className="flex">{(x.type === 'kauf' || x.type === 'verkauf') && <button type="button" className="btn btn-ghost btn-sm" aria-label="Buchung bearbeiten" title="Buchung bearbeiten" onClick={() => nav.openEntry(x.type as 'kauf' | 'verkauf', { fromId: x.id })}><Pencil /></button>}<DeleteButton onConfirm={() => del(x.id)} /></span>
                 </div>
+                {/* Gewinn/Verlust auf eigener Zeile: neben dem Betrag hat er auf dem Handy keinen Platz */}
+                {x.type === 'verkauf' && x.realized != null && <div className="col-span-2"><Result tx={x} /></div>}
               </li>
             ))}
           </ul>
