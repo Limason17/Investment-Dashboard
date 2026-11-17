@@ -1,7 +1,7 @@
-import { NotebookPen, Pencil, Trash2 } from 'lucide-react'
+import { NotebookPen, Pencil } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { MonthBars, type MonthPair } from '@/components/charts/MonthBars'
-import { Card, Chip, Delta, DemoTag, Empty, Segmented, Stat, Cur } from '@/components/ui'
+import { Card, Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Stat, Cur } from '@/components/ui'
 import { withIds, yearStats } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
 import { addMonths, dfmt, pct, qty, sUsd, usd, weekday, cur, cur0, money } from '@/lib/format'
@@ -14,25 +14,7 @@ import type { Tx } from '@/lib/types'
 
 const RECENT = 12
 
-function DeleteButton({ onConfirm, label = 'Buchung stornieren' }: { onConfirm: () => void; label?: string }) {
-  const [armed, setArmed] = useState(false)
-  return (
-    <button
-      type="button"
-      className={`btn btn-ghost btn-sm ${armed ? '!text-down' : ''}`}
-      aria-label={label}
-      title={label}
-      onClick={(e) => {
-        e.stopPropagation()
-        if (armed) return onConfirm()
-        setArmed(true)
-        setTimeout(() => setArmed(false), 3000)
-      }}
-    >
-      {armed ? 'Sicher?' : <Trash2 />}
-    </button>
-  )
-}
+const DeleteButton = ({ onConfirm, label = 'Buchung stornieren' }: { onConfirm: () => void; label?: string }) => <ConfirmDelete onConfirm={onConfirm} label={label} />
 
 export function Journal() {
   const { db, now } = useDepot()

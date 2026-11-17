@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { ArrowDownRight, ArrowUpRight, Minus, Trash2 } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useId, useState, type ComponentType, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import type { Tone } from '@/lib/calc'
 import { pct, sign, sUsd, cur } from '@/lib/format'
 
@@ -138,22 +138,39 @@ export function DemoTag({ className }: { className?: string }) {
 }
 
 /* ------------------------------------------------------------------ Löschen mit zweitem Klick */
+/**
+ * Erster Klick schärft, zweiter Klick löscht. Die Schaltfläche behält ihre Grösse (kein Springen der Zeile),
+ * der Hinweis «Sicher?» erscheint daneben. Bleibt 6 s scharf; ein früherer Timer kann einen neuen Versuch nicht abbrechen.
+ */
 export function ConfirmDelete({ onConfirm, label }: { onConfirm: () => void; label: string }) {
   const [armed, setArmed] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
   return (
-    <button
-      type="button"
-      className={clsx('btn btn-ghost btn-sm', armed && '!text-down')}
-      aria-label={label}
-      title={label}
-      onClick={(e) => {
-        e.stopPropagation()
-        if (armed) return onConfirm()
-        setArmed(true)
-        setTimeout(() => setArmed(false), 3000)
-      }}
-    >
-      {armed ? 'Sicher?' : <Trash2 />}
-    </button>
+    <span className="relative inline-flex">
+      {armed && (
+        <span aria-hidden className="pointer-events-none absolute right-full top-1/2 mr-1 -translate-y-1/2 whitespace-nowrap rounded-md bg-down/15 px-1.5 py-0.5 text-[11.5px] font-semibold text-down">
+          Sicher?
+        </span>
+      )}
+      <button
+        type="button"
+        className={clsx('btn btn-ghost btn-sm', armed && '!text-down')}
+        aria-label={armed ? label + ': nochmals tippen zum Bestätigen' : label}
+        title={label}
+        onClick={(e) => {
+          e.stopPropagation()
+          clearTimeout(timer.current)
+          if (armed) {
+            setArmed(false)
+            return onConfirm()
+          }
+          setArmed(true)
+          timer.current = setTimeout(() => setArmed(false), 6000)
+        }}
+      >
+        <Trash2 />
+      </button>
+    </span>
   )
 }
