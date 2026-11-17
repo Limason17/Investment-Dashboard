@@ -359,7 +359,7 @@ describe('Kalender: Monatsende, Jahreswechsel, Zeitumstellung', () => {
 
 describe('Befehlspalette', () => {
   it('genauer Ticker steht vor unscharfen Treffern', async () => {
-    const { paletteFilter } = await import('../features/CommandPalette')
+    const { paletteFilter } = await import('./palette')
     const plan = paletteFilter('ansicht Plan & Termine', 'aapl')
     const aapl = paletteFilter('position AAPL Apple Inc.', 'aapl')
     const aap = paletteFilter('position AAP Advance Auto Parts', 'aap')
