@@ -368,3 +368,15 @@ describe('Befehlspalette', () => {
     expect(paletteFilter('position MSFT Microsoft', 'xyz')).toBe(0)
   })
 })
+
+describe('CSV-Export', () => {
+  it('Kategorie mit Namen statt interner Kennung', async () => {
+    const { csvLines } = await import('./export')
+    const { compute } = await import('./calc')
+    const db: DB = { positions: { AAPL: { ticker: 'AAPL', name: 'Apple', shares: 6, bucket: 'k1', cost: 1200 } }, prices: { AAPL: { close: 350, prev: 349, date: '2026-11-16' } }, watchlist: {}, pots: {}, events: {}, log: {}, transactions: {}, dividends: {}, snapshots: {}, meta: { settings: { cash: 900, cashExcluded: false, categories: [{ id: 'etf', name: 'ETFs' }, { id: 'k1', name: 'Tech' }] } }, market: {} }
+    const lines = csvLines(compute(db))
+    expect(lines[1].split(';').slice(0, 3)).toEqual(['AAPL', 'Apple', 'Tech'])
+    expect(lines[1].split(';')[7]).toBe('70.00') // 2100 / 3000
+    expect(lines[2].split(';').slice(0, 3)).toEqual(['CASH', '', 'Cash'])
+  })
+})
