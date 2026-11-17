@@ -11,7 +11,7 @@ import { normTicker } from '@/lib/ticker'
 import { dfmt, parseNum, pctPlain, qty, r2, today, uid, sUsdRaw as sUsd, usdRaw as usd } from '@/lib/format'
 import { MIN_DATE, type ImportKind } from '@/lib/bulk'
 import { ImportForm } from './ImportForm'
-import { applyOps, movesCash, replayOps, reverseTx } from '@/lib/reverse'
+import { applyOps, emptyDepot, movesCash, replayOps, reverseTx } from '@/lib/reverse'
 import { mutate, type Op } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DB } from '@/lib/types'
@@ -63,7 +63,9 @@ function useSubmit({ onSaved, setBusy }: FormProps, save: () => Promise<string>)
       setBusy(false)
     }
   }
-  return { err, onSubmit }
+  // Eine Fehlermeldung gilt für die Eingabe, die sie ausgelöst hat: Sobald etwas geändert wird, verschwindet sie.
+  const clearErr = () => setErr((e) => (e ? '' : e))
+  return { err, setErr, clearErr, onSubmit }
 }
 /** Buchungsdatum: vorhanden und nicht in der Zukunft (Käufe und Zahlungen geschehen nie später als heute). */
 function checkDate(d: string) {
@@ -111,7 +113,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
     return out
   }
 
-  const { err, onSubmit } = useSubmit(fp, async () => {
+  const { err, clearErr, onSubmit } = useSubmit(fp, async () => {
     if (tk.trim() && !t) throw new Error('Ticker ungültig, z. B. MSFT oder BRK-B.')
     if (!t || !nSh || !nPx || nSh <= 0 || nPx <= 0) throw new Error('Titel, Stück und Preis müssen ausgefüllt sein.')
     if (fee.trim() && (parseNum(fee) == null || nFee < 0)) throw new Error('Gebühren prüfen: eine Zahl ab 0.')
@@ -146,7 +148,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
   })
 
   return (
-    <form id={fp.formId} onSubmit={onSubmit} className="grid gap-3.5">
+    <form id={fp.formId} onSubmit={onSubmit} onChange={clearErr} className="grid gap-3.5">
       <datalist id={listId}>{tickers.map((x) => <option key={x} value={x} />)}</datalist>
       <Field label="Titel (Ticker)">{(id) => <input id={id} className="input uppercase placeholder:normal-case" list={listId} placeholder="z. B. UBER" value={tk} onChange={(e) => setTk(e.target.value)} autoFocus autoCapitalize="characters" />}</Field>
       <div className="grid grid-cols-2 gap-3">
@@ -211,7 +213,7 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
   const g = parseNum(gross)
   const tx = parseNum(tax) ?? (g != null ? r2(g * w) : null)
 
-  const { err, onSubmit } = useSubmit(fp, async () => {
+  const { err, clearErr, onSubmit } = useSubmit(fp, async () => {
     const t = normTicker(tk)
     if (tk.trim() && !t) throw new Error('Ticker ungültig, z. B. MSFT oder BRK-B.')
     if (!t || g == null || g <= 0 || tx == null) throw new Error('Titel und Bruttobetrag eingeben.')
@@ -230,7 +232,7 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
   })
 
   return (
-    <form id={fp.formId} onSubmit={onSubmit} className="grid gap-3.5">
+    <form id={fp.formId} onSubmit={onSubmit} onChange={clearErr} className="grid gap-3.5">
       <Field label="Titel (Ticker)">{(id) => <input id={id} className="input uppercase" value={tk} onChange={(e) => setTk(e.target.value)} autoFocus={!from} />}</Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Brutto gesamt (USD)">{(id) => <input id={id} className="input num" inputMode="decimal" value={gross} onChange={(e) => setGross(e.target.value)} autoFocus={!!from} />}</Field>
@@ -250,32 +252,49 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
 /* ------------------------------------------------------------------ Ein-/Auszahlung, Cash-Korrektur */
 function CashForm(fp: FormProps) {
   const { db } = useDepot()
-  const [dir, setDir] = useState<'einzahlung' | 'auszahlung' | 'korrektur'>(cashOff(db) ? 'korrektur' : 'einzahlung')
+  const off = cashOff(db)
+  // Neues, leeres Depot: Die erste Einzahlung startet das Cash bei 0, ein Cash-Stand vorher ist nicht nötig.
+  const fresh = off && emptyDepot(db)
+  const [dir, setDirRaw] = useState<'einzahlung' | 'auszahlung' | 'korrektur'>(off && !fresh ? 'korrektur' : 'einzahlung')
   const [amt, setAmt] = useState('')
   const [date, setDate] = useState(today())
   const [note, setNote] = useState('')
-  const cash = cashOf(db)
-  const off = cashOff(db)
+  const cash = off ? 0 : cashOf(db)
   const a = parseNum(amt)
   const after = a == null ? null : dir === 'korrektur' ? a : dir === 'einzahlung' ? cash + a : cash - a
+  const blocked = off && dir !== 'korrektur' && !(fresh && dir === 'einzahlung')
+  const blockedText = fresh
+    ? 'Es ist noch kein Cash erfasst, also gibt es nichts auszuzahlen. Erfasse zuerst eine Einzahlung oder trage mit «Cash-Stand eintragen» den Saldo laut Broker ein.'
+    : 'Cash ist derzeit nicht erfasst. Trage zuerst mit «Cash-Stand eintragen» den Saldo laut Broker ein, danach zählen Ein- und Auszahlungen mit.'
 
-  const { err, onSubmit } = useSubmit(fp, async () => {
+  const { err, setErr, clearErr, onSubmit } = useSubmit(fp, async () => {
     if (a == null || after == null) throw new Error('Betrag eingeben.')
     if (dir !== 'korrektur' && a <= 0) throw new Error('Betrag muss grösser als 0 sein.')
     checkDate(date)
-    if (off && dir !== 'korrektur') throw new Error('Cash ist derzeit nicht erfasst. Trage zuerst mit «Cash-Stand korrigieren» den Saldo von deinem Broker ein.')
+    if (blocked) throw new Error(blockedText)
+    const start = off && dir === 'einzahlung'
     await commit(
       [
         { op: 'set', coll: 'transactions', id: uid(), data: { type: dir, date, cashDelta: r2(after - cash), note, createdAt: new Date().toISOString(), by: 'Dashboard', ...(dir === 'korrektur' && off ? { cashStart: true } : {}) } },
-        { op: 'merge', coll: 'meta', id: 'settings', data: { cash: r2(after), ...(dir === 'korrektur' ? { cashEstimate: false, cashExcluded: false, cashNote: 'Saldo laut Broker ' + dfmt(date), cashDate: date } : {}) } },
+        {
+          op: 'merge', coll: 'meta', id: 'settings', data: {
+            cash: r2(after),
+            ...(dir === 'korrektur' ? { cashEstimate: false, cashExcluded: false, cashNote: 'Saldo laut Broker ' + dfmt(date), cashDate: date } : {}),
+            ...(start ? { cashEstimate: false, cashExcluded: false } : {}),
+          },
+        },
       ],
       dir === 'korrektur' ? 0 : after - cash,
     )
     return 'Cash aktualisiert.'
   })
+  const setDir = (d: typeof dir) => {
+    setDirRaw(d)
+    setErr('')
+  }
 
   return (
-    <form id={fp.formId} onSubmit={onSubmit} className="grid gap-3.5">
+    <form id={fp.formId} onSubmit={onSubmit} onChange={clearErr} className="grid gap-3.5">
       <Field label="Richtung">{(id) => (
         <select id={id} className="input" value={dir} onChange={(e) => setDir(e.target.value as typeof dir)}>
           <option value="einzahlung">Einzahlung aufs Konto</option>
@@ -289,7 +308,16 @@ function CashForm(fp: FormProps) {
       </div>
       <Field label="Notiz">{(id) => <input id={id} className="input" value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
       <CalcBox>
-        {off && dir !== 'korrektur' ? <>Cash ist derzeit nicht erfasst. Mit «Cash-Stand korrigieren» trägst du den Saldo laut Broker ein, danach zählt Cash mit.</> : after == null ? <>{off ? 'Cash ist derzeit nicht erfasst.' : <>Aktuelles Cash: <b className="num">{usd(cash)} USD</b>.</>}</> : <>Cash danach <b className="num">{usd(after)} USD</b>{dir === 'korrektur' && !off ? ' (ersetzt den bisherigen Stand)' : ''}.</>}
+        {blocked ? (
+          <>
+            {blockedText}{' '}
+            <button type="button" className="font-semibold text-accent underline underline-offset-2" onClick={() => setDir('korrektur')}>Zu «Cash-Stand eintragen» wechseln</button>
+          </>
+        ) : after == null ? (
+          <>{off ? (fresh ? 'Noch kein Cash erfasst. Die erste Einzahlung startet das Cash bei 0 USD.' : 'Cash ist derzeit nicht erfasst.') : <>Aktuelles Cash: <b className="num">{usd(cash)} USD</b>.</>}</>
+        ) : (
+          <>Cash danach <b className="num">{usd(after)} USD</b>{dir === 'korrektur' && !off ? ' (ersetzt den bisherigen Stand)' : ''}.</>
+        )}
       </CalcBox>
       <ErrorLine err={err} />
     </form>
@@ -301,13 +329,13 @@ function NoteForm(fp: FormProps) {
   const [title, setTitle] = useState('')
   const [text, setText] = useState('')
   const [date, setDate] = useState(today())
-  const { err, onSubmit } = useSubmit(fp, async () => {
+  const { err, clearErr, onSubmit } = useSubmit(fp, async () => {
     if (!title.trim()) throw new Error('Titel eingeben.')
     await mutate([{ op: 'set', coll: 'log', id: uid(), data: { date, title: title.trim(), text: text.trim(), by: (CLOUD ? getAccount().user?.name : 'LiAd') || undefined } }])
     return 'Notiz gespeichert.'
   })
   return (
-    <form id={fp.formId} onSubmit={onSubmit} className="grid gap-3.5">
+    <form id={fp.formId} onSubmit={onSubmit} onChange={clearErr} className="grid gap-3.5">
       <Field label="Titel">{(id) => <input id={id} className="input" placeholder="z. B. Nachkauf verschoben" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />}</Field>
       <Field label="Text">{(id) => <textarea id={id} className="input" value={text} onChange={(e) => setText(e.target.value)} />}</Field>
       <Field label="Datum">{(id) => <input id={id} className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />}</Field>

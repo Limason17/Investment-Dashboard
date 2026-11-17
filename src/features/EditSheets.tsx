@@ -75,7 +75,7 @@ function EditSheet({ open, onClose, title, sub, save, remove, children }: {
         </>
       }
     >
-      <form id={formId} onSubmit={submit} className="grid gap-3.5">
+      <form id={formId} onSubmit={submit} onChange={() => setErr((e) => (e ? '' : e))} className="grid gap-3.5">
         {children}
         {err && <div role="alert" className="text-[12.5px] text-down">{err}</div>}
       </form>

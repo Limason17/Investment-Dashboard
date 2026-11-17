@@ -244,6 +244,9 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   let tp = 0
   while (tp < tl.trades.length && tl.trades[tp].date < start) tp++
   let prevV = baseTotal, cum = 1, gainFlows = 0
+  // Eingesetztes Geld im Zeitraum: mit Cash die Ein- minus Auszahlungen; ohne Cash alle Käufe (brutto).
+  // Verkaufserlöse sind kein zurückgezogenes Geld: Sie würden den Nenner schrumpfen lassen und die Rendite aufblähen.
+  let paidIn = 0
   const pl: number[] = [], mwr: number[] = [], flowsAt: number[] = [], den: number[] = []
   const seen: { t: number; amount: number }[] = []
   // Zeitpunkt des Anfangswerts: ein Schritt vor dem ersten Punkt
@@ -251,6 +254,7 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   const bPrev = { ...bBase }
   const bCum = Object.fromEntries(ids.map((id) => [id, 1])) as Record<HoldingBucket, number>
   const bFlow = Object.fromEntries(ids.map((id) => [id, 0])) as Record<HoldingBucket, number>
+  const bBuys = Object.fromEntries(ids.map((id) => [id, 0])) as Record<HoldingBucket, number>
   const bSeen = Object.fromEntries(ids.map((id) => [id, [] as { t: number; amount: number }[]])) as Record<HoldingBucket, { t: number; amount: number }[]>
 
   for (let i = s0; i < n; i++) {
@@ -268,10 +272,16 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
       }
     }
     let f = 0
-    while (fp < flows.length && flows[fp].date <= date) f += flows[fp++].amount
+    while (fp < flows.length && flows[fp].date <= date) {
+      const a = flows[fp++].amount
+      f += a
+      paidIn += cashTracked || a > 0 ? a : 0
+    }
     const bf = Object.fromEntries(ids.map((id) => [id, 0])) as Record<HoldingBucket, number>
     while (tp < tl.trades.length && tl.trades[tp].date <= date) {
-      bf[bucketOfT(tl.trades[tp].ticker)] += tl.trades[tp].amount
+      const tb = bucketOfT(tl.trades[tp].ticker)
+      bf[tb] += tl.trades[tp].amount
+      if (tl.trades[tp].amount > 0) bBuys[tb] += tl.trades[tp].amount
       tp++
     }
     const v = sec + (cashTracked ? cashAt(date) : 0)
@@ -289,7 +299,7 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
     if (!(cap > floor)) cap = Math.max(floor, 0)
     pl.push(g)
     // Max (seit Beginn): Ertrag im Verhältnis zum eingesetzten Geld, wie beim Broker; sonst zeitgewichtetes Kapital (Simple Dietz)
-    const paid = baseTotal + invested
+    const paid = baseTotal + paidIn
     // Ohne Anfangswert (alles erst im Zeitraum gekauft) zählt wie bei Max das eingesetzte Geld; sonst bläht ein Kauf kurz vor Ende die Rendite auf.
     const dn = (chart.range === 'MAX' || baseTotal < 1e-6) && paid > 1e-6 ? paid : cap > 1e-6 ? cap : 0
     mwr.push(dn ? g / dn : 0)
@@ -313,7 +323,8 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
       const bg = bv[id] - bBase[id] - bFlow[id]
       let bcap = bBase[id]
       for (const fl of bSeen[id]) bcap += fl.amount * (span > 0 ? (chart.t[i] - fl.t) / span : 1)
-      const bpaid = bBase[id] + bFlow[id]
+      // Nenner = Anfangswert + alle Käufe im Zeitraum (Verkäufe senken ihn nicht, siehe paidIn)
+      const bpaid = bBase[id] + bBuys[id]
       const bden = (chart.range === 'MAX' || bBase[id] < 1e-6) && bpaid > 1e-6 ? bpaid : bcap > 1e-6 ? bcap : bpaid > 1e-6 ? bpaid : 0
       buckets[id].pl.push(bg)
       buckets[id].mwr.push(bden ? bg / bden : 0)

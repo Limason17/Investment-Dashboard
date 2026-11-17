@@ -7,6 +7,10 @@ import { r2 } from './format'
 import type { Op } from './store'
 import type { DB, Dividend, Tx } from './types'
 
+/** Leeres Depot: noch keine Buchung, kein Titel, keine Dividende. Dann startet das Cash eindeutig bei 0. */
+export const emptyDepot = (db: DB) =>
+  !Object.keys(db.transactions).length && !Object.keys(db.dividends).length && !Object.values(db.positions).some((p) => p && p.shares > 0)
+
 /** Datum des letzten Cash-Stands (Saldo laut Broker) oder null. */
 export const lastBalance = (db: DB) => Object.values(db.transactions).filter((x) => x.type === 'korrektur' && !x.ticker && x.date).map((x) => x.date).sort().at(-1) ?? null
 

@@ -159,7 +159,8 @@ function useSave(run: () => Promise<string>, done: () => void) {
       setBusy(false)
     }
   }
-  return { err, busy, onSubmit }
+  const clearErr = () => setErr((e) => (e ? '' : e))
+  return { err, busy, onSubmit, clearErr }
 }
 
 /* ------------------------------------------------------------------ Position */
@@ -181,7 +182,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
   const [status, setStatus] = useState(p?.status ?? '')
   const [note, setNote] = useState(p?.note ?? '')
 
-  const { err, busy, onSubmit } = useSave(async () => {
+  const { err, busy, onSubmit, clearErr } = useSave(async () => {
     const n = parseNum(sh)
     if (n == null || n < 0) throw new Error('Stückzahl prüfen.')
     const c = parseNum(cost)
@@ -265,7 +266,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
       )}
 
       {p && edit && (
-        <form id={formId} onSubmit={onSubmit} className="grid gap-3.5">
+        <form id={formId} onSubmit={onSubmit} onChange={clearErr} className="grid gap-3.5">
           <div className="grid grid-cols-2 gap-3">
             <div className="field"><label htmlFor={formId + 's'}>Stück</label><input id={formId + 's'} className="input num" inputMode="decimal" value={sh} onChange={(e) => setSh(e.target.value)} /></div>
             <div className="field"><label htmlFor={formId + 'c'}>Einstand gesamt (USD)</label><input id={formId + 'c'} className="input num" inputMode="decimal" placeholder="laut Broker" value={cost} onChange={(e) => setCost(e.target.value)} /></div>
@@ -302,7 +303,7 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
   const [met, setMet] = useState(w?.conditionMet === false ? 'offen' : w?.conditionMet === true ? 'ja' : 'keine')
   const [pot, setPot] = useState(w?.pot ?? '')
 
-  const { err, busy, onSubmit } = useSave(async () => {
+  const { err, busy, onSubmit, clearErr } = useSave(async () => {
     for (const [v, name] of [[limit, 'Grenze'], [cautious, 'Vorsichtige Grenze']] as const) {
       const n = parseNum(v)
       if (v.trim() && (n == null || n <= 0)) throw new Error(`${name} muss eine positive Zahl sein.`)
@@ -378,7 +379,7 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
       )}
 
       {w && edit && (
-        <form id={formId} onSubmit={onSubmit} className="grid gap-3.5">
+        <form id={formId} onSubmit={onSubmit} onChange={clearErr} className="grid gap-3.5">
           <div className="grid grid-cols-2 gap-3">
             <div className="field"><label htmlFor={formId + 'l'}>Grenze (USD)</label><input id={formId + 'l'} className="input num" inputMode="decimal" value={limit} onChange={(e) => setLimit(e.target.value)} /></div>
             <div className="field"><label htmlFor={formId + 'c'}>Vorsichtige Grenze</label><input id={formId + 'c'} className="input num" inputMode="decimal" value={cautious} onChange={(e) => setCautious(e.target.value)} /></div>

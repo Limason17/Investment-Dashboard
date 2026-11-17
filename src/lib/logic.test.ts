@@ -6,7 +6,7 @@ import { cur, setDisplayCurrency, sUsd, usd, usdRaw } from './format'
 import { closeUpdates } from './closes'
 import { portfolioSeries, timeline } from './history'
 import { aggregate, newPortfolioId, portfolioList } from './portfolios'
-import { applyOps, replayOps, reverseDividend, reverseTx } from './reverse'
+import { applyOps, emptyDepot, replayOps, reverseDividend, reverseTx } from './reverse'
 import type { DB, Tx } from './types'
 
 const empty = (): DB => ({ positions: {}, prices: {}, watchlist: {}, pots: {}, events: {}, log: {}, transactions: {}, dividends: {}, snapshots: {}, meta: { settings: { cash: 1000, cashExcluded: false, withholding: 0.15 } }, market: {} })
@@ -374,6 +374,35 @@ describe('Wertverlauf gegen echte Zahlen', () => {
     expect(ps.gain).toBeCloseTo(200) // nur der Kursgewinn, nicht das Cash
   })
 
+  it('neues Konto: erste Einzahlung ohne Cash-Stand startet bei 0, Kauf danach zieht ab', () => {
+    const db = empty()
+    db.meta.settings = { cash: 0, cashExcluded: true }
+    expect(emptyDepot(db)).toBe(true)
+    // so schreibt das Formular die erste Einzahlung in einem leeren Depot
+    db.transactions.e = { type: 'einzahlung', date: days[0], cashDelta: 10000 }
+    db.meta.settings = { cash: 10000, cashExcluded: false }
+    expect(emptyDepot(db)).toBe(false)
+    db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 10, bucket: 'etf', cost: 1000 }
+    db.transactions.k = { type: 'kauf', date: days[1], ticker: 'VTI', shares: 10, price: 100, cashDelta: -1000 }
+    db.meta.settings.cash = 9000
+    const ps = portfolioSeries(db, timeline(db), chart([100, 110, 120]))!
+    expect(ps.value).toEqual([10000, 10100, 10200])
+    expect(ps.invested).toEqual([10000, 10000, 10000])
+    expect(ps.gain).toBeCloseTo(200)
+  })
+
+  it('leeres Depot erkennt Titel, Buchungen und Dividenden', () => {
+    const a = empty()
+    expect(emptyDepot(a)).toBe(true)
+    a.positions.X = { ticker: 'X', name: 'X', shares: 0, bucket: 'etf', cost: 0 }
+    expect(emptyDepot(a)).toBe(true) // ganz verkaufter Titel ohne Buchung zählt nicht
+    a.positions.X.shares = 1
+    expect(emptyDepot(a)).toBe(false)
+    const b = empty()
+    b.dividends.d = { ticker: 'X', payDate: '2025-01-01', gross: 1, tax: 0, net: 1, status: 'erhalten' } as DB['dividends'][string]
+    expect(emptyDepot(b)).toBe(false)
+  })
+
   it('nur Cash, keine Titel: Verlauf beginnt mit dem ersten Cash-Eintrag', () => {
     const db = empty()
     db.meta.settings = { cash: 5000, cashExcluded: false }
@@ -411,6 +440,41 @@ describe('Rendite seit Beginn', () => {
     // Kategorie gleich gerechnet wie das Depot
     expect(ps.buckets.etf.pl.at(-1)).toBeCloseTo(1100)
     expect(ps.buckets.etf.mwr.at(-1)).toBeCloseTo(1100 / 3100)
+  })
+
+  // Live-Test 17.11.: Kategorie zeigte +323 % statt +47.6 %, weil Verkaufserlöse den Nenner senkten
+  const days4 = ['2026-10-05', '2026-10-06', '2026-10-12', '2026-11-02']
+  const ch4 = (series: Record<string, number[]>) => ({ range: 'MAX' as const, kind: 'daily' as const, interval: '1d', at: '', t: days4.map((d) => Date.parse(d + 'T21:00:00Z')), d: days4, series, prev: {}, failures: [] })
+  it('Teil- und Vollverkauf: Kategorie-Rendite = Ertrag / alle Käufe', () => {
+    const db = empty()
+    db.meta.settings = { cash: 7748, cashExcluded: false }
+    db.transactions.e = { type: 'einzahlung', date: '2026-10-05', cashDelta: 10000 }
+    db.positions.AAPL = { ticker: 'AAPL', name: 'AAPL', shares: 9, bucket: 'aktien', cost: 1860.6 }
+    db.transactions.a1 = { type: 'kauf', date: '2026-10-05', ticker: 'AAPL', shares: 10, price: 200, fees: 1, cashDelta: -2001 }
+    db.transactions.m1 = { type: 'kauf', date: '2026-10-06', ticker: 'MSFT', shares: 5, price: 400, cashDelta: -2000 }
+    db.transactions.a2 = { type: 'kauf', date: '2026-10-12', ticker: 'AAPL', shares: 5, price: 220, cashDelta: -1100 }
+    db.transactions.s1 = { type: 'verkauf', date: '2026-11-02', ticker: 'AAPL', shares: 6, price: 350, fees: 1, cashDelta: 2099 }
+    db.transactions.s2 = { type: 'verkauf', date: '2026-11-02', ticker: 'MSFT', shares: 5, price: 450, cashDelta: 2250 }
+    db.positions.MSFT = { ticker: 'MSFT', name: 'MSFT', shares: 0, bucket: 'aktien', cost: 0 }
+    const ps = portfolioSeries(db, timeline(db), ch4({ AAPL: [200, 205, 220, 353.61], MSFT: [400, 400, 410, 450] }))!
+    const gain = 9 * 353.61 - (2001 + 2000 + 1100) + (2099 + 2250)
+    expect(ps.buckets.aktien.pl.at(-1)).toBeCloseTo(gain)
+    expect(ps.buckets.aktien.mwr.at(-1)).toBeCloseTo(gain / 5101) // ≈ +47.6 %
+    expect(ps.value.at(-1)).toBeCloseTo(9 * 353.61 + 7748)
+  })
+  it('ganz verkaufte Kategorie mit Gewinn: Rendite positiv, nicht 0', () => {
+    const db = empty()
+    db.meta.settings = { cash: 0, cashExcluded: true }
+    db.positions.MSFT = { ticker: 'MSFT', name: 'MSFT', shares: 0, bucket: 'aktien', cost: 0 }
+    db.transactions.m1 = { type: 'kauf', date: '2026-10-06', ticker: 'MSFT', shares: 5, price: 400, cashDelta: -2000 }
+    db.transactions.s2 = { type: 'verkauf', date: '2026-11-02', ticker: 'MSFT', shares: 5, price: 450, cashDelta: 2250 }
+    db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 1, bucket: 'etf', cost: 100 }
+    db.transactions.v = { type: 'kauf', date: '2026-10-05', ticker: 'VTI', shares: 1, price: 100, cashDelta: -100 }
+    const ps = portfolioSeries(db, timeline(db), ch4({ MSFT: [400, 400, 410, 450], VTI: [100, 100, 100, 100] }))!
+    expect(ps.buckets.aktien.pl.at(-1)).toBeCloseTo(250)
+    expect(ps.buckets.aktien.mwr.at(-1)).toBeCloseTo(0.125)
+    // Depot ohne Cash: ebenso Ertrag / alle Käufe
+    expect(ps.mwr.at(-1)).toBeCloseTo(250 / 2100)
   })
 })
 
