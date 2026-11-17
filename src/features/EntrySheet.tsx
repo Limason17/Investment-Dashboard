@@ -242,7 +242,7 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
       </div>
       <Field label="Notiz">{(id) => <input id={id} className="input" value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
       <CalcBox>
-        {g == null || tx == null ? 'Bruttobetrag aus der Buchung des Brokers eingeben.' : <>Netto <b className="num">{usd(g - tx)} USD</b>{cashOff(db) || !movesCash(db, pay || today()) ? ' wird als erhalten gebucht.' : ' wird dem Cash gutgeschrieben.'}{!cashOff(db) && !movesCash(db, pay || today()) && <><br />{balanceNote}</>}</>}
+        {g == null || tx == null ? 'Bruttobetrag aus der Buchung des Brokers eingeben.' : tx > g ? 'Die Quellensteuer ist höher als der Bruttobetrag. Bitte prüfen.' : g <= 0 ? 'Bruttobetrag muss grösser als 0 sein.' : <>Netto <b className="num">{usd(g - tx)} USD</b>{cashOff(db) || !movesCash(db, pay || today()) ? ' wird als erhalten gebucht.' : ' wird dem Cash gutgeschrieben.'}{!cashOff(db) && !movesCash(db, pay || today()) && <><br />{balanceNote}</>}</>}
       </CalcBox>
       <ErrorLine err={err} />
     </form>
