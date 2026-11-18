@@ -10,7 +10,7 @@ import { alerts, capChecks, divAnnual, eventsSorted, fxOf, watchRows, yearStats 
 import { RANGE_LABEL, RANGE_TITLE, refreshCharts } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
 import { dlong, dshort, hhmm, int, pct, pctPlain, sign, sUsd, usd, cur, usdRaw, money } from '@/lib/format'
-import { BENCH, useMedia, usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
+import { BENCH, useMedia, useOnline, usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { RangeId } from '@/lib/types'
 
 const PHRASE: Record<RangeId, string> = { '1T': 'heute', '1W': 'in 1 Woche', '1M': 'in 1 Monat', '3M': 'in 3 Monaten', '1J': 'in 1 Jahr', '5J': 'in 5 Jahren', MAX: 'seit Beginn' }
@@ -116,10 +116,7 @@ function Hero() {
                 {valueLabel}
                 {c.priceLabel && (
                   <span className="inline-flex items-center gap-1.5 text-faint">
-                    <span className="relative flex size-1.5">
-                      {c.live && <span className="absolute inline-flex size-full animate-ping rounded-full bg-up opacity-60 [animation-duration:2.4s]" />}
-                      <span className={`relative inline-flex size-1.5 rounded-full ${c.live ? 'bg-up' : 'bg-faint'}`} />
-                    </span>
+                    <LiveWord live={c.live} />
                     {c.priceLabel}
                   </span>
                 )}
@@ -411,6 +408,13 @@ function FirstSteps() {
       </ol>
     </Card>
   )
+}
+
+/** Wort statt Punkt: «Live» (grün) während der Börse, «Offline» (grau) ohne Verbindung, sonst nichts */
+function LiveWord({ live }: { live: boolean }) {
+  const online = useOnline()
+  if (online && !live) return null
+  return <span className={clsx('text-[10.5px] font-semibold uppercase leading-none tracking-[0.06em]', online ? 'text-up' : 'text-faint')}>{online ? 'Live' : 'Offline'}</span>
 }
 
 export function Overview() {

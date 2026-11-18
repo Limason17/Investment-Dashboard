@@ -61,7 +61,7 @@ export function Watchlist() {
                     </span>
                     <span className="text-right leading-tight">
                       <span className={`num block text-[15px] font-semibold tracking-[-0.01em] ${below ? 'text-up' : ''}`}>{pctPlain(below ? -r.s.d! : r.s.d, 1)}</span>
-                      <span className="mt-0.5 block text-[11.5px] text-muted">{below ? 'unter der Grenze' : 'bis zur Grenze'}</span>
+                      <span className="mt-0.5 block text-[11.5px] text-muted">{Math.abs(r.s.d ?? 1) < 0.0005 ? 'an der Grenze' : below ? 'unter der Grenze' : 'bis zur Grenze'}</span>
                     </span>
                   </span>
                   <FluidSparkline className="mt-3" height={56} values={chart?.series[r.w.ticker] ?? []} baseline={r.w.limit} baselineColor="rgb(255 255 255 / 0.82)" baselineLabel={`Kaufgrenze ${money(r.w.limit)}`} endLabel={usd(r.px)} split={false} tone={trendOf(chart?.series[r.w.ticker])} label={`${r.w.ticker}: Kurs der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
@@ -102,7 +102,7 @@ export function Watchlist() {
                         <td>
                           <span className="flex items-center gap-2.5">
                             <Sparkline width={72} values={chart?.series[r.w.ticker] ?? []} tone={sign(chg)} label={`${r.w.ticker}: ${pct(chg, 1)} in 3 Monaten`} />
-                            <Delta value={chg} digits={0} icon={false} className="text-[12px]" />
+                            <Delta value={chg} digits={0} icon={false} className="text-[12px] @max-[700px]:hidden" />
                           </span>
                         </td>
                         <td className="r leading-tight">

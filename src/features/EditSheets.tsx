@@ -105,6 +105,8 @@ export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => voi
   // Titel je Kategorie, damit beim Löschen klar ist, wohin sie wandern
   const count = (id: string) => Object.values(db.positions).filter((p) => p.shares > 0 && catOf(p.bucket) === id).length
   const color = (i: number) => PALETTE[i % PALETTE.length]
+  // Gelöschte Kategorien mit Titeln: sichtbar sagen, wohin diese wandern (der Hinweis am Knopf fehlt auf dem Handy)
+  const removed = categoriesOf(s).filter((x) => !cats.some((y) => y.id === x.id) && count(x.id) > 0)
 
   const save = async () => {
     const list = cats.map((x) => ({ id: x.id, name: x.name.trim().slice(0, 30) }))
@@ -157,6 +159,11 @@ export function PlanSheet({ open, onClose }: { open: boolean; onClose: () => voi
             </div>
           )
         })}
+        {removed.length > 0 && cats[0] && (
+          <p className="rounded-lg border border-warn/25 bg-warn/[0.07] px-3 py-2 text-[12px] leading-[1.5] text-ink-2">
+            {removed.map((x) => `${count(x.id)} Titel aus «${x.name}»`).join(' und ')} {removed.reduce((t, x) => t + count(x.id), 0) === 1 ? 'kommt' : 'kommen'} beim Speichern zu «{cats[0].name || 'erste Kategorie'}». Unter Positionen → Titel → Bearbeiten ordnest du sie danach neu zu.
+          </p>
+        )}
         <div className={`num text-right text-[12px] ${filled && Math.abs(sum - 100) > 0.05 ? 'text-down' : 'text-muted'}`}>{filled ? `Summe ${r2(sum)} %${Math.abs(sum - 100) > 0.05 ? ' (muss 100 % sein)' : ''}` : '«max»: Zielanteil gilt als Obergrenze'}</div>
       </div>
 

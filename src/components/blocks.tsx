@@ -139,7 +139,7 @@ export function LimitRow({ r, onClick }: { r: WatchRow; onClick: () => void }) {
         </span>
         <span className="text-right leading-tight">
           <span className={clsx('num block text-[15px] font-semibold tracking-[-0.01em]', under ? 'text-up' : 'text-ink')}>{pctPlain(under ? -r.s.d! : r.s.d, 1)}</span>
-          <span className="mt-0.5 block text-[11.5px] text-muted">{under ? 'unter der Grenze' : 'bis zur Grenze'}</span>
+          <span className="mt-0.5 block text-[11.5px] text-muted">{Math.abs(r.s.d ?? 1) < 0.0005 ? 'an der Grenze' : under ? 'unter der Grenze' : 'bis zur Grenze'}</span>
         </span>
       </span>
       <span className="mt-2 block"><LimitTrack d={r.s.d} tone={r.s.tone} width="100%" /></span>
