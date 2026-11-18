@@ -9,7 +9,7 @@ import { Card, Chip, Delta, DemoTag, Empty, Segmented, Cur } from '@/components/
 import { alerts, capChecks, divAnnual, eventsSorted, fxOf, watchRows, yearStats } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TITLE, refreshCharts } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { dlong, hhmm, int, pct, pctPlain, sign, sUsd, usd, cur, usdRaw, money } from '@/lib/format'
+import { dlong, dshort, hhmm, int, pct, pctPlain, sign, sUsd, usd, cur, usdRaw, money } from '@/lib/format'
 import { BENCH, useMedia, usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { RangeId } from '@/lib/types'
 
@@ -241,34 +241,42 @@ function Hero() {
 }
 
 const PERIOD_LABEL: Partial<Record<RangeId, string>> = { '1W': 'Woche', '1M': 'Monat', '3M': '3 Monate', '1J': 'Jahr', MAX: 'Seit Beginn' }
-/** Höchstens so viele Punkte, dass der Mini-Verlauf ruhig bleibt. */
-const thin = (v: number[], max = 48) => (v.length <= max ? v : Array.from({ length: max }, (_, i) => v[Math.round((i / (max - 1)) * (v.length - 1))]))
+/** Höchstens so viele Punkte, dass der Mini-Verlauf ruhig bleibt: liefert die Stellen im vollen Verlauf. */
+const thinIdx = (n: number, max = 48) => (n <= max ? Array.from({ length: n }, (_, i) => i) : Array.from({ length: max }, (_, i) => Math.round((i / (max - 1)) * (n - 1))))
 
 function PeriodTile({ range, active, onSelect }: { range: RangeId; active: boolean; onSelect: () => void }) {
   const { c } = useDepot()
   const { series: ps, pending } = usePortfolio(range)
   const n = ps?.t.length ?? 0
   const day = range === '1T'
+  // Ablesen wie bei den Kategorien unter «Positionen»: Finger oder Maus auf dem Mini-Verlauf zeigt Rendite, Betrag und Zeitpunkt
+  const [hov, setHov] = useState<number | null>(null)
+  const idx = useMemo(() => thinIdx(n), [n])
+  const spark = useMemo(() => (ps ? idx.map((i) => ps.pl[i]) : []), [ps, idx])
+  const at = hov != null && ps && hov < idx.length ? idx[hov] : null
   // Vor Handelsbeginn gibt es noch keinen Tagesverlauf: Dann zählt der Stand gegenüber dem Vortag.
-  const ret = n ? ps!.mwr[n - 1] : day ? c.dayPct : null
-  const gain = n ? ps!.gain : day && c.dailyComplete ? c.day : null
-  const spark = useMemo(() => (ps ? thin(ps.pl) : []), [ps])
+  const ret = at != null ? ps!.mwr[at] : n ? ps!.mwr[n - 1] : day ? c.dayPct : null
+  const gain = at != null ? ps!.pl[at] : n ? ps!.gain : day && c.dailyComplete ? c.day : null
   const label = day ? (c.live ? 'Heute' : 'Letzter Tag') : PERIOD_LABEL[range]
+  const when = at != null && ps ? (ps.kind === 'intraday' ? (day ? hhmm(ps.t[at]) : `${dshort(new Date(ps.t[at]).toLocaleDateString('en-CA'))} ${hhmm(ps.t[at])}`) : dshort(ps.d[at])) : null
   return (
-    <button type="button" onClick={onSelect} aria-pressed={active} title={`${label}: im Chart zeigen. Ertrag in USD und im Verhältnis zum eingesetzten Kapital.`} className={clsx('group @container relative min-w-0 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03] sm:px-5', active && 'bg-white/[0.03]')}>
+    <div className={clsx('group relative min-w-0 transition-colors hover:bg-white/[0.03]', active && 'bg-white/[0.03]')}>
       {active && <span className="pointer-events-none absolute inset-x-4 top-[-1px] h-px bg-gradient-to-r from-transparent via-white/40 to-transparent sm:inset-x-5" />}
-      <span className="flex items-center justify-between gap-3">
-        <span className="min-w-0">
-          <span className={clsx('label block truncate transition-colors', active && '!text-ink-2')}>{label}</span>
-          <span className={clsx('num mt-1 block text-[17px] font-semibold leading-6 tracking-[-0.02em] sm:text-[19px]', !ps && pending && 'animate-pulse')}>
-            <Delta value={c.valuationComplete ? ret : null} digits={2} icon={false} />
-          </span>
-          <span className="mt-0.5 block truncate text-[12px] text-muted"><Delta value={c.valuationComplete ? gain : null} kind="usd" icon={false} className="!text-muted" /> {cur()}</span>
+      {/* Antippen der Zahlen zeigt den Zeitraum im grossen Chart */}
+      <button type="button" onClick={onSelect} aria-pressed={active} title={`${label}: im Chart zeigen. Ertrag in ${cur()} und im Verhältnis zum eingesetzten Kapital.`} className="block w-full px-4 pb-1 pt-3.5 text-left sm:px-5">
+        <span className={clsx('label block truncate transition-colors', (active || when) && '!text-ink-2')}>{when ?? label}</span>
+        <span className={clsx('num mt-1 block text-[17px] font-semibold leading-6 tracking-[-0.02em] sm:text-[19px]', !ps && pending && 'animate-pulse')}>
+          <Delta value={c.valuationComplete ? ret : null} digits={2} icon={false} />
         </span>
-        {/* Mini-Verlauf nur, wenn die Kachel breit genug ist: lieber keiner als ein gequetschter */}
-        {spark.length > 1 && <FluidSparkline className="hidden w-12 flex-none @[138px]:block @[190px]:w-20" height={34} values={spark} tone={sign(ret)} baseline={0} label={`Ertrag im Verlauf, ${label}`} />}
-      </span>
-    </button>
+        <span className="mt-0.5 block truncate text-[12px] text-muted"><Delta value={c.valuationComplete ? gain : null} kind="usd" icon={false} className="!text-muted" /> {cur()}</span>
+      </button>
+      {/* Mini-Verlauf über die ganze Breite zum Ablesen */}
+      <div className={clsx('px-4 pb-3 pt-1.5 sm:px-5', pending && 'opacity-40')}>
+        {spark.length > 1 ? (
+          <FluidSparkline height={30} values={spark} tone={sign(ret)} baseline={0} hi={hov} onHover={setHov} label={`Ertrag im Verlauf, ${label}`} />
+        ) : <div className="h-[30px]" />}
+      </div>
+    </div>
   )
 }
 
