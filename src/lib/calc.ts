@@ -258,7 +258,8 @@ export interface Attention {
 
 /** Bausteine mit Obergrenze gegen ihren Anteil; der kritischste zuerst. Ohne Cash-Stand nicht beurteilbar. */
 export function capChecks(c: Calc): { id: BucketId; name: string; w: number; cap: number; state: 'ueber' | 'nahe' | 'ok' }[] {
-  if (!c.valuationComplete || c.settings.cashExcluded || !c.total) return []
+  // Cash nur in einem Teil der Portfolios erfasst: der Gesamtwert ist unvollständig, Obergrenzen nicht beurteilbar
+  if (!c.valuationComplete || c.settings.cashExcluded || c.settings.cashPartial || !c.total) return []
   const rank = { ueber: 0, nahe: 1, ok: 2 }
   return BUCKETS.filter((b) => b.id !== 'cash' && isCap(c.settings, b.id) && targetOf(c.settings, b.id) != null)
     .map((b) => {

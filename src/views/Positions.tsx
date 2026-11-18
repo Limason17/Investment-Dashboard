@@ -154,7 +154,7 @@ export function Positions() {
             const ret = s && s.mwr.length ? s.mwr[s.mwr.length - 1] : null
             const n = c.rows.filter((r) => catOf(r.p.bucket) === b.id).length
             const at = hov?.id === b.id && s && hov.i < s.mwr.length ? hov.i : null
-            const over = isCap(c.settings, b.id) && !cashOff && tgt != null && w > tgt
+            const over = isCap(c.settings, b.id) && !cashOff && !c.settings.cashPartial && tgt != null && w > tgt
             return (
               <div key={b.id} className={`min-w-0 transition-opacity ${bucket !== 'alle' && bucket !== b.id ? 'opacity-45' : ''}`}>
               {/* Oben: antippen filtert die Liste. Unten: Verlauf zum Ablesen. */}

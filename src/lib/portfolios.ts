@@ -64,7 +64,7 @@ export function aggregate(parts: { info: PortfolioInfo; db: DB }[]): DB {
   const out: DB = { positions: {}, prices: {}, watchlist: {}, pots: {}, events: {}, log: {}, transactions: {}, dividends: {}, snapshots: {}, meta: {}, market: {} }
   const tag = (pid: string, id: string) => `${pid}:${id}`
   const quotes: Record<string, Quote> = {}
-  let cash = 0, anyCash = false
+  let cash = 0, anyCash = false, anyOpen = false
   const anyTracked = parts.some(({ db }) => db.meta.settings && !db.meta.settings.cashExcluded)
   for (const { info, db } of parts) {
     const tracked = !!db.meta.settings && !db.meta.settings.cashExcluded
@@ -94,10 +94,10 @@ export function aggregate(parts: { info: PortfolioInfo; db: DB }[]): DB {
     if (st && !st.cashExcluded) {
       cash += Number(st.cash) || 0
       anyCash = true
-    }
+    } else if (Object.values(db.positions).some((p) => p.shares > 0)) anyOpen = true
   }
   const first: Settings = parts.find((p) => p.info.id === MAIN)?.db.meta.settings ?? parts[0]?.db.meta.settings ?? { cash: 0 }
-  out.meta = { settings: { ...first, cash: r2(cash), cashExcluded: !anyCash, rules: first.rules, openItems: [] } }
+  out.meta = { settings: { ...first, cash: r2(cash), cashExcluded: !anyCash, ...(anyCash && anyOpen ? { cashPartial: true } : {}), rules: first.rules, openItems: [] } }
   out.market = { latest: { quotes } }
   return out
 }

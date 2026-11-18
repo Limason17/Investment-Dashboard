@@ -202,7 +202,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
             {potNow && <><br />Topf «{potNow.label}»: frei danach <span className={`num ${potLeft! < -0.005 ? 'font-medium text-warn' : ''}`}>{usd(potLeft!)} USD</span>{potLeft! < -0.005 ? ' (Kauf grösser als der Topf)' : ''}.</>}
             <br />Bestand danach: {qty(have + nSh!)} {t}{p ? '' : ' (neue Position)'}.{moves && <> Cash danach: <span className="num">{usd(cashOf(db) - amt - nFee)}</span>.</>}
             {inBalance && <><br />{balanceNote}</>}
-            {lookNow?.found && <><br />Gefunden: {lookNow.name || t}{lookNow.price != null ? <>, Kurs <span className="num">{usd(lookNow.price)}</span> USD</> : ''}.</>}
+            {lookNow?.found && <><br />Gefunden: {lookNow.name || t}{lookNow.price != null && lookNow.price > 0 ? <>, Kurs <span className="num">{usd(lookNow.price)}</span> USD</> : ''}.</>}
             {lookNow && !lookNow.found && <><br /><span className="font-medium text-warn">Zu «{t}» findet der Kurs-Dienst keinen Kurs. Ticker prüfen; ohne Kurs gilt der Kaufpreis als Bewertung.</span></>}
           </>
         ) : nSh! > have + 1e-9 ? (

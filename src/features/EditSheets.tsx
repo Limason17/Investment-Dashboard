@@ -3,15 +3,15 @@
  * Quellensteuer, Broker, Regeln), Cash-Töpfe, Termine und Watchlist-Titel.
  */
 import { Plus, Trash2 } from 'lucide-react'
-import { useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
 import { Switch } from '@/components/ui'
 import { catOf, categoriesOf, MAX_CATEGORIES, newCategoryId, PALETTE } from '@/lib/buckets'
 import { isCap, targetOf } from '@/lib/calc'
 import { useDepot } from '@/lib/context'
-import { parseNum, r2, today, uid } from '@/lib/format'
+import { parseNum, pctPlain, r2, today, uid, usdRaw } from '@/lib/format'
 import { normTicker } from '@/lib/ticker'
-import { mutate, type Op } from '@/lib/store'
+import { lookupTicker, mutate, type Op } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { BucketId, DepotEvent, Pot } from '@/lib/types'
 
@@ -289,6 +289,20 @@ export function WatchAddSheet({ open, onClose }: { open: boolean; onClose: () =>
   const [name, setName] = useState('')
   const [limit, setLimit] = useState('')
   const [note, setNote] = useState('')
+  // Ticker beim Kurs-Dienst nachfragen: Tippfehler früh zeigen, Name und Kurs als Hilfe für die Grenze
+  const tk = normTicker(ticker) ?? ''
+  const [look, setLook] = useState<{ t: string; r: Awaited<ReturnType<typeof lookupTicker>> } | null>(null)
+  useEffect(() => {
+    if (!tk || db.watchlist[tk]) return
+    let alive = true
+    const id = setTimeout(() => void lookupTicker(tk).then((r) => alive && setLook({ t: tk, r })), 600)
+    return () => {
+      alive = false
+      clearTimeout(id)
+    }
+  }, [tk, db.watchlist])
+  const found = look?.t === tk ? look.r : null
+  const lim = parseNum(limit)
 
   const save = async () => {
     const t = normTicker(ticker)
@@ -296,7 +310,7 @@ export function WatchAddSheet({ open, onClose }: { open: boolean; onClose: () =>
     if (db.watchlist[t]) throw new Error(`${t} ist schon auf der Watchlist.`)
     const l = parseNum(limit)
     if (limit.trim() && (l == null || l <= 0)) throw new Error('Grenze muss eine positive Zahl sein.')
-    const ops: Op[] = [{ op: 'set', coll: 'watchlist', id: t, data: { ticker: t, name: name.trim().slice(0, 80) || db.positions[t]?.name || t, price: null, limit: l, limitCautious: null, conditionMet: null, note: note.trim().slice(0, 300) } }]
+    const ops: Op[] = [{ op: 'set', coll: 'watchlist', id: t, data: { ticker: t, name: name.trim().slice(0, 80) || db.positions[t]?.name || (found?.found && found.name) || t, price: null, limit: l, limitCautious: null, conditionMet: null, note: note.trim().slice(0, 300) } }]
     await mutate(ops)
     return `${t} beobachtet. Der Kurs kommt mit der nächsten Aktualisierung.`
   }
@@ -309,6 +323,14 @@ export function WatchAddSheet({ open, onClose }: { open: boolean; onClose: () =>
       </div>
       <Field label="Name (optional)">{(id) => <input id={id} className="input" maxLength={80} placeholder="Microsoft" value={name} onChange={(e) => setName(e.target.value)} />}</Field>
       <Field label="Notiz">{(id) => <input id={id} className="input" maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
+      {tk && db.watchlist[tk] && <p className="text-[12.5px] font-medium text-warn">{tk} ist schon auf der Watchlist.</p>}
+      {found?.found && (
+        <p className="text-[12.5px] leading-[1.55] text-ink-2">
+          Gefunden: <b className="font-medium text-ink">{found.name || tk}</b>{found.price != null && found.price > 0 && <>, Kurs <span className="num">{usdRaw(found.price)}</span> USD</>}.
+          {found.price != null && found.price > 0 && lim != null && lim > 0 && <> Die Grenze liegt <span className="num">{pctPlain(Math.abs(lim / found.price - 1), 1)}</span> {lim <= found.price ? 'unter' : 'über'} dem Kurs{lim > found.price ? ' (sofort erreicht)' : ''}.</>}
+        </p>
+      )}
+      {found && !found.found && <p className="text-[12.5px] font-medium text-warn">Zu «{tk}» findet der Kurs-Dienst keinen Kurs. Ticker prüfen.</p>}
     </EditSheet>
   )
 }

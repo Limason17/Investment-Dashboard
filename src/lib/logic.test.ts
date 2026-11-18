@@ -590,7 +590,10 @@ describe('Alle Portfolios: Start-Cash eines weiteren Portfolios ist Einsatz, kei
     const all = aggregate([{ info: info('main'), db: main() }, { info: info('zwei'), db: b }])
     const s = portfolioSeries(all, timeline(all), chart)!
     expect(s.value.at(-1)).toBeCloseTo(8500 + 3 * 550 + 2 * 70)
-    expect(s.gain).toBeCloseTo(150 + 20)
+    // Die Dividende bewegt kein Cash, zählt aber zum Ertrag (wie im Portfolio selbst)
+    expect(s.gain).toBeCloseTo(150 + 20 + 1)
+    // Cash nur teilweise erfasst: Obergrenzen sind dann nicht beurteilbar
+    expect(all.meta.settings?.cashPartial).toBe(true)
   })
 })
 

@@ -135,6 +135,8 @@ export interface Snapshot {
 export interface Settings {
   cash: number
   cashExcluded?: boolean
+  /** Nur «Alle Portfolios»: Cash ist in einigen Portfolios erfasst, in anderen nicht (Anteile am Gesamtwert sind dann unsicher) */
+  cashPartial?: boolean
   cashEstimate?: boolean
   cashNote?: string
   cashDate?: string

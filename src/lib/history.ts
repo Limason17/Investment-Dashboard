@@ -24,8 +24,8 @@ export interface Timeline {
   external: { date: string; amount: number }[]
   /** jede Änderung des Cash-Stands (Buchungen und erhaltene Dividenden) */
   cashMoves: { date: string; amount: number }[]
-  /** erhaltene Dividenden (netto) nach Zahltag */
-  payouts: { date: string; ticker: string; amount: number }[]
+  /** erhaltene Dividenden (netto) nach Zahltag; noCash: aus einem Portfolio ohne erfasstes Cash (nur «Alle Portfolios») */
+  payouts: { date: string; ticker: string; amount: number; noCash?: boolean }[]
   /** Datum des ersten Cash-Stands; davor gilt dieser Stand (Cash war da, nur nicht erfasst). */
   cashStart: string | null
   /** erstes Datum mit Bestand; null, wenn es Bestände ohne Buchung gibt */
@@ -98,7 +98,7 @@ export function timeline(db: DB): Timeline {
   const payouts: Timeline['payouts'] = []
   for (const d of Object.values(db.dividends)) {
     if (d.status !== 'erhalten' || !d.payDate || !d.net) continue
-    payouts.push({ date: d.payDate, ticker: d.ticker, amount: d.net })
+    payouts.push({ date: d.payDate, ticker: d.ticker, amount: d.net, ...(d.aggNoCash ? { noCash: true } : {}) })
     if (!d.aggNoCash) cashMoves.push({ date: d.payDate, amount: d.net })
   }
   const byDate = (a: { date: string }, b: { date: string }) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
@@ -270,8 +270,9 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   let fp = 0
   while (fp < flows.length && flows[fp].date < start) fp++
   // Ohne erfasstes Cash gehen erhaltene Dividenden aufs nicht erfasste Konto: Sie verlassen das Depot wie ein
-  // Verkaufserlös und zählen zum Ertrag. Mit erfasstem Cash sind sie schon im Cash-Stand (also im Wert).
-  const payouts = cashTracked ? [] : tl.payouts
+  // Verkaufserlös und zählen zum Ertrag. Mit erfasstem Cash sind sie schon im Cash-Stand (also im Wert); in «Alle
+  // Portfolios» gilt das nicht für Dividenden aus Portfolios ohne erfasstes Cash.
+  const payouts = cashTracked ? tl.payouts.filter((p) => p.noCash) : tl.payouts
   let pp = 0
   while (pp < payouts.length && payouts[pp].date < start) pp++
   let tp = 0

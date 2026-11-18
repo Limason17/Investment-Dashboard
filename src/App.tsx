@@ -21,7 +21,7 @@ import { PortfoliosSheet, PortfolioSwitcher } from '@/features/Portfolios'
 import { Tour } from '@/features/Tour'
 import { LegalLinks, LegalSheet, type LegalDoc } from '@/features/Legal'
 import { PullToRefresh } from '@/components/PullToRefresh'
-import { ALL } from '@/lib/portfolios'
+import { ALL, MAIN } from '@/lib/portfolios'
 import type { DB, LiveResult, ViewId } from '@/lib/types'
 import { Dividends } from '@/views/Dividends'
 import { Journal } from '@/views/Journal'
@@ -267,7 +267,9 @@ function Dashboard() {
       return false
     }
   }
-  const tourPending = CLOUD && !!c && !!user && !c.settings.tourDone && !tourSeen()
+  // Nur im Hauptportfolio: Dort ist «tourDone» gespeichert. Ein neues zweites Portfolio hat eigene Einstellungen
+  // ohne diesen Eintrag und würde die Einführung sonst auf jedem neuen Gerät erneut öffnen.
+  const tourPending = CLOUD && !!c && !!user && portfolio === MAIN && !c.settings.tourDone && !tourSeen()
   useEffect(() => {
     if (!tourPending) return
     const t = setTimeout(() => setTourOpen(true), 700)
@@ -280,8 +282,8 @@ function Dashboard() {
     } catch {
       /* nur Komfort */
     }
-    if (CLOUD && !c?.settings.tourDone) mutate([{ op: 'merge', coll: 'meta', id: 'settings', data: { tourDone: true } }]).catch(() => {})
-  }, [tourKey, c?.settings.tourDone])
+    if (CLOUD && portfolio === MAIN && !c?.settings.tourDone) mutate([{ op: 'merge', coll: 'meta', id: 'settings', data: { tourDone: true } }]).catch(() => {})
+  }, [tourKey, portfolio, c?.settings.tourDone])
   const anyDialog = palette || entry.open || !!posT || !!watchT
 
   useEffect(() => {
