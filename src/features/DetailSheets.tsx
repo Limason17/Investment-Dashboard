@@ -11,7 +11,7 @@ import { useDepot, useNav } from '@/lib/context'
 import { dfmt, parseNum, pct, pctPlain, qty, usd, cur, money } from '@/lib/format'
 import { withNow } from '@/lib/history'
 import { useStored } from '@/lib/hooks'
-import { TX_LABEL } from '@/lib/labels'
+import { txLabel } from '@/lib/labels'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { RangeId, Tx, WithId } from '@/lib/types'
@@ -117,7 +117,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
                 {showTrades && view.byIndex.get(i)?.map((x) => (
                   <div key={x.id} className="mt-2 border-t border-line pt-2 text-[11.5px]">
                     <div className="flex items-center justify-between gap-3">
-                      <span className="inline-flex items-center gap-1.5 font-medium text-ink"><TradeGlyph type={x.type as Marker['type']} />{TX_LABEL[x.type]}</span>
+                      <span className="inline-flex items-center gap-1.5 font-medium text-ink"><TradeGlyph type={x.type as Marker['type']} />{txLabel(x)}</span>
                       <span className="num text-muted">{dfmt(x.date)}</span>
                     </div>
                     <div className="num mt-0.5 text-ink-2">{qty(x.shares)} Stk. × {money(x.price)}</div>
@@ -282,7 +282,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
                 {txs.map((x) => (
                   <li key={x.id} className="grid grid-cols-[74px_70px_minmax(0,1fr)_auto] items-center gap-2 px-3.5 py-2.5 text-[12.5px]">
                     <span className="num text-muted">{dfmt(x.date)}</span>
-                    <span className="font-medium">{TX_LABEL[x.type]}</span>
+                    <span className="font-medium">{txLabel(x)}</span>
                     <span className="num text-ink-2">{qty(x.shares)} × {money(x.price)} {x.demo && <DemoTag className="ml-1" />}</span>
                     <span><Delta value={x.cashDelta} kind="usd" icon={false} /><Cur /></span>
                   </li>

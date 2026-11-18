@@ -354,6 +354,23 @@ describe('Wertverlauf gegen echte Zahlen', () => {
     expect(ps.mwr.at(-1)).toBeCloseTo(0.2) // seit Beginn: Ertrag / eingesetztes Geld
   })
 
+  it('ohne Cash: erhaltene Dividenden zählen zum Ertrag (wie mit erfasstem Cash)', () => {
+    const db = empty()
+    db.meta.settings = { cash: 0, cashExcluded: true }
+    db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 10, bucket: 'etf', cost: 1000 }
+    db.transactions.k = { type: 'kauf', date: days[0], ticker: 'VTI', shares: 10, price: 100, cashDelta: -1000 }
+    db.dividends.d = { ticker: 'VTI', exDate: null, payDate: days[1], perShare: null, shares: null, gross: 12, tax: 2, net: 10, status: 'erhalten' }
+    const ps = portfolioSeries(db, timeline(db), chart([100, 110, 120]))!
+    expect(ps.gain).toBeCloseTo(210)
+    expect(ps.mwr.at(-1)).toBeCloseTo(0.21)
+    expect(ps.invested).toEqual([1000, 1000, 1000]) // «Eingezahlt» bleibt bei den Käufen
+    expect(ps.buckets.etf.pl.at(-1)).toBeCloseTo(210)
+    // Mit erfasstem Cash steckt dieselbe Dividende im Cash-Stand: gleicher Ertrag
+    db.meta.settings = { cash: 10, cashExcluded: false }
+    db.transactions.s = { type: 'korrektur', date: days[0], cashDelta: 0, cashStart: true }
+    expect(portfolioSeries(db, timeline(db), chart([100, 110, 120]))!.gain).toBeCloseTo(210)
+  })
+
   it('Kauf kurz vor Ende des Zeitraums: Rendite wie seit Kauf, nicht aufgebläht', () => {
     const db = empty()
     db.meta.settings = { cash: 0, cashExcluded: true }

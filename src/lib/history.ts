@@ -24,6 +24,8 @@ export interface Timeline {
   external: { date: string; amount: number }[]
   /** jede Änderung des Cash-Stands (Buchungen und erhaltene Dividenden) */
   cashMoves: { date: string; amount: number }[]
+  /** erhaltene Dividenden (netto) nach Zahltag */
+  payouts: { date: string; ticker: string; amount: number }[]
   /** Datum des ersten Cash-Stands; davor gilt dieser Stand (Cash war da, nur nicht erfasst). */
   cashStart: string | null
   /** erstes Datum mit Bestand; null, wenn es Bestände ohne Buchung gibt */
@@ -93,8 +95,15 @@ export function timeline(db: DB): Timeline {
       if (x.type === 'einzahlung' || x.type === 'auszahlung' || (x.type === 'korrektur' && !t && !isStart)) external.push({ date: x.date, amount: cd })
     }
   }
-  for (const d of Object.values(db.dividends)) if (d.status === 'erhalten' && d.payDate && d.net && !d.aggNoCash) cashMoves.push({ date: d.payDate, amount: d.net })
-  cashMoves.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+  const payouts: Timeline['payouts'] = []
+  for (const d of Object.values(db.dividends)) {
+    if (d.status !== 'erhalten' || !d.payDate || !d.net) continue
+    payouts.push({ date: d.payDate, ticker: d.ticker, amount: d.net })
+    if (!d.aggNoCash) cashMoves.push({ date: d.payDate, amount: d.net })
+  }
+  const byDate = (a: { date: string }, b: { date: string }) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
+  cashMoves.sort(byDate)
+  payouts.sort(byDate)
 
   // Abgleich mit dem Bestand: Was die Buchungen nicht erklären, gilt als durchgehend gehalten.
   const unbooked: string[] = []
@@ -112,7 +121,7 @@ export function timeline(db: DB): Timeline {
   const ext = cashStart
     ? [...trades.filter((f) => f.date <= cashStart!).map((f) => ({ date: f.date, amount: f.amount })), ...external.filter((f) => f.date >= cashStart!)].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
     : external
-  return { steps, trades, external: ext, cashMoves, cashStart, first, tickers: Object.keys(steps).filter((t) => steps[t].length), unbooked }
+  return { steps, trades, external: ext, cashMoves, payouts, cashStart, first, tickers: Object.keys(steps).filter((t) => steps[t].length), unbooked }
 }
 
 /** Den neuesten (Live-)Kurs als letzten Punkt einsetzen, damit der Chart dort endet, wo die Kennzahl steht. */
@@ -260,6 +269,11 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
   const buckets = Object.fromEntries(ids.map((id) => [id, { value: [] as number[], twr: [] as number[], pl: [] as number[], mwr: [] as number[] }])) as PortfolioSeries['buckets']
   let fp = 0
   while (fp < flows.length && flows[fp].date < start) fp++
+  // Ohne erfasstes Cash gehen erhaltene Dividenden aufs nicht erfasste Konto: Sie verlassen das Depot wie ein
+  // Verkaufserlös und zählen zum Ertrag. Mit erfasstem Cash sind sie schon im Cash-Stand (also im Wert).
+  const payouts = cashTracked ? [] : tl.payouts
+  let pp = 0
+  while (pp < payouts.length && payouts[pp].date < start) pp++
   let tp = 0
   while (tp < tl.trades.length && tl.trades[tp].date < start) tp++
   let prevV = baseTotal, cum = 1, gainFlows = 0
@@ -297,6 +311,12 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
       paidIn += cashTracked || a > 0 ? a : 0
     }
     const bf = Object.fromEntries(ids.map((id) => [id, 0])) as Record<HoldingBucket, number>
+    let out = 0
+    while (pp < payouts.length && payouts[pp].date <= date) {
+      const po = payouts[pp++]
+      out += po.amount
+      bf[bucketOfT(po.ticker)] -= po.amount
+    }
     while (tp < tl.trades.length && tl.trades[tp].date <= date) {
       const tb = bucketOfT(tl.trades[tp].ticker)
       bf[tb] += tl.trades[tp].amount
@@ -304,12 +324,12 @@ export function portfolioSeries(db: DB, tl: Timeline, chart: ChartData, benchTic
       tp++
     }
     const v = sec + (cashTracked ? cashAt(date) : 0)
-    cum *= 1 + stepReturn(prevV, v, f)
+    cum *= 1 + stepReturn(prevV, v, f - out)
     prevV = v
     invested += f
-    gainFlows += f
+    gainFlows += f - out
     // Zuflüsse arbeiten ab dem Punkt davor (sie zählen zum Beginn des Schritts).
-    if (f) seen.push({ t: i > s0 ? chart.t[i - 1] : t0, amount: f })
+    if (f - out) seen.push({ t: i > s0 ? chart.t[i - 1] : t0, amount: f - out })
     const g = v - baseTotal - gainFlows
     const span = chart.t[i] - t0
     let cap = baseTotal

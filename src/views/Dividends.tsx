@@ -102,10 +102,10 @@ export function Dividends() {
               )
             })}
           </ul>
-          <div className="hidden overflow-x-auto md:block">
+          <div className="@container hidden overflow-x-auto md:block">
             <table className="tbl">
               <thead>
-                <tr><th>Titel</th>{cols.ex && <th>Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r">je Stück</th>}{cols.shares && <th className="r">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th>Status</th><th><span className="sr-only">Aktion</span></th></tr>
+                <tr><th>Titel</th>{cols.ex && <th>Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r">je Stück</th>}{cols.shares && <th className="r">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r @max-[600px]:hidden">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th>Status</th><th><span className="sr-only">Aktion</span></th></tr>
               </thead>
               <tbody>
                 {all.map((d) => {
@@ -118,7 +118,7 @@ export function Dividends() {
                       {cols.per && <td className="r num text-ink-2">{d.perShare != null ? Number(d.perShare).toFixed(4) : '–'}</td>}
                       {cols.shares && <td className="r num text-ink-2">{qty(d.shares)}</td>}
                       <td className="r num">{usd(d.gross)}</td>
-                      <td className="r num text-ink-2">{usd(d.tax)}</td>
+                      <td className="r num text-ink-2 @max-[600px]:hidden">{usd(d.tax)}</td>
                       <td className="r num font-medium">{usd(d.net)}</td>
                       <td>
                         <span className="inline-flex items-center gap-1.5">
@@ -147,10 +147,11 @@ export function Dividends() {
         {a.per.length === 0 ? (
           <Empty>Für die gehaltenen Titel liegt noch keine Dividendenrate vor. Sie wird aus den Ausschüttungen der letzten 12 Monate berechnet und erscheint kurz nach dem Start.</Empty>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="@container overflow-x-auto">
             <table className="tbl">
               <thead>
-                <tr><th>Titel</th><th className="r">Rate pro Jahr {cur()}</th><th className="r">Rendite</th><th className="r">Netto pro Jahr {cur()}</th></tr>
+                {/* Schmale Karte (Handy, Seitenspalte): kurze Spaltennamen, damit «Netto pro Jahr» ohne seitliches Scrollen sichtbar bleibt */}
+                <tr><th>Titel</th><th className="r"><span className="@max-[440px]:hidden">Rate pro Jahr</span><span className="@min-[440px]:hidden">Rate</span> {cur()}</th><th className="r">Rendite</th><th className="r"><span className="@max-[440px]:hidden">Netto pro Jahr</span><span className="@min-[440px]:hidden">Netto</span> {cur()}</th></tr>
               </thead>
               <tbody>
                 {a.per.map((r) => (

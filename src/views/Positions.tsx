@@ -214,7 +214,7 @@ export function Positions() {
         </div>
 
         {/* Ab Tablet: Tabelle */}
-        <div className="hidden overflow-x-auto md:block">
+        <div className="@container hidden overflow-x-auto md:block">
           <table className="tbl">
             <thead>
               <tr>
@@ -223,7 +223,7 @@ export function Positions() {
                 {th('px', `Kurs ${cur()}`, true)}
                 {th('gl', `G/V ${RANGE_LABEL[range]} ${cur()}`, true, `Gewinn oder Verlust in ${cur()}, ${glTitle}. Erst im Zeitraum gekaufte Titel: seit Kauf.`)}
                 {th('glp', `G/V ${RANGE_LABEL[range]} %`, true, `Gewinn oder Verlust in Prozent, ${glTitle}`)}
-                {th('shares', `Stück · Ø Einstand`, true, costDemo ? 'Einstand: Testwerte' : undefined, 'max-lg:hidden')}
+                {th('shares', `Stück · Ø Einstand`, true, costDemo ? 'Einstand: Testwerte' : undefined, '@max-[900px]:hidden')}
                 {th('val', `Wert ${cur()}`, true)}
                 {th(null, 'Anteil', true, cashOff ? 'Anteil an den Wertpapieren' : 'Anteil am Gesamtwert')}
               </tr>
@@ -241,7 +241,7 @@ export function Positions() {
                         </td>
                         <td className="r"><Delta value={gAbs} kind="usd" icon={false} className="font-medium" /></td>
                         <td className="r"><Delta value={gAbs != null && sum != null && sum - gAbs > 0 ? gAbs / (sum - gAbs) : null} digits={2} icon={false} className="font-medium" /></td>
-                        <td className="max-lg:hidden" />
+                        <td className="@max-[900px]:hidden" />
                         <td className="r num">{usd(sum)}</td>
                         <td className="r num">{share(sum)}</td>
                       </tr>
@@ -258,7 +258,7 @@ export function Positions() {
                           <td className="r">{d?.move.abs != null ? <Delta value={d.move.abs} kind="usd" icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
                           <td className="r" title={d?.move.sinceBuy ? 'seit Kauf' : undefined}>{d?.move.pct != null ? <Delta value={d.move.pct} digits={2} icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
                           {/* genau wie die Überschrift: Stück · Ø Einstand auf einer Zeile */}
-                          <td className="r num whitespace-nowrap text-ink-2 max-lg:hidden">
+                          <td className="r num whitespace-nowrap text-ink-2 @max-[900px]:hidden">
                             {qty(r.p.shares)} <span className="text-muted">·</span> Ø {usd(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}
                           </td>
                           <td className="r num font-medium">{usd(r.val)}</td>
@@ -275,7 +275,7 @@ export function Positions() {
                     <span className="inline-flex items-center gap-2.5">{grouped === 'an' && <i className="swatch" style={{ background: 'var(--color-cash)' }} />}Cash</span> {c.settings.cashEstimate && <Chip tone="warn" title={c.settings.cashNote}>Schätzung</Chip>}</td>
                   <td />
                   <td />
-                  <td className="max-lg:hidden" />
+                  <td className="@max-[900px]:hidden" />
                   <td className="r num">{usd(c.cash)}</td>
                   <td className="r num">{share(c.cash)}</td>
                 </tr>

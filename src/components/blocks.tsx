@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { CalendarClock, ChartNoAxesColumn, Check, ChevronRight, CircleDot, Eye, Flag, Layers, OctagonAlert, Target, TriangleAlert, type LucideIcon } from 'lucide-react'
 import type { Attention, WatchRow } from '@/lib/calc'
-import { daysBetween, dshort, pct, weekday, money } from '@/lib/format'
+import { daysBetween, dshort, pctPlain, weekday, money } from '@/lib/format'
 import type { DepotEvent, WithId } from '@/lib/types'
 import { LimitTrack } from './charts/Small'
 import { Chip, DemoTag } from './ui'
@@ -138,8 +138,8 @@ export function LimitRow({ r, onClick }: { r: WatchRow; onClick: () => void }) {
           <span className="mt-0.5 block truncate text-[12px] leading-4 text-muted">{r.w.name}</span>
         </span>
         <span className="text-right leading-tight">
-          <span className={clsx('num block text-[15px] font-semibold tracking-[-0.01em]', under ? 'text-up' : 'text-ink')}>{pct(r.s.d, 1)}</span>
-          <span className="mt-0.5 block text-[11.5px] text-muted">bis zur Grenze</span>
+          <span className={clsx('num block text-[15px] font-semibold tracking-[-0.01em]', under ? 'text-up' : 'text-ink')}>{pctPlain(under ? -r.s.d! : r.s.d, 1)}</span>
+          <span className="mt-0.5 block text-[11.5px] text-muted">{under ? 'unter der Grenze' : 'bis zur Grenze'}</span>
         </span>
       </span>
       <span className="mt-2 block"><LimitTrack d={r.s.d} tone={r.s.tone} width="100%" /></span>

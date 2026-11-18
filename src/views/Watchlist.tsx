@@ -7,7 +7,7 @@ import { WatchAddSheet } from '@/features/EditSheets'
 import { watchRows, type WatchRow } from '@/lib/calc'
 import { useChart } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { pct, sign, usd, money, cur } from '@/lib/format'
+import { pct, pctPlain, sign, usd, money, cur } from '@/lib/format'
 import { rangeChange, withNow } from '@/lib/history'
 
 const GROUPS: { id: string; title: string; hint: string; test: (r: WatchRow) => boolean }[] = [
@@ -60,8 +60,8 @@ export function Watchlist() {
                       <span className="mt-0.5 block truncate text-[12px] leading-4 text-muted">{r.w.name}</span>
                     </span>
                     <span className="text-right leading-tight">
-                      <span className={`num block text-[15px] font-semibold tracking-[-0.01em] ${below ? 'text-up' : ''}`}>{pct(r.s.d, 1)}</span>
-                      <span className="mt-0.5 block text-[11.5px] text-muted">bis zur Grenze</span>
+                      <span className={`num block text-[15px] font-semibold tracking-[-0.01em] ${below ? 'text-up' : ''}`}>{pctPlain(below ? -r.s.d! : r.s.d, 1)}</span>
+                      <span className="mt-0.5 block text-[11.5px] text-muted">{below ? 'unter der Grenze' : 'bis zur Grenze'}</span>
                     </span>
                   </span>
                   <FluidSparkline className="mt-3" height={56} values={chart?.series[r.w.ticker] ?? []} baseline={r.w.limit} baselineColor="rgb(255 255 255 / 0.82)" baselineLabel={`Kaufgrenze ${money(r.w.limit)}`} endLabel={usd(r.px)} split={false} tone={trendOf(chart?.series[r.w.ticker])} label={`${r.w.ticker}: Kurs der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
@@ -78,7 +78,7 @@ export function Watchlist() {
         ) : (
           <>
             {/* Ab Tablet: Tabelle */}
-            <div className="hidden overflow-x-auto md:block">
+            <div className="@container hidden overflow-x-auto md:block">
               <table className="tbl">
                 <thead>
                   <tr>
@@ -86,10 +86,11 @@ export function Watchlist() {
                     <th title="Kursverlauf der letzten 3 Monate">3 Monate</th>
                     <th className="r">Kurs {cur()} · Tag</th>
                     <th className="r">Grenze {cur()}</th>
-                    <th>Kurs zur Grenze</th>
+                    {/* Schmale Karte: Balken weglassen (der Abstand steht daneben), damit «Status» ohne seitliches Scrollen sichtbar bleibt */}
+                    <th className="@max-[1000px]:hidden">Kurs zur Grenze</th>
                     <th className="r">Abstand</th>
                     <th>Status</th>
-                    <th className="max-xl:hidden">Bedingung</th>
+                    <th className="@max-[800px]:hidden">Bedingung</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -97,7 +98,7 @@ export function Watchlist() {
                     const chg = rangeChange(chart, r.w.ticker)
                     return (
                       <tr key={r.w.ticker} className="row-click" tabIndex={0} onClick={() => nav.openWatch(r.w.ticker)} onKeyDown={(e) => e.key === 'Enter' && nav.openWatch(r.w.ticker)}>
-                        <td><Ticker t={r.w.ticker} name={r.w.name} /></td>
+                        <td><Ticker t={r.w.ticker} name={r.w.name} className="@max-[800px]:[&>div:last-child]:max-w-[104px]" /></td>
                         <td>
                           <span className="flex items-center gap-2.5">
                             <Sparkline width={72} values={chart?.series[r.w.ticker] ?? []} tone={sign(chg)} label={`${r.w.ticker}: ${pct(chg, 1)} in 3 Monaten`} />
@@ -113,10 +114,10 @@ export function Watchlist() {
                           {r.w.limitCautious != null && <div className="num text-[11.5px] text-muted">vorsichtig {usd(r.w.limitCautious)}</div>}
                           {r.w.limitNote && <div className="max-w-[150px] text-[11.5px] text-muted">{r.w.limitNote}</div>}
                         </td>
-                        <td><LimitTrack d={r.s.d} tone={r.s.tone} width={120} /></td>
+                        <td className="@max-[1000px]:hidden"><LimitTrack d={r.s.d} tone={r.s.tone} width={120} /></td>
                         <td className={`r num font-medium ${r.s.d != null && r.s.d <= 0 ? 'text-up' : ''}`}>{pct(r.s.d, 1)}</td>
                         <td><Chip tone={r.s.tone}>{r.s.label}</Chip></td>
-                        <td className="max-xl:hidden"><div className="line-clamp-2 max-w-[300px] text-[12px] leading-[1.4] text-ink-2">{r.w.condition}</div>{r.w.pot && <div className="mt-0.5 text-[11.5px] text-muted">Topf: {r.w.pot}</div>}</td>
+                        <td className="@max-[800px]:hidden"><div className="line-clamp-2 max-w-[300px] text-[12px] leading-[1.4] text-ink-2">{r.w.condition}</div>{r.w.pot && <div className="mt-0.5 text-[11.5px] text-muted">Topf: {r.w.pot}</div>}</td>
                       </tr>
                     )
                   })}

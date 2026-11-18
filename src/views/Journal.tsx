@@ -5,7 +5,7 @@ import { Card, Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Stat, Cur 
 import { withIds, yearStats } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
 import { addMonths, dfmt, pct, qty, sUsd, usd, weekday, cur, cur0, money } from '@/lib/format'
-import { TX_LABEL } from '@/lib/labels'
+import { txLabel } from '@/lib/labels'
 import { replayOps, reverseTx } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -101,7 +101,7 @@ export function Journal() {
               <li key={x.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <Chip tone={x.type === 'kauf' ? 'info' : 'mute'} icon={false}>{TX_LABEL[x.type] ?? x.type}</Chip>
+                    <Chip tone={x.type === 'kauf' ? 'info' : 'mute'} icon={false}>{txLabel(x)}</Chip>
                     {x.ticker && <button type="button" className="tk" onClick={() => db.positions[x.ticker!] && nav.openPosition(x.ticker!)}>{x.ticker}</button>}
                     {x.demo && <DemoTag />}
                   </div>
@@ -123,16 +123,16 @@ export function Journal() {
               </li>
             ))}
           </ul>
-          <div className="hidden overflow-x-auto md:block">
-            <table className="tbl min-w-[720px]">
+          <div className="@container hidden overflow-x-auto md:block">
+            <table className="tbl">
               <thead>
-                <tr><th>Datum</th><th>Art</th><th>Titel</th><th className="r">Stück</th><th className="r">Preis {cur()}</th><th className="r">Betrag {cur()}</th><th>Notiz</th><th><span className="sr-only">Aktion</span></th></tr>
+                <tr><th>Datum</th><th>Art</th><th>Titel</th><th className="r">Stück</th><th className="r">Preis {cur()}</th><th className="r">Betrag {cur()}</th><th className="@max-[880px]:hidden">Notiz</th><th><span className="sr-only">Aktion</span></th></tr>
               </thead>
               <tbody>
                 {shown.map((x) => (
                   <tr key={x.id}>
                     <td className="num whitespace-nowrap text-ink-2">{dfmt(x.date)}</td>
-                    <td><Chip tone={x.type === 'kauf' ? 'info' : 'mute'} icon={false}>{TX_LABEL[x.type] ?? x.type}</Chip></td>
+                    <td><Chip tone={x.type === 'kauf' ? 'info' : 'mute'} icon={false}>{txLabel(x)}</Chip></td>
                     <td>{x.ticker ? <button type="button" className="tk hover:underline" onClick={() => db.positions[x.ticker!] && nav.openPosition(x.ticker!)}>{x.ticker}</button> : null}</td>
                     <td className="r num text-ink-2">{x.shares != null ? qty(x.shares) : ''}</td>
                     <td className="r num text-ink-2">{x.price != null ? usd(x.price) : ''}</td>
@@ -141,7 +141,7 @@ export function Journal() {
                       {/* Ein realisiertes Ergebnis gibt es nur bei Verkäufen. */}
                       {x.type === 'verkauf' && x.realized != null && <Result tx={x} />}
                     </td>
-                    <td>
+                    <td className="@max-[880px]:hidden">
                       <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
                         {x.demo ? <DemoTag /> : <span className="line-clamp-2 max-w-[300px] leading-[1.4]" title={x.note}>{x.note}</span>}
                         {x.demo && x.note && x.note !== 'Testbuchung' && <span>{x.note.replace(' (Testbuchung)', '')}</span>}
@@ -199,8 +199,9 @@ function Result({ tx }: { tx: Tx }) {
   const cost = (tx.cashDelta ?? 0) - r
   const tone = r > 0 ? 'text-up' : r < 0 ? 'text-down' : 'text-muted'
   return (
-    <div className={`num mt-0.5 whitespace-nowrap text-[11.5px] font-medium ${tone}`} title={`Erlös minus Einstand${tx.costMethod ? ' (' + tx.costMethod + ')' : ''}`}>
-      {r >= 0 ? 'Gewinn' : 'Verlust'} {sUsd(r)} {cur()}{cost > 0 ? ` · ${pct(r / cost, 1)}` : ''}
+    <div className={`num mt-0.5 text-[11.5px] @max-[880px]:whitespace-normal font-medium ${tone}`} title={`Erlös minus Einstand${tx.costMethod ? ' (' + tx.costMethod + ')' : ''}`}>
+      {/* In schmaler Karte darf nur beim «·» umgebrochen werden, nicht zwischen Zahl und Einheit */}
+      {`${r >= 0 ? 'Gewinn' : 'Verlust'} ${sUsd(r)} ${cur()}`.replace(/ /g, ' ')}{cost > 0 ? ` · ${pct(r / cost, 1).replace(/ /g, ' ')}` : ''}
     </div>
   )
 }
