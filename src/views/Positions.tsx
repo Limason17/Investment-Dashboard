@@ -97,7 +97,7 @@ export function Positions() {
   const cats = HOLDING_BUCKETS.filter((b) => b.id === bucket || c.rows.some((r) => catOf(r.p.bucket) === b.id))
   const catCols = cats.length >= 4 ? 'lg:grid-cols-4' : cats.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'
 
-  const th = (k: SortKey | null, label: string, right?: boolean, hint?: string, className?: string) => (
+  const th = (k: SortKey | null, label: React.ReactNode, right?: boolean, hint?: string, className?: string) => (
     <th className={`${right ? 'r' : ''} ${className ?? ''}`} aria-sort={k && sort.k === k ? (sort.d === 1 ? 'ascending' : 'descending') : undefined} title={hint}>
       {k ? (
         <button type="button" onClick={() => onSort(k)}>
@@ -218,7 +218,8 @@ export function Positions() {
           <table className="tbl">
             <thead>
               <tr>
-                {th('t', 'Titel')}
+                {/* Schmale Karte (Tablet): nur der Ticker, darunter Stück · Ø Einstand statt einer eigenen Spalte */}
+                {th('t', <>Titel<span className="hidden @max-[900px]:inline"> · Stück · Ø Einstand</span></>)}
                 {th(null, `Verlauf ${RANGE_LABEL[range]}`, false, `Kursverlauf, ${rangeText}`)}
                 {th('px', `Kurs ${cur()}`, true)}
                 {th('gl', `G/V ${RANGE_LABEL[range]} ${cur()}`, true, `Gewinn oder Verlust in ${cur()}, ${glTitle}. Erst im Zeitraum gekaufte Titel: seit Kauf.`)}
@@ -250,7 +251,10 @@ export function Positions() {
                       const d = data[r.t]
                       return (
                         <tr key={r.t} className="row-click" tabIndex={0} onClick={() => nav.openPosition(r.t)} onKeyDown={(e) => e.key === 'Enter' && nav.openPosition(r.t)}>
-                          <td className="w-[150px] max-w-[150px]"><Ticker t={r.t} name={r.p.name} className="[&>div:last-child]:max-w-[140px]" /></td>
+                          <td className="w-[150px] max-w-[150px] @max-[900px]:w-auto @max-[900px]:max-w-none">
+                            <Ticker t={r.t} name={r.p.name} className="[&>div:last-child]:max-w-[140px] @max-[900px]:[&>div:last-child]:hidden" />
+                            <div className="num hidden whitespace-nowrap text-[12px] leading-4 text-muted @max-[900px]:block">{qty(r.p.shares)} · Ø {usd(r.avg)}</div>
+                          </td>
                           <td className={`transition-opacity ${pending ? 'opacity-40' : ''}`}>
                             <Sparkline values={d?.values ?? []} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} label={`${r.t}: ${pct(d?.move.pct, 1)} ${glTitle}`} />
                           </td>
@@ -305,15 +309,13 @@ export function Positions() {
                     const d = data[r.t]
                     return (
                       <li key={r.t} className="border-b border-white/[0.04] last:border-b-0">
-                        <button type="button" onClick={() => nav.openPosition(r.t)} className="grid min-h-[58px] w-full grid-cols-[minmax(0,1fr)_56px_auto] items-center gap-3 px-3 py-2 text-left active:bg-white/[0.04]">
+                        <button type="button" onClick={() => nav.openPosition(r.t)} className="grid min-h-[58px] w-full grid-cols-[minmax(0,1fr)_80px_auto] items-center gap-3 px-3 py-2 text-left active:bg-white/[0.04]">
                           <span className="min-w-0">
-                            <span className="flex min-w-0 items-baseline gap-2">
-                              <span className="tk flex-none">{r.t}</span>
-                              <span className="num truncate text-[11.5px] text-muted">{qty(r.p.shares)} · Ø {usd(r.avg)}</span>
-                            </span>
-                            <span className="block truncate text-[12px] leading-4 text-muted">{r.p.name}</span>
+                            {/* Nur der Ticker (der Name steht in der Detailansicht), darunter Stück · Ø Einstand */}
+                            <span className="tk block">{r.t}</span>
+                            <span className="num block truncate text-[12px] leading-4 text-muted">{qty(r.p.shares)} · Ø {usd(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}</span>
                           </span>
-                          <span className={pending ? 'opacity-40' : ''}><Sparkline width={56} height={26} values={d?.values ?? []} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} /></span>
+                          <span className={pending ? 'opacity-40' : ''}><Sparkline width={80} height={26} values={d?.values ?? []} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} /></span>
                           <span className="min-w-[96px] text-right leading-tight">
                             <span className="num block text-[13.5px] font-medium">{usd(r.val)}<Cur /></span>
                             <span className="mt-0.5 block whitespace-nowrap">{gl(d?.move, true)}</span>
