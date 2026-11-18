@@ -16,6 +16,7 @@ import type { ImportKind } from '@/lib/bulk'
 import { exportCsv } from '@/lib/export'
 import { daysBetween, dfmt, today, weekday, cur } from '@/lib/format'
 import { initStore, loadDb, mutate, refreshAll, useStore } from '@/lib/store'
+import { useOnline } from '@/lib/hooks'
 import { toast } from '@/lib/toast'
 import { PortfoliosSheet, PortfolioSwitcher } from '@/features/Portfolios'
 import { Tour } from '@/features/Tour'
@@ -81,14 +82,16 @@ function Brand({ compact }: { compact?: boolean }) {
 }
 
 const isStale = (c: Calc, now: string) => (c.lastDate ? daysBetween(c.lastDate, now) > 4 : true)
-const statusText = (c: Calc, now: string, live: LiveResult | null) =>
-  live && !isStale(c, now) ? c.priceLabel : c.lastDate ? (isStale(c, now) ? 'Kurse vom ' : 'Schlusskurse ') + dfmt(c.lastDate) : 'Noch keine Kurse'
+// Ohne Verbindung zuerst sagen, dass die Kurse nicht mehr nachkommen
+const statusText = (c: Calc, now: string, live: LiveResult | null, online = true) =>
+  !online ? 'Offline · ' + (c.lastDate ? 'Kurse vom ' + dfmt(c.lastDate) : 'keine Kurse') : live && !isStale(c, now) ? c.priceLabel : c.lastDate ? (isStale(c, now) ? 'Kurse vom ' : 'Schlusskurse ') + dfmt(c.lastDate) : 'Noch keine Kurse'
 
 function StatusDot({ stale, live }: { stale: boolean; live: boolean }) {
+  const online = useOnline()
   return (
     <span className="relative flex size-2 flex-none">
-      {live && !stale && <span className="absolute inline-flex size-full animate-ping rounded-full bg-up opacity-50 [animation-duration:2.4s]" />}
-      <span className={clsx('relative inline-flex size-2 rounded-full', stale ? 'bg-warn' : 'bg-up')} />
+      {online && live && !stale && <span className="absolute inline-flex size-full animate-ping rounded-full bg-up opacity-50 [animation-duration:2.4s]" />}
+      <span className={clsx('relative inline-flex size-2 rounded-full', !online ? 'bg-faint' : stale ? 'bg-warn' : 'bg-up')} />
     </span>
   )
 }
@@ -99,11 +102,12 @@ function DataStatus({ db, c, now, live }: { db: DB; c: Calc; now: string; live: 
   const stale = isStale(c, now)
   const refreshed = m?.refreshedAt?.slice(0, 10) ?? s.refresh?.at
   const by = m?.by ?? s.refresh?.by
+  const online = useOnline()
   return (
     <div className="rounded-xl border border-line bg-white/[0.025] p-3.5">
       <div className="flex items-center gap-2 text-[12.5px] font-medium">
         <StatusDot stale={stale} live={c.live} />
-        {statusText(c, now, live)}
+        {statusText(c, now, live, online)}
       </div>
       {live ? (
         <div className="mt-1 pl-4 text-[11.5px] text-muted">
@@ -218,8 +222,11 @@ function Dashboard() {
   const [accountOpen, setAccountOpen] = useState(false)
   const now = today()
   const [refreshing, setRefreshing] = useState(false)
+  const online = useOnline()
   const refresh = useCallback(async () => {
     if (refreshing) return
+    // Ohne Verbindung sofort Bescheid geben statt lange zu warten
+    if (!navigator.onLine) return toast('Keine Verbindung. Es gelten die zuletzt geladenen Kurse.')
     setRefreshing(true)
     const r = await refreshAll()
     refreshCharts()
@@ -359,7 +366,7 @@ function Dashboard() {
                 </h1>
                 <PortfolioSwitcher mini sub={shortDate} className="-ml-1 w-fit max-w-[calc(100%+4px)]" onManage={() => setPortfoliosOpen(true)} />
               </div>
-              <span className="grid size-6 flex-none place-items-center" title={statusText(c, now, live) ?? undefined} aria-label={statusText(c, now, live) ?? undefined} role="img">
+              <span className="grid size-6 flex-none place-items-center" title={statusText(c, now, live, online) ?? undefined} aria-label={statusText(c, now, live, online) ?? undefined} role="img">
                 <StatusDot stale={stale} live={c.live} />
               </span>
               <button type="button" data-tour="account" className="btn btn-ghost btn-icon -mr-1" onClick={() => setAccountOpen(true)} aria-label={CLOUD ? 'Konto und Daten' : 'Daten'}><CircleUser /></button>

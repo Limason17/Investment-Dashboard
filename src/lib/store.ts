@@ -275,6 +275,8 @@ export async function mutate(ops: Op[]) {
   if (pid === ALL) throw new Error('In der Gesamtansicht lässt sich nichts ändern. Wähle oben ein Portfolio.')
   if (CLOUD) {
     if (!state.db) throw new Error('Daten noch nicht geladen')
+    // Ohne Verbindung sofort melden: Firestore versucht es sonst lange erneut, und «Speichert …» bleibt stehen
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('Keine Verbindung. Prüfe das Internet und speichere dann nochmals.')
     const changed = await cloudBatch(state.db, ops, pid).catch(async (e) => {
       // Ein anderes Gerät hat dieselben Einträge geändert: neu laden, damit der nächste Versuch vom aktuellen Stand rechnet.
       if (e instanceof ConflictError) await loadDb().catch(() => {})

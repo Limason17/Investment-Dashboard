@@ -287,7 +287,8 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
       setErr(x instanceof Error ? x.message : String(x))
     }
   }
-  const n = (d: Partial<DB>) => Object.keys(d.positions ?? {}).length + ' Positionen, ' + Object.keys(d.transactions ?? {}).length + ' Buchungen, ' + Object.keys(d.dividends ?? {}).length + ' Dividenden'
+  // Wie in der Liste: nur Positionen mit Bestand (verkaufte bleiben für den Verlauf in der Datei)
+  const n = (d: Partial<DB>) => Object.values(d.positions ?? {}).filter((p) => p.shares > 0).length + ' Positionen, ' + Object.keys(d.transactions ?? {}).length + ' Buchungen, ' + Object.keys(d.dividends ?? {}).length + ' Dividenden'
 
   return (
     <Sheet open={open} onClose={onClose} title={CLOUD ? 'Konto und Daten' : 'Daten'} sub={CLOUD ? user?.email : 'Positionen hochladen und Daten sichern'}>
@@ -355,7 +356,7 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
           {empty && <p className="text-[12px] text-muted">Dein Depot ist noch leer. Lade zuerst deine Positionen hoch.</p>}
           {pending && (
             <div className="grid gap-2 rounded-xl border border-warn/25 bg-warn/[0.07] px-3.5 py-3 text-[12.5px] text-ink-2">
-              <p><b className="text-ink">Achtung:</b> Die Kopie ersetzt alle Daten in diesem Konto. Das lässt sich nicht rückgängig machen. Lade vorher eine Sicherungskopie herunter, falls du die jetzigen Daten brauchst.</p>
+              <p><b className="text-ink">Achtung:</b> Die Kopie ersetzt alle Daten {pfName ? <>im Portfolio «{pfName}». Andere Portfolios bleiben unverändert.</> : 'in diesem Depot.'} Das lässt sich nicht rückgängig machen. Lade vorher eine Sicherungskopie herunter, falls du die jetzigen Daten brauchst.</p>
               <p className="text-muted">In der Kopie: {n(pending)}.</p>
               <div className="flex gap-2">
                 <button type="button" className="btn btn-sm btn-primary" disabled={busy} onClick={() => void restore()}>{busy ? 'Stellt wieder her …' : 'Alle Daten ersetzen'}</button>

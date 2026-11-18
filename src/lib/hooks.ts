@@ -64,3 +64,14 @@ export function usePortfolio(range: RangeId) {
   const series = useMemo(() => (chart ? portfolioSeries(db, tl, chart, BENCH) : null), [db, tl, chart])
   return { tl, chart, series, pending, error }
 }
+
+/** Verbindung laut Browser: false heisst sicher offline (true kann trotzdem ohne Internet sein). */
+const subscribeOnline = (cb: () => void) => {
+  window.addEventListener('online', cb)
+  window.addEventListener('offline', cb)
+  return () => {
+    window.removeEventListener('online', cb)
+    window.removeEventListener('offline', cb)
+  }
+}
+export const useOnline = () => useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true)
