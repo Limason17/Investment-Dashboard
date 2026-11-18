@@ -238,6 +238,10 @@ const BUCKET_WORDS: [HoldingBucket, string[]][] = [
   ['zukunft', ['zukunft', 'future']],
   ['metalle', ['metalle', 'metall', 'metallekrypto', 'krypto', 'crypto', 'gold']],
 ]
+/** Fehlertext mit dem eingegebenen Wert, damit man die Stelle findet */
+const bad = (what: string, raw: string | undefined) => (raw?.trim() ? `${what} «${raw.trim()}» ist keine gültige Zahl` : `${what} fehlt`)
+const badCat = (raw: string | undefined) => `Kategorie «${raw}» unbekannt. Möglich: ${HOLDING_BUCKETS.map((b) => b.name).join(", ")}`
+
 /** Kategorie aus dem Text (Name, Kurzname oder Kennung der eigenen Kategorien); undefined = leer, null = unbekannt. */
 function bucket(raw: string | undefined): HoldingBucket | null | undefined {
   const n = norm(raw ?? '')
@@ -529,9 +533,9 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       // Summen- und Cash-Zeilen aus Broker-Exporten still überspringen.
       if (!t) return void (/(total|cash|summe|gesamt)/i.test(rawT) ? res.skipped.push({ line, msg: `«${rawT}» übersprungen` }) : err(`Ticker «${rawT}» ungültig`))
       const shares = num(get(r, 'shares'))
-      if (shares == null || shares < 0) return void err('Stück fehlt oder ungültig')
+      if (shares == null || shares < 0) return void err(bad('Stück', get(r, 'shares')))
       const b = bucket(get(r, 'bucket'))
-      if (b === null) return void err(`Kategorie «${get(r, 'bucket')}» unbekannt`)
+      if (b === null) return void err(badCat(get(r, 'bucket')))
       const costRaw = get(r, 'cost')
       const cost = num(costRaw)
       if (costRaw && cost == null) return void err(`Einstand «${costRaw}» ungültig`)
@@ -546,11 +550,11 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       if (d < MIN_DATE) return void err(`Datum ${d} liegt zu weit zurück`)
       if (!type) return void err(`Art «${get(r, 'type')}» unbekannt (Kauf oder Verkauf)`)
       if (!t) return void err(get(r, 'ticker') ? `Ticker «${get(r, 'ticker')}» ungültig` : 'Ticker fehlt')
-      if (!shares || shares <= 0) return void err('Stück fehlt oder ungültig')
-      if (!price || price <= 0) return void err('Preis fehlt oder ungültig')
+      if (!shares || shares <= 0) return void err(bad('Stück', get(r, 'shares')))
+      if (!price || price <= 0) return void err(bad('Preis', get(r, 'price')))
       if (get(r, 'fees') && num(get(r, 'fees')) == null) return void err(`Gebühr «${get(r, 'fees')}» ungültig`)
       if (fees < 0) return void err('Gebühr darf nicht negativ sein')
-      if (b === null) return void err(`Kategorie «${get(r, 'bucket')}» unbekannt`)
+      if (b === null) return void err(badCat(get(r, 'bucket')))
       res.trades.push({ line, date: d, type, ticker: t, shares: Math.abs(shares), price, fees, bucket: b, note: get(r, 'note') })
     } else {
       const d = date(get(r, 'payDate'))
@@ -561,7 +565,7 @@ export function parseImport(kind: ImportKind, text: string): ParseResult {
       const ex = date(exRaw)
       if (!d) return void err(`Zahltag «${get(r, 'payDate')}» ungültig`)
       if (!t) return void err(get(r, 'ticker') ? `Ticker «${get(r, 'ticker')}» ungültig` : 'Ticker fehlt')
-      if (!gross || gross <= 0) return void err('Bruttobetrag fehlt oder ungültig')
+      if (!gross || gross <= 0) return void err(bad('Bruttobetrag', get(r, 'gross')))
       if (d > todayISO()) return void err(`Zahltag ${d} liegt in der Zukunft`)
       if (d < MIN_DATE) return void err(`Zahltag ${d} liegt zu weit zurück`)
       if (taxRaw && tax == null) return void err(`Quellensteuer «${taxRaw}» ungültig`)

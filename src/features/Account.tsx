@@ -1,4 +1,4 @@
-import { ClipboardPaste, Download, LogOut, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { ClipboardPaste, Download, Eye, EyeOff, LogOut, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Sheet } from '@/components/Sheet'
 import { Segmented, Switch } from '@/components/ui'
@@ -88,6 +88,8 @@ export function AuthScreen({ brand }: { brand: ReactNode }) {
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  // Passwort zeigen: auf dem Handy vertippt man sich leicht
+  const [showPw, setShowPw] = useState(false)
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -132,7 +134,12 @@ export function AuthScreen({ brand }: { brand: ReactNode }) {
             <Field label="E-Mail">{(id) => <input id={id} className="input" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />}</Field>
             {mode !== 'reset' && (
               <Field label="Passwort" hint={mode === 'register' ? `mindestens ${PASSWORD_MIN} Zeichen` : undefined}>
-                {(id) => <input id={id} className="input" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} required minLength={mode === 'register' ? PASSWORD_MIN : undefined} value={password} onChange={(e) => setPassword(e.target.value)} />}
+                {(id) => (
+                  <div className="relative">
+                    <input id={id} className="input !pr-11" type={showPw ? 'text' : 'password'} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} required minLength={mode === 'register' ? PASSWORD_MIN : undefined} value={password} onChange={(e) => setPassword(e.target.value)} />
+                    <button type="button" className="absolute right-1 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-lg text-muted hover:text-ink [&>svg]:size-4" onClick={() => setShowPw((v) => !v)} aria-label={showPw ? 'Passwort verbergen' : 'Passwort zeigen'} aria-pressed={showPw} title={showPw ? 'Passwort verbergen' : 'Passwort zeigen'}>{showPw ? <EyeOff /> : <Eye />}</button>
+                  </div>
+                )}
               </Field>
             )}
             {mode === 'register' && (
@@ -259,7 +266,9 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
       await deleteAccount(pw)
       location.reload()
     } catch (x) {
-      setErr(authMessage(x))
+      // Hier ist die E-Mail bekannt: nur das Passwort kann falsch sein
+      const code = (x as { code?: string })?.code ?? ''
+      setErr(/invalid-credential|wrong-password/.test(code) ? 'Das Passwort stimmt nicht.' : authMessage(x))
       setBusy(false)
     }
   }
@@ -282,7 +291,8 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
 
   return (
     <Sheet open={open} onClose={onClose} title={CLOUD ? 'Konto und Daten' : 'Daten'} sub={CLOUD ? user?.email : 'Positionen hochladen und Daten sichern'}>
-      <div className="grid gap-5">
+      {/* Eine Spalte, die schrumpfen darf: sonst machen die abgeschnittenen Zeilen das Blatt auf dem Handy breiter als den Bildschirm */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
 
         <section className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
           <div className="min-w-0">
@@ -369,15 +379,17 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
                   <p><b className="text-ink">Achtung:</b> Das löscht dein Konto und alle Daten darin. Das lässt sich nicht rückgängig machen.</p>
                   <input className="input" type="password" autoComplete="current-password" placeholder="Passwort zur Bestätigung" value={pw} onChange={(e) => setPw(e.target.value)} />
                   <div className="flex gap-2">
-                    <button type="button" className="btn btn-sm btn-primary" disabled={busy || !pw} onClick={() => void remove()}>{busy ? 'Löscht …' : 'Endgültig löschen'}</button>
-                    <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setDel(false); setPw('') }}>Abbrechen</button>
+                    <button type="button" className="btn btn-sm border-down/40 bg-down/90 font-semibold text-white hover:bg-down" disabled={busy || !pw} onClick={() => void remove()}>{busy ? 'Löscht …' : 'Endgültig löschen'}</button>
+                    <button type="button" className="btn btn-sm btn-ghost" onClick={() => { setDel(false); setPw(''); setErr('') }}>Abbrechen</button>
                   </div>
+                  {/* Fehler direkt beim Löschen zeigen, nicht weit unten */}
+                  {err && <div role="alert" className="font-medium text-down">{err}</div>}
                 </div>
               )}
             </section>
           </>
         )}
-        {err && <div role="alert" className="text-[12.5px] text-down">{err}</div>}
+        {err && !del && <div role="alert" className="text-[12.5px] text-down">{err}</div>}
         <LegalLinks className="border-t border-line pt-4 text-[12px] text-muted" onOpen={setLegal} />
       </div>
       <LegalSheet doc={legal} onClose={() => setLegal(null)} />

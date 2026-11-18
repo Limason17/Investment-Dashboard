@@ -143,11 +143,12 @@ export function Watchlist() {
             </div>
           </>
         )}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-3 pb-2 pt-3 text-[12px] text-muted">
+        {/* Legende nur, wenn es Zeilen gibt, die sie erklärt */}
+        {rows.length > 0 && <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-3 pb-2 pt-3 text-[12px] text-muted">
           <span className="inline-flex items-center gap-2"><i className="inline-block h-3 w-[2px] rounded-full bg-ink-2" />Kaufgrenze</span>
           <span className="inline-flex items-center gap-2"><i className="inline-block h-1 w-5 rounded-full bg-up/30" />Kaufzone darunter</span>
           <span className="inline-flex items-center gap-2"><i className="inline-block size-2 rounded-full bg-[#8a91a0]" />Kurs, Skala −15 % bis +35 %</span>
-        </div>
+        </div>}
       </Card>
       <WatchAddSheet key={String(add)} open={add} onClose={() => setAdd(false)} />
     </div>

@@ -50,11 +50,11 @@ export function Dividends() {
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
       <section className="card col-span-12 grid grid-cols-2 divide-line lg:grid-cols-5 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l">
-        <Stat label="Jahresprognose netto" value={<>{usd(a.per.length ? a.net : null)}<Cur /></>} sub={<span>{money(a.per.length ? a.gross : null)} brutto, {pctPlain(w, 0)} Steuer</span>} />
+        <Stat label="Jahresprognose netto" value={a.per.length ? <>{usd(a.net)}<Cur /></> : '–'} sub={<span>{a.per.length ? <>{money(a.gross)} brutto, {pctPlain(w, 0)} Steuer</> : 'erscheint mit den ersten Dividendentiteln'}</span>} />
         <Stat label="Rendite auf Wertpapiere" value={pctPlain(c.valuationComplete && a.per.length && c.sec ? a.gross / c.sec : null, 2)} sub={<span>brutto, laufende Raten</span>} />
         <Stat label={<>Erhalten {year} {hasDemo && <DemoTag />}</>} value={<>{usd(recYear)}<Cur /></>} sub={<span>{recYearCount} {recYearCount === 1 ? 'Zahlung' : 'Zahlungen'}, netto</span>} />
         <Stat label="Erwartet, 6 Monate" value={expected.length || projected.length ? <>{usd(expSum)}<Cur /></> : '–'} sub={<span>{expected.length || projected.length ? [expected.length ? `${expected.length} erfasst` : '', projected.length ? `${projected.length} geschätzt` : ''].filter(Boolean).join(', ') + ', netto' : 'keine Zahlung in Sicht'}</span>} />
-        <Stat className="max-lg:col-span-2" label="Pro Monat im Schnitt" value={<>{usd(a.per.length ? a.net / 12 : null)}<Cur /></>} sub={<span>netto, Prognose</span>} />
+        <Stat className="max-lg:col-span-2" label="Pro Monat im Schnitt" value={a.per.length ? <>{usd(a.net / 12)}<Cur /></> : '–'} sub={<span>netto, Prognose</span>} />
       </section>
 
       <div className="col-span-12 grid content-start gap-3 sm:gap-4 xl:col-span-7">

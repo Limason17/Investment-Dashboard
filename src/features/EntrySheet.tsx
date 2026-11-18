@@ -103,6 +103,9 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
   const have = old && old.ticker === t ? (current.positions[t]?.shares || 0) - (old.type === 'kauf' ? 1 : -1) * (old.shares ?? 0) : p?.shares || 0
   const avg = p && p.cost != null && p.shares ? p.cost / p.shares : null
   const amt = nSh && nPx ? nSh * nPx : null
+  // Gewählter Topf: was danach noch frei ist (beim Bearbeiten ist die alte Buchung schon herausgerechnet)
+  const potNow = pot ? db.pots[pot] : undefined
+  const potLeft = potNow && amt != null ? (potNow.budget || 0) - (potNow.used || 0) - amt - nFee : null
   // Buchung am oder vor dem letzten Cash-Stand: im erfassten Saldo schon enthalten, Cash bleibt.
   const moves = !cashOff(db) && movesCash(db, date)
   const inBalance = !cashOff(db) && !moves
@@ -196,17 +199,20 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
         ) : type === 'kauf' ? (
           <>
             Kaufwert <b className="num">{usd(amt)}</b> + Gebühren {usd(nFee)} = <b className="num">{usd(amt + nFee)} USD</b>{moves ? ' aus dem Cash' : ''}.
+            {potNow && <><br />Topf «{potNow.label}»: frei danach <span className={`num ${potLeft! < -0.005 ? 'font-medium text-warn' : ''}`}>{usd(potLeft!)} USD</span>{potLeft! < -0.005 ? ' (Kauf grösser als der Topf)' : ''}.</>}
             <br />Bestand danach: {qty(have + nSh!)} {t}{p ? '' : ' (neue Position)'}.{moves && <> Cash danach: <span className="num">{usd(cashOf(db) - amt - nFee)}</span>.</>}
             {inBalance && <><br />{balanceNote}</>}
             {lookNow?.found && <><br />Gefunden: {lookNow.name || t}{lookNow.price != null ? <>, Kurs <span className="num">{usd(lookNow.price)}</span> USD</> : ''}.</>}
             {lookNow && !lookNow.found && <><br /><span className="font-medium text-warn">Zu «{t}» findet der Kurs-Dienst keinen Kurs. Ticker prüfen; ohne Kurs gilt der Kaufpreis als Bewertung.</span></>}
           </>
+        ) : nSh! > have + 1e-9 ? (
+          // Mehr als vorhanden: kein negativer Bestand und kein Ergebnis für Stück, die es nicht gibt
+          <span className="font-medium text-down">{have > 0 ? <>Im Bestand sind nur {qty(have)} {t}. Weniger Stück eingeben.</> : <>{t} ist nicht im Bestand.</>}</span>
         ) : (
           <>
-            Erlös <b className="num">{usd(amt - nFee)} USD</b>{moves ? ' ins Cash' : ''}. Bestand danach: {qty(have - nSh!)} {t}.
+            Erlös <b className="num">{usd(amt - nFee)} USD</b>{moves ? ' ins Cash' : ''}. Bestand danach: {qty(have - nSh!)} {t}{have - nSh! < 1e-9 ? ' (Position geschlossen)' : ''}.
             {inBalance && <><br />{balanceNote}</>}
             {avg != null && <><br />Realisiert: <b className={`num font-semibold ${amt - nFee - avg * nSh! >= 0 ? 'text-up' : 'text-down'}`}>{sUsd(amt - nFee - avg * nSh!)}</b> USD gegen Ø-Einstand {usd(avg)}.</>}
-            {nSh! > have + 1e-9 && <><br /><span className="font-medium text-down">Mehr als im Bestand.</span></>}
           </>
         )}
       </CalcBox>
@@ -229,6 +235,10 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
   const w = wht(db)
   const g = parseNum(gross)
   const tx = parseNum(tax) ?? (g != null ? r2(g * w) : null)
+  // Tippfehler früh zeigen: Titel, der weder im Bestand ist noch je gebucht wurde (ein verkaufter Titel kann noch zahlen)
+  const tNorm = normTicker(tk)
+  const unknown = !!tNorm && !db.positions[tNorm] && !Object.values(db.transactions).some((x) => x.ticker === tNorm) && !Object.values(db.dividends).some((d) => d.ticker === tNorm)
+  const exLate = !!ex && !!pay && ex > pay
 
   const { err, clearErr, onSubmit } = useSubmit(fp, async () => {
     const t = normTicker(tk)
@@ -237,6 +247,7 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
     if (tax.trim() && parseNum(tax) == null) throw new Error('Quellensteuer prüfen: ein Betrag in USD, leer = Standardsatz.')
     if (tx < 0 || tx > g) throw new Error('Die Quellensteuer muss zwischen 0 und dem Bruttobetrag liegen (ein Betrag in USD, kein Prozentsatz).')
     if (pay) checkDate(pay)
+    if (ex && pay && ex > pay) throw new Error('Der Ex-Tag liegt nach dem Zahltag. Bitte die Daten prüfen.')
     await commit([
       {
         op: 'set', coll: 'dividends', id: fromId || uid(),
@@ -260,6 +271,8 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
       <Field label="Notiz">{(id) => <input id={id} className="input" value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
       <CalcBox>
         {g == null || tx == null ? 'Bruttobetrag aus der Buchung des Brokers eingeben.' : tx > g ? 'Die Quellensteuer ist höher als der Bruttobetrag. Bitte prüfen.' : g <= 0 ? 'Bruttobetrag muss grösser als 0 sein.' : <>Netto <b className="num">{usd(g - tx)} USD</b>{cashOff(db) || !movesCash(db, pay || today()) ? ' wird als erhalten gebucht.' : ' wird dem Cash gutgeschrieben.'}{!cashOff(db) && !movesCash(db, pay || today()) && <><br />{balanceNote}</>}</>}
+        {unknown && <><br /><span className="font-medium text-warn">{tNorm} ist nicht im Depot und wurde nie gebucht. Ticker prüfen.</span></>}
+        {exLate && <><br /><span className="font-medium text-down">Der Ex-Tag liegt nach dem Zahltag.</span></>}
       </CalcBox>
       <ErrorLine err={err} />
     </form>
