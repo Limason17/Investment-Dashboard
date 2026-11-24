@@ -1,5 +1,5 @@
 import { Check, Pencil, Upload } from 'lucide-react'
-import { useMemo } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { DIV_EXPECTED, DIV_RECEIVED, DividendBars, type DivMonth } from '@/components/charts/DividendBars'
 import { Card, Chip, ConfirmDelete, DemoTag, Empty, Stat, Cur } from '@/components/ui'
 import { divAnnual, dividendsList, projectedDividends, wht } from '@/lib/calc'
@@ -8,6 +8,10 @@ import { addMonths, dfmt, pctPlain, qty, usd, cur, curRate, money } from '@/lib/
 import { movesCash, reverseDividend } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
+
+/** Anzahl Zeilen je Gruppe, bevor «Alle zeigen» nötig ist (wie im Journal). */
+const RECENT = 8
+type DivRow = ReturnType<typeof dividendsList>[number]
 
 export function Dividends() {
   const { db, c, now } = useDepot()
@@ -47,6 +51,21 @@ export function Dividends() {
   // Spalten nur zeigen, wenn mindestens eine Zeile dort etwas stehen hat (importierte Buchungen kennen oft nur die Beträge).
   const cols = { ex: all.some((d) => d.exDate), per: all.some((d) => d.perShare != null), shares: all.some((d) => d.shares != null) }
 
+  const [showAll, setShowAll] = useState(false)
+  const groups = [
+    { key: 'offen', label: 'Anstehend', hint: 'nächste zuerst', items: [...expected].reverse() },
+    { key: 'erhalten', label: 'Erhalten', hint: 'neueste zuerst', items: received },
+  ].filter((g) => g.items.length).map((g) => ({ ...g, shown: showAll ? g.items : g.items.slice(0, RECENT) }))
+  const total = all.length
+  const shownCount = groups.reduce((s, g) => s + g.shown.length, 0)
+  const isDue = (d: DivRow) => d.status === 'erwartet' && d.payDate <= now
+  const actions = (d: DivRow) => (
+    <>
+      {isDue(d) ? <button type="button" className="btn btn-sm" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Check /> Bestätigen</button> : <button type="button" className="btn btn-ghost btn-sm" aria-label="Dividende bearbeiten" title="Dividende bearbeiten" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Pencil /></button>}
+      <ConfirmDelete label={d.status === 'erhalten' ? 'Dividende stornieren (Cash wird zurückgesetzt)' : 'Erwartete Dividende löschen'} onConfirm={() => void del(d.id)} />
+    </>
+  )
+
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
       <section className="card col-span-12 grid grid-cols-2 divide-line lg:grid-cols-5 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l">
@@ -57,8 +76,7 @@ export function Dividends() {
         <Stat className="max-lg:col-span-2" label="Pro Monat im Schnitt" value={a.per.length ? <>{usd(a.net / 12)}<Cur /></> : '–'} sub={<span>netto, Prognose</span>} />
       </section>
 
-      <div className="col-span-12 grid content-start gap-3 sm:gap-4 xl:col-span-7">
-      <Card title="Dividenden nach Monat" sub={`netto nach Quellensteuer, in ${cur()}`}>
+      <Card className="col-span-12 self-start xl:col-span-7" title="Dividenden nach Monat" sub={`netto nach Quellensteuer, in ${cur()}`}>
         {all.length === 0 ? (
           <Empty title="Noch keine Dividenden erfasst">Erhaltene Beträge trägst du mit «Eintrag» ein, viele auf einmal mit «Hochladen».</Empty>
         ) : (
@@ -72,78 +90,7 @@ export function Dividends() {
         )}
       </Card>
 
-      <Card title="Alle Dividenden" sub="Erwartete Beträge bestätigst du, sobald der Broker sie bucht" flush action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'dividenden' })}><Upload /> Hochladen</button>}>
-        {all.length === 0 ? (
-          <Empty>Noch keine Einträge.</Empty>
-        ) : (
-          <>
-          {/* Handy: eine Zeile je Zahlung */}
-          <ul className="divide-y divide-white/[0.045] px-2 md:hidden">
-            {all.map((d) => {
-              const due = d.status === 'erwartet' && d.payDate <= now
-              return (
-                <li key={d.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="tk">{d.ticker}</span>
-                      {d.status === 'erhalten' ? <Chip tone="up">erhalten</Chip> : due ? <Chip tone="warn">zu bestätigen</Chip> : <Chip tone="info">erwartet</Chip>}
-                      {d.demo && <DemoTag />}
-                    </div>
-                    <div className="num mt-1 truncate text-[12px] text-muted">{dfmt(d.payDate)}{d.payDateEstimated ? ' (geschätzt)' : ''} · brutto {money(d.gross)} · Steuer {money(d.tax)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="num text-[14px] font-medium">{usd(d.net)}<Cur /></div>
-                    <div className="mt-1 flex items-center justify-end gap-0.5">
-                      {d.status === 'erwartet' ? <button type="button" className="btn btn-sm" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Check /> Bestätigen</button> : <button type="button" className="btn btn-ghost btn-sm" aria-label="Dividende bearbeiten" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Pencil /></button>}
-                      <ConfirmDelete label={d.status === 'erhalten' ? 'Dividende stornieren' : 'Erwartete Dividende löschen'} onConfirm={() => void del(d.id)} />
-                    </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-          <div className="@container hidden overflow-x-auto md:block">
-            <table className="tbl">
-              <thead>
-                <tr><th>Titel</th>{cols.ex && <th>Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r">je Stück</th>}{cols.shares && <th className="r">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r @max-[600px]:hidden">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th>Status</th><th><span className="sr-only">Aktion</span></th></tr>
-              </thead>
-              <tbody>
-                {all.map((d) => {
-                  const due = d.status === 'erwartet' && d.payDate <= now
-                  return (
-                    <tr key={d.id}>
-                      <td><span className="tk">{d.ticker}</span></td>
-                      {cols.ex && <td className="num text-ink-2">{dfmt(d.exDate)}</td>}
-                      <td className="num">{dfmt(d.payDate)}{d.payDateEstimated && <span className="text-muted"> (geschätzt)</span>}</td>
-                      {cols.per && <td className="r num text-ink-2">{d.perShare != null ? Number(d.perShare).toFixed(4) : '–'}</td>}
-                      {cols.shares && <td className="r num text-ink-2">{qty(d.shares)}</td>}
-                      <td className="r num">{usd(d.gross)}</td>
-                      <td className="r num text-ink-2 @max-[600px]:hidden">{usd(d.tax)}</td>
-                      <td className="r num font-medium">{usd(d.net)}</td>
-                      <td>
-                        <span className="inline-flex items-center gap-1.5">
-                          {d.status === 'erhalten' ? <Chip tone="up">erhalten</Chip> : due ? <Chip tone="warn">zu bestätigen</Chip> : <Chip tone="info">erwartet</Chip>}
-                          {d.demo && <DemoTag />}
-                        </span>
-                      </td>
-                      <td className="r">
-                        <span className="inline-flex items-center gap-1">
-                          {d.status === 'erwartet' ? <button type="button" className="btn btn-sm" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Check /> Bestätigen</button> : <button type="button" className="btn btn-ghost btn-sm" aria-label="Dividende bearbeiten" title="Dividende bearbeiten" onClick={() => nav.openEntry('dividende', { fromId: d.id })}><Pencil /></button>}
-                          <ConfirmDelete label={d.status === 'erhalten' ? 'Dividende stornieren (Cash wird zurückgesetzt)' : 'Erwartete Dividende löschen'} onConfirm={() => void del(d.id)} />
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          </>
-        )}
-      </Card>
-      </div>
-
-      <Card className="col-span-12 self-start xl:col-span-5" title="Dividendenzahler im Depot" sub={c.settings.demo ? 'Jahresrate je Stück' : 'Jahresrate je Stück, letzte 12 Monate'} flush>
+      <Card className="col-span-12 self-start max-xl:order-last xl:col-span-5" title="Dividendenzahler im Depot" sub={c.settings.demo ? 'Jahresrate je Stück' : 'Jahresrate je Stück, letzte 12 Monate'} flush>
         {a.per.length === 0 ? (
           <Empty>Für die gehaltenen Titel liegt noch keine Dividendenrate vor. Sie wird aus den Ausschüttungen der letzten 12 Monate berechnet und erscheint kurz nach dem Start.</Empty>
         ) : (
@@ -165,6 +112,75 @@ export function Dividends() {
               </tbody>
             </table>
           </div>
+        )}
+      </Card>
+
+      {/* Zwei Gruppen statt einer Liste mit Status-Spalte: anstehend (nächste zuerst) und erhalten (neueste zuerst).
+          Kurz: je Gruppe die ersten RECENT, wie im Journal. «Bestätigen» nur, wenn der Zahltag erreicht ist. */}
+      <Card className="col-span-12" title="Alle Dividenden" sub={total > shownCount ? `${shownCount} von ${total}` : `${total} ${total === 1 ? 'Eintrag' : 'Einträge'}`} flush action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'dividenden' })}><Upload /> Hochladen</button>}>
+        {all.length === 0 ? (
+          <Empty>Noch keine Einträge.</Empty>
+        ) : (
+          <>
+          {/* Handy: eine Zeile je Zahlung */}
+          <div className="px-2 md:hidden">
+            {groups.map((g) => (
+              <section key={g.key}>
+                <div className="label flex items-baseline justify-between px-1 pb-1 pt-4">{g.label} <span className="font-normal normal-case tracking-normal">{g.hint}</span></div>
+                <ul className="divide-y divide-white/[0.045]">
+                  {g.shown.map((d) => (
+                    <li key={d.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 py-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="tk">{d.ticker}</span>
+                          {isDue(d) && <Chip tone="warn">zu bestätigen</Chip>}
+                          {d.demo && <DemoTag />}
+                        </div>
+                        <div className="num mt-1 truncate text-[12px] text-muted">{dfmt(d.payDate)}{d.payDateEstimated ? ' (geschätzt)' : ''} · brutto {money(d.gross)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="num text-[14px] font-medium">{usd(d.net)}<Cur /></div>
+                        <div className="mt-1 flex items-center justify-end gap-0.5">{actions(d)}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+          <div className="@container hidden overflow-x-auto md:block">
+            <table className="tbl">
+              <thead>
+                <tr><th>Titel</th>{cols.ex && <th className="@max-[860px]:hidden">Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r @max-[760px]:hidden">je Stück</th>}{cols.shares && <th className="r @max-[800px]:hidden">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r @max-[600px]:hidden">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th><span className="sr-only">Aktion</span></th></tr>
+              </thead>
+              <tbody>
+                {groups.map((g) => (
+                  <Fragment key={g.key}>
+                    <tr className="row-group"><td colSpan={9}><span className="inline-flex items-baseline gap-2.5">{g.label}<span className="font-normal text-muted">{g.hint}</span></span></td></tr>
+                    {g.shown.map((d) => (
+                      <tr key={d.id}>
+                        <td><span className="inline-flex items-center gap-2"><span className="tk">{d.ticker}</span>{isDue(d) && <Chip tone="warn">zu bestätigen</Chip>}{d.demo && <DemoTag />}</span></td>
+                        {cols.ex && <td className="num text-ink-2 @max-[860px]:hidden">{dfmt(d.exDate)}</td>}
+                        <td className="num">{dfmt(d.payDate)}{d.payDateEstimated && <span className="text-muted"> geschätzt</span>}</td>
+                        {cols.per && <td className="r num text-ink-2 @max-[760px]:hidden">{d.perShare != null ? Number(d.perShare).toFixed(4) : '–'}</td>}
+                        {cols.shares && <td className="r num text-ink-2 @max-[800px]:hidden">{qty(d.shares)}</td>}
+                        <td className="r num">{usd(d.gross)}</td>
+                        <td className="r num text-ink-2 @max-[600px]:hidden">{usd(d.tax)}</td>
+                        <td className="r num font-medium">{usd(d.net)}</td>
+                        <td className="r"><span className="inline-flex items-center gap-1">{actions(d)}</span></td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {total > RECENT && groups.some((g) => g.items.length > RECENT) && (
+            <div className="px-2 pb-1 pt-2">
+              <button type="button" className="btn btn-ghost w-full" onClick={() => setShowAll((v) => !v)}>{showAll ? `Je Gruppe nur ${RECENT} zeigen` : `Alle ${total} Dividenden zeigen`}</button>
+            </div>
+          )}
+          </>
         )}
       </Card>
 

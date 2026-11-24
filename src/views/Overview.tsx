@@ -117,7 +117,8 @@ function Hero() {
                 {c.priceLabel && (
                   <span className="inline-flex items-center gap-1.5 text-faint">
                     <LiveWord live={c.live} />
-                    {c.priceLabel}
+                    {/* «Live» steht schon als Wort davor */}
+                    {c.priceLabel.replace(/^Live /, '')}
                   </span>
                 )}
                 {c.settings.demo && <DemoTag />}

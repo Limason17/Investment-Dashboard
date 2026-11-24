@@ -5,8 +5,7 @@ import { Allocation } from '@/components/charts/Allocation'
 import { Meter } from '@/components/charts/Small'
 import { Card, Empty, Cur } from '@/components/ui'
 import { EventSheet, PlanSheet, PotSheet } from '@/features/EditSheets'
-import { BUCKETS } from '@/lib/buckets'
-import { eventsSorted, isCap, targetOf } from '@/lib/calc'
+import { eventsSorted } from '@/lib/calc'
 import { useDepot } from '@/lib/context'
 import { pctPlain, usd, cur, money } from '@/lib/format'
 import { mutate } from '@/lib/store'
@@ -40,7 +39,7 @@ export function Plan() {
       <Card title="Allokation" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(true)}><Pencil /> Ziele</button>} sub={c.settings.cashExcluded ? 'Ist gegen Plan, in % der Wertpapiere' : c.settings.cashPartial ? 'Ist gegen Plan, in % vom Gesamtwert (Cash nur in einem Teil der Portfolios erfasst)' : 'Ist gegen Plan, in % vom Gesamtwert'}>
         <Allocation c={c} />
       </Card>
-      <Card title="Cash-Töpfe" sub={pots.length ? `${usd(budget - used)} von ${usd(budget)} ${cur()} frei` : undefined} action={<button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button>}>
+      <Card title="Cash-Töpfe" action={<button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button>}>
         {pots.length === 0 ? (
           <Empty>Keine Töpfe. Ein Topf ist ein Budget für geplante Käufe; Käufe daraus zählen automatisch.</Empty>
         ) : (
@@ -75,11 +74,12 @@ export function Plan() {
                       <button type="button" title="Topf bearbeiten" className="text-left text-[13.5px] font-medium underline-offset-4 break-words hover:underline" onClick={() => setPot({ id: p.id, n: Date.now() })}>{p.label}</button>
                       {p.note && <div className="mt-0.5 text-[12.5px] text-muted">{p.note}</div>}
                     </div>
+                    {/* Unberührter Topf: nur der Betrag. «von …», Anteil und Balken erst, wenn etwas eingesetzt ist. */}
                     <div className="text-right leading-tight">
                       <div className="num text-[13.5px] font-medium">{usd(rest)}<Cur /> <span className="font-normal text-muted">frei</span></div>
-                      <div className="num mt-0.5 text-[12px] text-muted">von {money(p.budget)}{u > 0 && <span className="max-[420px]:block"><span className="max-[420px]:hidden"> · </span>{pctPlain(u, 0)} eingesetzt</span>}</div>
+                      {u > 0 && <div className="num mt-0.5 text-[12px] text-muted">von {money(p.budget)}<span className="max-[420px]:block"><span className="max-[420px]:hidden"> · </span>{pctPlain(u, 0)} eingesetzt</span></div>}
                     </div>
-                    <Meter className="col-span-2" value={u} height={5} />
+                    {u > 0 && <Meter className="col-span-2" value={u} height={5} />}
                   </li>
                 )
               })}
@@ -113,15 +113,7 @@ export function Plan() {
       </Card>
 
       <Card className="col-span-12" title="Regeln des Plans" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(true)}><Pencil /> Bearbeiten</button>}>
-        <div className="mb-4 flex flex-wrap gap-2">
-          {BUCKETS.filter((b) => targetOf(c.settings, b.id) != null || Math.abs(c.b[b.id] || 0) > 0.005).map((b) => (
-            <span key={b.id} className="inline-flex items-center gap-2 rounded-full border border-line bg-white/[0.025] py-1 pl-2.5 pr-3 text-[12.5px]">
-              <i className="swatch" style={{ background: b.color }} />
-              <span className="text-ink-2">{b.name}</span>
-              <span className="num font-medium">{targetOf(c.settings, b.id) == null ? 'kein Ziel' : (isCap(c.settings, b.id) ? 'max ' : '') + pctPlain(targetOf(c.settings, b.id), 0)}</span>
-            </span>
-          ))}
-        </div>
+        {/* Die Zielanteile je Kategorie stehen schon in der Allokation oben; hier nur die eigenen Regeln. */}
         {rules.length === 0 ? (
           <Empty>Keine Regeln. Unter «Bearbeiten» legst du Zielanteile, Obergrenzen und eigene Regeln fest.</Empty>
         ) : (
