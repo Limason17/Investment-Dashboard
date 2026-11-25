@@ -5,7 +5,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { Toaster } from '@/components/Sheet'
 import { AccountSheet, AuthScreen, VerifyScreen } from '@/features/Account'
 import { CommandPalette } from '@/features/CommandPalette'
-import { useAccount } from '@/lib/cloud'
+import { signOut, useAccount } from '@/lib/cloud'
 import { CLOUD } from '@/lib/config'
 import { PositionSheet, WatchSheet } from '@/features/DetailSheets'
 import { EntrySheet } from '@/features/EntrySheet'
@@ -81,14 +81,17 @@ function Brand({ compact }: { compact?: boolean }) {
   )
 }
 
-const isStale = (c: Calc, now: string) => (c.lastDate ? daysBetween(c.lastDate, now) > 4 : true)
+// Ohne einen einzigen Kurs (leeres Depot) ist nichts veraltet: dann kein gelbes «Kurse alt»
+const isStale = (c: Calc, now: string) => (c.lastDate ? daysBetween(c.lastDate, now) > 4 : c.rows.length > 0)
 // Ohne Verbindung zuerst sagen, dass die Kurse nicht mehr nachkommen
 const statusText = (c: Calc, now: string, live: LiveResult | null, online = true) =>
   !online ? 'Offline · ' + (c.lastDate ? 'Kurse vom ' + dfmt(c.lastDate) : 'keine Kurse') : live && !isStale(c, now) ? c.priceLabel : c.lastDate ? (isStale(c, now) ? 'Kurse vom ' : 'Schlusskurse ') + dfmt(c.lastDate) : 'Noch keine Kurse'
 
 /** Zustand der Kurse als Wort statt als Punkt: Live (grün), Offline (grau); dazu Börse zu und alte Kurse. */
-function StatusWord({ stale, live }: { stale: boolean; live: boolean }) {
+function StatusWord({ stale, live, none = false }: { stale: boolean; live: boolean; none?: boolean }) {
   const online = useOnline()
+  // Noch kein Kurs (leeres Depot): kein Wort, denn «Börse zu» oder «Live» wäre hier falsch
+  if (none && online) return null
   const [word, tone] = !online ? ['Offline', 'text-faint'] : stale ? ['Kurse alt', 'text-warn'] : live ? ['Live', 'text-up'] : ['Börse zu', 'text-faint']
   return <span className={clsx('flex-none text-[11px] font-semibold uppercase leading-none tracking-[0.06em]', tone)}>{word}</span>
 }
@@ -103,7 +106,7 @@ function DataStatus({ db, c, now, live }: { db: DB; c: Calc; now: string; live: 
   return (
     <div className="rounded-xl border border-line bg-white/[0.025] p-3.5">
       <div className="flex items-center gap-2 text-[12.5px] font-medium">
-        <StatusWord stale={stale} live={c.live} />
+        <StatusWord stale={stale} live={c.live} none={!c.lastDate} />
         {/* Das Wort davor sagt schon «Live» bzw. «Offline»: hier nicht wiederholen (sonst «LIVE Live 17:04») */}
         <span className="min-w-0 truncate">{statusText(c, now, live, online)?.replace(/^(Live |Offline · |Stand )/, '')}</span>
       </div>
@@ -326,6 +329,8 @@ function Dashboard() {
           ) : (
             <p className="animate-pulse text-[13px] text-muted">Daten werden geladen …</p>
           )}
+          {/* Hängt das Laden, kommt man sonst nicht mehr zum Konto: hier immer abmelden können */}
+          {CLOUD && <button type="button" className="mt-6 text-[12.5px] text-muted underline decoration-line-2 underline-offset-4 hover:text-ink" onClick={() => void signOut().then(() => location.reload())}>Abmelden</button>}
         </div>
       </div>
     )
@@ -365,7 +370,7 @@ function Dashboard() {
                 <PortfolioSwitcher mini sub={shortDate} className="-ml-1 w-fit max-w-[calc(100%+4px)]" onManage={() => setPortfoliosOpen(true)} />
               </div>
               <span className="grid h-6 flex-none place-items-center px-1" title={statusText(c, now, live, online) ?? undefined} aria-label={statusText(c, now, live, online) ?? undefined} role="img">
-                <StatusWord stale={stale} live={c.live} />
+                <StatusWord stale={stale} live={c.live} none={!c.lastDate} />
               </span>
               <button type="button" data-tour="account" className="btn btn-ghost btn-icon -mr-1" onClick={() => setAccountOpen(true)} aria-label={CLOUD ? 'Konto und Daten' : 'Daten'}><CircleUser /></button>
               <button type="button" data-tour="refresh" className="btn btn-ghost btn-icon -mr-2" onClick={() => void refresh()} disabled={refreshing} aria-label="Kurse und Daten aktualisieren"><RefreshCw className={clsx(refreshing && 'animate-spin')} /></button>
