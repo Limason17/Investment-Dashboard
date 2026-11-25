@@ -12,6 +12,9 @@ import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DepotEvent, WithId } from '@/lib/types'
 
+/** So viele «Vergangen und noch offen» stehen zuerst da. */
+const FEW = 3
+
 export function Plan() {
   const { db, c, now } = useDepot()
   const pots = Object.entries(db.pots).map(([id, p]) => ({ id, ...p })).sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
@@ -24,6 +27,7 @@ export function Plan() {
   const rules = c.settings.rules ?? []
 
   const [planOpen, setPlanOpen] = useState(false)
+  const [allOverdue, setAllOverdue] = useState(false)
   const [pot, setPot] = useState<{ id: string | null; n: number } | null>(null)
   const [ev, setEv] = useState<{ id: string | null; n: number } | null>(null)
   const editEvent = (e: WithId<DepotEvent>) => setEv({ id: e.id, n: Date.now() })
@@ -101,7 +105,9 @@ export function Plan() {
         {overdue.length > 0 && (
           <>
             <div className="label mt-5">Vergangen und noch offen</div>
-            <ul>{overdue.map((e) => <EventItem key={e.id} e={e} now={now} onToggle={toggle} onEdit={editEvent} />)}</ul>
+            {/* Zuerst nur die jüngsten 3; ältere offene Termine auf Wunsch */}
+            <ul>{(allOverdue ? overdue : overdue.slice(-FEW)).map((e) => <EventItem key={e.id} e={e} now={now} onToggle={toggle} onEdit={editEvent} />)}</ul>
+            {overdue.length > FEW && <button type="button" className="btn btn-ghost mt-1 w-full" onClick={() => setAllOverdue((v) => !v)}>{allOverdue ? `Nur die letzten ${FEW} zeigen` : `Alle ${overdue.length} offenen zeigen`}</button>}
           </>
         )}
         {done.length > 0 && (

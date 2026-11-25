@@ -10,6 +10,8 @@ import { useDepot, useNav } from '@/lib/context'
 import { pct, pctPlain, sign, usd, money, cur } from '@/lib/format'
 import { rangeChange, withNow } from '@/lib/history'
 
+/** Handy: so viele Titel «Darüber» stehen zuerst da. */
+const FEW = 3
 const GROUPS: { id: string; title: string; hint: string; test: (r: WatchRow) => boolean }[] = [
   { id: 'unter', title: 'Unter der Grenze', hint: 'Bedingung prüfen, dann entscheiden', test: (r) => r.s.d != null && r.s.d <= 0 },
   { id: 'nahe', title: 'Nahe', hint: 'bis 5 % über der Grenze', test: (r) => r.s.d != null && r.s.d > 0 && r.s.d <= 0.05 },
@@ -22,6 +24,7 @@ const trendOf = (v?: number[]) => sign(v && v.length > 1 && v[0] > 0 ? v[v.lengt
 
 export function Watchlist() {
   const [add, setAdd] = useState(false)
+  const [allAbove, setAllAbove] = useState(false)
   const { db } = useDepot()
   const nav = useNav()
   const rows = useMemo(() => watchRows(db), [db])
@@ -136,7 +139,11 @@ export function Watchlist() {
                       <span className="font-medium text-ink-2">{g.title} <span className="font-normal text-faint">{rs.length}</span></span>
                       <span className="text-muted">{g.hint}</span>
                     </div>
-                    <div className="px-0.5 py-1">{rs.map((r) => <LimitRow key={r.w.ticker} r={r} onClick={() => nav.openWatch(r.w.ticker)} />)}</div>
+                    {/* «Darüber» heisst warten: zuerst nur die nächsten 3, der Rest auf Wunsch */}
+                    <div className="px-0.5 py-1">{(g.id === 'darueber' && !allAbove ? rs.slice(0, FEW) : rs).map((r) => <LimitRow key={r.w.ticker} r={r} onClick={() => nav.openWatch(r.w.ticker)} />)}</div>
+                    {g.id === 'darueber' && rs.length > FEW && (
+                      <div className="px-2 pb-1"><button type="button" className="btn btn-ghost w-full" onClick={() => setAllAbove((v) => !v)}>{allAbove ? `Nur die nächsten ${FEW} zeigen` : `Alle ${rs.length} darüber zeigen`}</button></div>
+                    )}
                   </section>
                 )
               })}
