@@ -53,13 +53,13 @@ export function usePortfolioRanges(): RangeId[] {
   return (['1T', '1W', '1M', '3M', '1J'] as RangeId[]).filter((r) => RANGE_DAYS[r] <= age + 3).concat('MAX')
 }
 
-/** Wertverlauf des Depots für einen Zeitraum: Buchungen × Kursverläufe, am Ende der Live-Stand. */
-export function usePortfolio(range: RangeId) {
+/** Wertverlauf des Depots für einen Zeitraum: Buchungen × Kursverläufe, am Ende der Live-Stand. «ohlc»: mit Kerzendaten je Titel. */
+export function usePortfolio(range: RangeId, ohlc = false) {
   const { db, now } = useDepot()
   const tl = useMemo(() => timeline(db), [db.transactions, db.dividends, db.positions]) // eslint-disable-line react-hooks/exhaustive-deps -- nur Buchungen und Bestand zählen
   const since = range === '1J' || range === '5J' || range === 'MAX' ? null : shift(now, -(RANGE_DAYS[range] + 6))
   const tickers = useMemo(() => [...new Set([...heldSince(tl, since), BENCH])], [tl, since])
-  const { data, pending, error } = useChart(range, tickers, tl.first)
+  const { data, pending, error } = useChart(range, tickers, tl.first, ohlc)
   const chart = useMemo(() => (data ? withNow(db, data) : null), [db, data])
   const series = useMemo(() => (chart ? portfolioSeries(db, tl, chart, BENCH) : null), [db, tl, chart])
   return { tl, chart, series, pending, error }

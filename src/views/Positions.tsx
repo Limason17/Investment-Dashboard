@@ -1,10 +1,11 @@
 import { ArrowDown, ArrowUp, Download, Search, Upload, X } from 'lucide-react'
 import { Fragment, useMemo, useState } from 'react'
-import { FluidSparkline, Meter, Sparkline } from '@/components/charts/Small'
+import { ChartStyleToggle, FluidSparkline, Meter, Sparkline } from '@/components/charts/Small'
 import { Card, Chip, Delta, DemoTag, Empty, Segmented, Ticker, Switch, Cur } from '@/components/ui'
 import { HOLDING_BUCKETS, catOf } from '@/lib/buckets'
 import { isCap, targetOf, type Row } from '@/lib/calc'
-import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE } from '@/lib/charts'
+import { toCandles } from '@/lib/candles'
+import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE, useChartStyle } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
 import { exportCsv } from '@/lib/export'
 import { pct, pctPlain, qty, sign, usd, dshort, hhmm, cur, money } from '@/lib/format'
@@ -27,7 +28,12 @@ export function Positions() {
   const ranges = usePortfolioRanges()
   const [stored, setRange] = useStored<RangeId>('depot.range.pos', '1M')
   const range = ranges.includes(stored) ? stored : 'MAX'
-  const { chart, series: ps, pending } = usePortfolio(range)
+  // Kursverlauf je Titel als Kerzen (Standard) oder Linie; die Kategorien darüber bleiben Linien (Rendite, kein Kurs)
+  const [style, setStyle] = useChartStyle()
+  const candle = style === 'kerzen'
+  const { chart, series: ps, pending } = usePortfolio(range, candle)
+  /** Kerzen eines Titels, so viele wie in die Breite passen (mind. 3 px je Kerze) */
+  const candlesOf = (t: string, width: number) => (candle && chart ? toCandles(chart, t, Math.floor((width - 6) / 3))?.candles : undefined)
   const [sort, setSort] = useState<{ k: SortKey; d: 1 | -1 }>({ k: 'val', d: -1 })
   const [bucket, setBucket] = useState<string>('alle')
   const [hov, setHov] = useState<{ id: string; i: number } | null>(null)
@@ -190,9 +196,9 @@ export function Positions() {
       <Card
         className="col-span-12"
         title="Alle Positionen"
-        sub={`${c.rows.length} Titel · ${c.valuationComplete ? usd(c.sec) + ' ' + cur() : 'Marktwert offen'}`}
+        sub={<span className="max-sm:hidden">{`${c.rows.length} Titel · ${c.valuationComplete ? usd(c.sec) + ' ' + cur() : 'Marktwert offen'}`}</span>}
         flush
-        action={<div className="flex gap-1 max-sm:-mr-2"><button type="button" className="btn btn-ghost btn-sm max-sm:!px-2.5" onClick={() => nav.openEntry('import', { kind: 'trades' })} aria-label="Positionen hochladen" title="Positionen hochladen"><Upload /><span className="max-sm:hidden">Hochladen</span></button><button type="button" className="btn btn-ghost btn-sm max-sm:!px-2.5" onClick={() => exportCsv(c)} aria-label="Als CSV herunterladen" title="Als CSV herunterladen"><Download /><span className="max-sm:hidden">CSV</span></button></div>}
+        action={<div className="flex items-center gap-1 max-sm:-mr-2"><ChartStyleToggle value={style} onChange={setStyle} className="mr-1" /><button type="button" className="btn btn-ghost btn-sm max-sm:!px-2.5" onClick={() => nav.openEntry('import', { kind: 'trades' })} aria-label="Positionen hochladen" title="Positionen hochladen"><Upload /><span className="max-sm:hidden">Hochladen</span></button><button type="button" className="btn btn-ghost btn-sm max-sm:!px-2.5" onClick={() => exportCsv(c)} aria-label="Als CSV herunterladen" title="Als CSV herunterladen"><Download /><span className="max-sm:hidden">CSV</span></button></div>}
       >
         {/* Handy: Suche und Sortierung in einer Zeile, darunter Gruppieren und Filter */}
         <div className="flex flex-wrap items-center gap-2 px-2 pb-2 sm:px-3">
@@ -256,7 +262,7 @@ export function Positions() {
                             <div className="num hidden whitespace-nowrap text-[12px] leading-4 text-muted @max-[900px]:block">{qty(r.p.shares)} · Ø {usd(r.avg)}</div>
                           </td>
                           <td className={`transition-opacity ${pending ? 'opacity-40' : ''}`}>
-                            <Sparkline values={d?.values ?? []} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} label={`${r.t}: ${pct(d?.move.pct, 1)} ${glTitle}`} />
+                            <Sparkline values={d?.values ?? []} candles={candlesOf(r.t, 88)} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} label={`${r.t}: ${pct(d?.move.pct, 1)} ${glTitle}`} />
                           </td>
                           <td className="r num">{usd(r.px)}</td>
                           <td className="r">{d?.move.abs != null ? <Delta value={d.move.abs} kind="usd" icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
@@ -315,7 +321,7 @@ export function Positions() {
                             <span className="tk block">{r.t}</span>
                             <span className="num block truncate text-[12px] leading-4 text-muted">{qty(r.p.shares)} · Ø {usd(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}</span>
                           </span>
-                          <span className={pending ? 'opacity-40' : ''}><Sparkline width={80} height={26} values={d?.values ?? []} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} /></span>
+                          <span className={pending ? 'opacity-40' : ''}><Sparkline width={80} height={26} values={d?.values ?? []} candles={candlesOf(r.t, 80)} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} /></span>
                           <span className="min-w-[96px] text-right leading-tight">
                             <span className="num block text-[13.5px] font-medium">{usd(r.val)}<Cur /></span>
                             <span className="mt-0.5 block whitespace-nowrap">{gl(d?.move, true)}</span>
