@@ -51,7 +51,7 @@ export function Watchlist() {
       </section>}
 
       {focus.length > 0 && (
-        <Card title="Im Fokus" sub={hot.length ? 'unter oder nahe der Grenze · Kurs der letzten 3 Monate' : 'am nächsten an der Grenze · Kurs der letzten 3 Monate'} bodyClassName="!px-2.5 !pb-2.5 !pt-1.5">
+        <Card title="Im Fokus" sub={hot.length ? 'Kurs der letzten 3 Monate' : 'am nächsten an der Grenze, 3 Monate'} bodyClassName="!px-2.5 !pb-2.5 !pt-1.5">
           <div className="grid gap-1 md:grid-cols-2 xl:grid-cols-3">
             {focus.map((r) => {
               const below = r.s.d! <= 0

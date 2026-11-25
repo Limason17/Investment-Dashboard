@@ -136,7 +136,7 @@ export function Positions() {
       <Card
         className="col-span-12"
         title="Kategorien"
-        sub={<span className="max-sm:hidden">Gewicht gegen Plan · Rendite {rangeText} auf das eingesetzte Geld</span>}
+        sub={<span className="max-sm:hidden">Gewicht gegen Plan · Rendite {rangeText}</span>}
         action={rangeSwitch}
       >
         {c.sec > 0 && (

@@ -140,8 +140,8 @@ export function Allocation({ c }: { c: Calc }) {
                 </div>
                 {/* Ziel in % klein über dem Zielstrich (am Rand nach innen geschoben, damit nichts abgeschnitten wird) */}
                 {r.tgt != null && (
-                  <div className="relative mt-1 h-3.5">
-                    <span className="num absolute bottom-0 text-[10.5px] leading-none text-muted" style={{ left: `${Math.min(Math.max((r.tgt / scale) * 100, 3), 97)}%`, transform: 'translateX(-50%)' }}>{(r.cap ? 'max ' : '') + pctPlain(r.tgt, 0)}</span>
+                  <div className="relative mt-1 h-[18px]">
+                    <span className="num absolute bottom-[5px] text-[10.5px] leading-none text-muted" style={{ left: `${Math.min(Math.max((r.tgt / scale) * 100, 3), 97)}%`, transform: 'translateX(-50%)' }}>{(r.cap ? 'max ' : '') + pctPlain(r.tgt, 0).replace(' ', '')}</span>
                   </div>
                 )}
                 <Meter className={r.tgt != null ? 'mt-0.5' : 'mt-2'} value={r.w / scale} mark={r.tgt != null ? r.tgt / scale : undefined} color={r.b.color} height={5} />

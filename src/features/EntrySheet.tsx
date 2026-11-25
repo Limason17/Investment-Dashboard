@@ -11,7 +11,9 @@ import { normTicker } from '@/lib/ticker'
 import { dfmt, parseNum, pctPlain, qty, r2, today, uid, usdRaw as usd } from '@/lib/format'
 import { MIN_DATE, type ImportKind } from '@/lib/bulk'
 import { ImportForm } from './ImportForm'
-import { applyOps, emptyDepot, movesCash, replayOps, reverseTx } from '@/lib/reverse'
+import { applyOps, emptyDepot, movesCash, replayOps, reverseTx, stornoOps } from '@/lib/reverse'
+import { txLabel } from '@/lib/labels'
+import { Trash2 } from 'lucide-react'
 import { lookupTicker, mutate, type Op } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DB } from '@/lib/types'
@@ -280,15 +282,21 @@ function DividendForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
 }
 
 /* ------------------------------------------------------------------ Ein-/Auszahlung, Cash-Korrektur */
-function CashForm(fp: FormProps) {
-  const { db } = useDepot()
+function CashForm({ fromId, ...fp }: FormProps & { fromId?: string }) {
+  // Bearbeiten = alte Buchung stornieren und neu buchen, in einem Zug (wie bei Kauf und Verkauf)
+  const { db: current } = useDepot()
+  const old = fromId ? current.transactions[fromId] : undefined
+  const undo = useMemo(() => (old && fromId ? reverseTx(current, fromId, old) : []), [current, old, fromId])
+  const db = useMemo(() => (undo.length ? applyOps(current, undo) : current), [current, undo])
   const off = cashOff(db)
   // Neues, leeres Depot: Die erste Einzahlung startet das Cash bei 0, ein Cash-Stand vorher ist nicht nötig.
   const fresh = off && emptyDepot(db)
-  const [dir, setDirRaw] = useState<'einzahlung' | 'auszahlung' | 'korrektur'>(off && !fresh ? 'korrektur' : 'einzahlung')
-  const [amt, setAmt] = useState('')
-  const [date, setDate] = useState(today())
-  const [note, setNote] = useState('')
+  const oldDir = old && (old.type === 'einzahlung' || old.type === 'auszahlung' || old.type === 'korrektur') ? old.type : null
+  const [dir, setDirRaw] = useState<'einzahlung' | 'auszahlung' | 'korrektur'>(oldDir ?? (off && !fresh ? 'korrektur' : 'einzahlung'))
+  // Beim Bearbeiten: Betrag bzw. der damals eingetragene Saldo
+  const [amt, setAmt] = useState(old ? String(oldDir === 'korrektur' ? r2(cashOf(db) + (old.cashDelta || 0)) : Math.abs(old.cashDelta || 0)) : '')
+  const [date, setDate] = useState(old?.date ?? today())
+  const [note, setNote] = useState(old?.note ?? '')
   const cash = off ? 0 : cashOf(db)
   const a = parseNum(amt)
   const after = a == null ? null : dir === 'korrektur' ? a : dir === 'einzahlung' ? cash + a : cash - a
@@ -305,7 +313,8 @@ function CashForm(fp: FormProps) {
     const start = off && dir === 'einzahlung'
     await commit(
       [
-        { op: 'set', coll: 'transactions', id: uid(), data: { type: dir, date, cashDelta: r2(after - cash), note, createdAt: new Date().toISOString(), by: 'Dashboard', ...(dir === 'korrektur' && off ? { cashStart: true } : {}) } },
+        ...undo,
+        { op: 'set', coll: 'transactions', id: fromId ?? uid(), data: { type: dir, date, cashDelta: r2(after - cash), note, createdAt: old?.createdAt ?? new Date().toISOString(), by: 'Dashboard', ...(dir === 'korrektur' && off ? { cashStart: true } : {}) } },
         {
           op: 'merge', coll: 'meta', id: 'settings', data: {
             cash: r2(after),
@@ -393,16 +402,30 @@ export function EntrySheet({ open, type: initial, fromId, ticker, kind, text, on
   const { db: current } = useDepot()
   const confirming = type === 'dividende' && !!fromId && current.dividends[fromId]?.status === 'erwartet'
   const editing = !!fromId && !confirming
+  // Löschen einer Buchung geschieht hier im Bearbeiten (im Journal gibt es nur den Stift)
+  const tx = fromId && type !== 'dividende' ? current.transactions[fromId] : undefined
+  const [delArmed, setDelArmed] = useState(false)
+  const remove = () => {
+    const ops = stornoOps(current, fromId!)
+    mutate(ops)
+      .then(() => { onClose(); toast(ops.some((o) => o.coll === 'meta') ? 'Buchung gelöscht. Bestand und Cash sind zurückgesetzt.' : 'Buchung gelöscht.') })
+      .catch((e) => toast('Nicht gelöscht: ' + e.message))
+  }
   return (
     <Sheet
       open={open}
       onClose={onClose}
-      title={type === 'import' ? 'Positionen hochladen' : confirming ? 'Dividende bestätigen' : editing ? 'Eintrag bearbeiten' : tradeOnly ? `${ticker} kaufen oder verkaufen` : 'Neuer Eintrag'}
+      title={type === 'import' ? 'Positionen hochladen' : type === 'buchung' ? 'Buchung' : confirming ? 'Dividende bestätigen' : editing ? 'Eintrag bearbeiten' : tradeOnly ? `${ticker} kaufen oder verkaufen` : 'Neuer Eintrag'}
       sub={CLOUD ? 'Wird in deinem Konto gespeichert. Es werden nie Orders platziert.' : 'Wird nur lokal auf diesem Rechner gespeichert. Es werden nie Orders platziert.'}
       footer={
         <>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>Abbrechen</button>
-          <button type="submit" form={formId} className="btn btn-primary" disabled={busy}>{busy ? 'Speichert …' : type === 'import' ? 'Übernehmen' : 'Speichern'}</button>
+          {tx && editing && (
+            <button type="button" className="btn btn-ghost mr-auto text-down" onClick={() => (delArmed ? remove() : setDelArmed(true))}>
+              <Trash2 /> {delArmed ? 'Wirklich löschen?' : 'Löschen'}
+            </button>
+          )}
+          <button type="button" className="btn btn-ghost" onClick={onClose}>{type === 'buchung' ? 'Schliessen' : 'Abbrechen'}</button>
+          {type !== 'buchung' && <button type="submit" form={formId} className="btn btn-primary" disabled={busy}>{busy ? 'Speichert …' : type === 'import' ? 'Übernehmen' : 'Speichern'}</button>}
         </>
       }
     >
@@ -410,7 +433,20 @@ export function EntrySheet({ open, type: initial, fromId, ticker, kind, text, on
       {type === 'kauf' && <TradeForm key="kauf" type="kauf" ticker={ticker} fromId={fromId} {...fp} />}
       {type === 'verkauf' && <TradeForm key="verkauf" type="verkauf" ticker={ticker} fromId={fromId} {...fp} />}
       {type === 'dividende' && <DividendForm key={fromId ?? 'neu'} fromId={fromId} {...fp} />}
-      {type === 'einzahlung' && <CashForm {...fp} />}
+      {type === 'einzahlung' && <CashForm fromId={fromId} {...fp} />}
+      {type === 'buchung' && tx && (
+        <div className="grid gap-2 text-[13px]">
+          <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-y-1.5">
+            <span className="text-muted">Art</span><span>{txLabel(tx)}</span>
+            <span className="text-muted">Datum</span><span className="num">{dfmt(tx.date)}</span>
+            {tx.ticker && <><span className="text-muted">Titel</span><span className="tk">{tx.ticker}</span></>}
+            {tx.shares != null && <><span className="text-muted">Stück</span><span className="num">{qty(tx.shares)}</span></>}
+            {!!tx.cashDelta && <><span className="text-muted">Betrag</span><span className="num">{usd(tx.cashDelta)} USD</span></>}
+            {tx.note && <><span className="text-muted">Notiz</span><span>{tx.note}</span></>}
+          </div>
+          <p className="mt-2 text-[12.5px] text-muted">Diese Art Buchung lässt sich nicht bearbeiten, nur löschen.</p>
+        </div>
+      )}
       {type === 'notiz' && <NoteForm {...fp} />}
       {type === 'import' && <ImportForm formId={formId} initial={kind ?? 'trades'} initialText={text} setBusy={setBusy} onSaved={fp.onSaved} />}
       {!confirming && !editing && (

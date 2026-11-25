@@ -5,12 +5,12 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AlertItem, EventItem, EventStrip, LimitRow } from '@/components/blocks'
 import { FluidSparkline } from '@/components/charts/Small'
 import { TimeChart, type TimeSeries, type VLine } from '@/components/charts/TimeChart'
-import { Card, Chip, Delta, DemoTag, Empty, Segmented, Cur } from '@/components/ui'
+import { Card, Chip, Delta, Empty, Segmented, Cur } from '@/components/ui'
 import { alerts, capChecks, divAnnual, eventsSorted, fxOf, watchRows, yearStats } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TITLE, refreshCharts } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
 import { dlong, dshort, hhmm, pct, pctPlain, sign, usd, cur, usdRaw, money } from '@/lib/format'
-import { BENCH, useMedia, useOnline, usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
+import { BENCH, useMedia, usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { RangeId } from '@/lib/types'
 
 const pctAxis = (v: number) => (Math.abs(v) < 1e-9 ? '0 %' : (Math.abs(v % 1) > 1e-9 ? v.toFixed(1) : v.toFixed(0)).replace('-', '−') + ' %')
@@ -31,8 +31,8 @@ function useCountUp(target: number) {
 function Hero() {
   const { db, c } = useDepot()
   const ranges = usePortfolioRanges()
-  // Startet immer mit 1T (Tag); die Wahl gilt nur bis zum nächsten Öffnen
-  const [stored, setRange] = useState<RangeId>('1T')
+  // Startet immer mit Max (seit Beginn); die Wahl gilt nur bis zum nächsten Öffnen
+  const [stored, setRange] = useState<RangeId>('MAX')
   const range = ranges.includes(stored) ? stored : 'MAX'
   const [mode, setMode] = useStored<'wert' | 'rendite'>('depot.view', 'rendite', ['wert', 'rendite'])
   const [hover, setHover] = useState<number | null>(null)
@@ -106,24 +106,8 @@ function Hero() {
         {/* Links Stand und Wert, rechts die Umschalter: So bleibt die Zeile neben der grossen Zahl nicht leer. */}
         <div className="flex items-start justify-between gap-x-6">
          <div className="min-w-0 flex-1">
-          <div className="label flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1">
-            {hi != null && ps ? (
-              <span className="text-ink-2">{ps.kind === 'intraday' ? `${dlong(new Date(ps.t[hi]).toLocaleDateString('en-CA'))} · ${hhmm(ps.t[hi])}` : dlong(ps.d[hi])}</span>
-            ) : (
-              <>
-                {valueLabel}
-                {c.priceLabel && (
-                  <span className="inline-flex items-center gap-1.5 text-faint">
-                    <LiveWord live={c.live} />
-                    {/* «Live» steht schon als Wort davor */}
-                    {c.priceLabel.replace(/^Live /, '')}
-                  </span>
-                )}
-                {c.settings.demo && <DemoTag />}
-              </>
-            )}
-          </div>
-        <div className="mt-1 flex items-baseline gap-2.5">
+          {/* Kein Titel und keine Live-Zeit hier: der Betrag steht ganz oben, der Kursstand steht in der Seitenleiste bzw. oben im Kopf */}
+        <div className="flex items-baseline gap-2.5">
           <span className={`text-[40px] font-semibold leading-[1.05] tracking-[-0.04em] sm:text-[52px] ${hi != null ? 'tabular-nums' : ''}`}>
             {c.valuationComplete ? usd(hi != null && ps ? ps.value[hi] : shown) : '–'}
           </span>
@@ -138,11 +122,14 @@ function Hero() {
               <span className={`chip ${sign(ret) === 'down' ? 'chip-down' : sign(ret) === 'up' ? 'chip-up' : 'chip-mute'} !h-6 !text-[12.5px]`}>
                 <Delta value={ret} digits={2} className="!text-inherit" />
               </span>
-              {ps && hi == null && (
+              {ps && (hi == null ? (
                 <span className="text-muted">
                   <Delta value={ps.gain} kind="usd" icon={false} className="font-medium" />
                 </span>
-              )}
+              ) : (
+                // Beim Zeigen auf den Chart: Zeitpunkt des Punkts
+                <span className="text-ink-2">{ps.kind === 'intraday' ? `${dlong(new Date(ps.t[hi]).toLocaleDateString('en-CA'))} · ${hhmm(ps.t[hi])}` : dlong(ps.d[hi])}</span>
+              ))}
             </>
           )}
         </div>
@@ -401,13 +388,6 @@ function FirstSteps() {
       </ol>
     </Card>
   )
-}
-
-/** Wort statt Punkt: «Live» (grün) während der Börse, «Offline» (grau) ohne Verbindung, sonst nichts */
-function LiveWord({ live }: { live: boolean }) {
-  const online = useOnline()
-  if (online && !live) return null
-  return <span className={clsx('text-[10.5px] font-semibold uppercase leading-none tracking-[0.06em]', online ? 'text-up' : 'text-faint')}>{online ? 'Live' : 'Offline'}</span>
 }
 
 export function Overview() {

@@ -20,9 +20,10 @@ export function Card({ title, sub, action, children, className, bodyClassName, f
     <section className={clsx('card flex flex-col', className)}>
       {(title || action) && (
         <header className="card-head">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-            <h2 className="card-title">{title}</h2>
-            {sub && <span className="card-sub">{sub}</span>}
+          {/* Titel und Zusatz in einer Zeile; ein zu langer Zusatz wird gekürzt statt umzubrechen */}
+          <div className="flex min-w-0 flex-1 items-baseline gap-x-2.5">
+            <h2 className="card-title flex-none whitespace-nowrap">{title}</h2>
+            {sub && <span className="card-sub min-w-0 truncate">{sub}</span>}
           </div>
           {action && <div className="ml-auto flex max-w-full flex-none items-center gap-2 overflow-x-auto [scrollbar-width:none] max-sm:has-[.seg-wide]:w-full">{action}</div>}
         </header>

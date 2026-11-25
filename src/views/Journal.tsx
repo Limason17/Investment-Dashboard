@@ -4,17 +4,20 @@ import { useMemo, useState } from 'react'
 import { MonthBars, type MonthPair } from '@/components/charts/MonthBars'
 import { Card, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Stat, StatGroup } from '@/components/ui'
 import { withIds, yearStats } from '@/lib/calc'
-import { useDepot, useNav } from '@/lib/context'
+import { useDepot, useNav, type EntryType } from '@/lib/context'
 import { addMonths, dfmt, qty, usd, weekday, cur, cur0, money } from '@/lib/format'
 import { txLabel } from '@/lib/labels'
-import { replayOps, reverseTx } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
+import type { Tx } from '@/lib/types'
 
 
 const RECENT = 12
 
 const DeleteButton = ({ onConfirm, label = 'Buchung stornieren' }: { onConfirm: () => void; label?: string }) => <ConfirmDelete onConfirm={onConfirm} label={label} />
+
+/** Welches Formular eine Buchung bearbeitet; Gebühren und Bestandskorrekturen lassen sich nur ansehen und löschen. */
+const editType = (x: Tx): EntryType => (x.type === 'kauf' || x.type === 'verkauf' ? x.type : (x.type === 'einzahlung' || x.type === 'auszahlung' || x.type === 'korrektur') && !x.ticker ? 'einzahlung' : 'buchung')
 
 /** Betrag ohne Vorzeichen: Rot heisst Geld geht weg, Grün heisst Geld kommt herein */
 const signTone = (v: number | null | undefined) => (v == null || v === 0 ? 'text-ink' : v < 0 ? 'text-down' : 'text-up')
@@ -31,15 +34,6 @@ export function Journal() {
   const log = useMemo(() => withIds(db.log).sort((a, b) => ((b.date || '') > (a.date || '') ? 1 : -1)), [db])
 
   // Storno: Bestand, Einstand, Topf und Cash werden mit zurückgesetzt (Cash nur nach dem letzten Cash-Stand).
-  const del = (id: string) =>
-    Promise.resolve()
-      .then(() => {
-        const x = db.transactions[id]
-        const ops = reverseTx(db, id, x)
-        return mutate(x.ticker && (x.type === 'kauf' || x.type === 'verkauf') ? replayOps(db, ops, x.ticker) : ops).then(() => ops.some((o) => o.coll === 'meta'))
-      })
-      .then((cash) => toast(cash ? 'Buchung storniert. Bestand und Cash sind zurückgesetzt.' : db.meta.settings?.cashExcluded ? 'Buchung storniert.' : 'Buchung storniert. Das Cash bleibt, es steckt im letzten Cash-Stand.'))
-      .catch((e) => toast('Nicht storniert: ' + e.message))
   const delNote = (id: string) =>
     mutate([{ op: 'delete', coll: 'log', id }])
       .then(() => toast('Notiz gelöscht.'))
@@ -83,7 +77,7 @@ export function Journal() {
       </StatGroup>
 
       {stats.any && (
-        <Card className={"col-span-12 xl:col-span-8"} title="Käufe und Verkäufe" sub={`je Monat, letzte ${stats.months.length} Monate, in ${cur()}`}>
+        <Card className={"col-span-12 xl:col-span-8"} title="Käufe und Verkäufe" sub={`${stats.months.length} Monate, in ${cur()}`}>
           <MonthBars months={stats.months} labels={['Käufe', 'Verkäufe']} colors={['var(--color-accent)', 'var(--color-ref)']} format={cur0} current={now.slice(0, 7)} />
         </Card>
       )}
@@ -120,7 +114,7 @@ export function Journal() {
                   <div className="pt-0.5 text-right leading-tight">
                     <span className={clsx('num text-[13.5px] font-medium', signTone(x.cashDelta))}>{usd(Math.abs(x.cashDelta ?? 0))}</span>
                   </div>
-                  <span className="flex">{(x.type === 'kauf' || x.type === 'verkauf') && <button type="button" className="btn btn-ghost btn-sm" aria-label="Buchung bearbeiten" title="Buchung bearbeiten" onClick={() => nav.openEntry(x.type as 'kauf' | 'verkauf', { fromId: x.id })}><Pencil /></button>}<DeleteButton onConfirm={() => del(x.id)} /></span>
+                  <span className="flex"><button type="button" className="btn btn-ghost btn-sm" aria-label="Buchung bearbeiten" title="Buchung bearbeiten oder löschen" onClick={() => nav.openEntry(editType(x), { fromId: x.id })}><Pencil /></button></span>
                 </div>
               </li>
             ))}
@@ -147,7 +141,7 @@ export function Journal() {
                         {x.demo && x.note && x.note !== 'Testbuchung' && <span>{x.note.replace(' (Testbuchung)', '')}</span>}
                       </span>
                     </td>
-                    <td className="r whitespace-nowrap">{(x.type === 'kauf' || x.type === 'verkauf') && <button type="button" className="btn btn-ghost btn-sm" aria-label="Buchung bearbeiten" title="Buchung bearbeiten" onClick={() => nav.openEntry(x.type as 'kauf' | 'verkauf', { fromId: x.id })}><Pencil /></button>}<DeleteButton onConfirm={() => del(x.id)} /></td>
+                    <td className="r whitespace-nowrap"><button type="button" className="btn btn-ghost btn-sm" aria-label="Buchung bearbeiten" title="Buchung bearbeiten oder löschen" onClick={() => nav.openEntry(editType(x), { fromId: x.id })}><Pencil /></button></td>
                   </tr>
                 ))}
               </tbody>

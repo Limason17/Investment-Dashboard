@@ -3,7 +3,7 @@ import { createContext, useContext } from 'react'
 import type { Calc } from './calc'
 import type { DB, ViewId } from './types'
 
-export type EntryType = 'kauf' | 'verkauf' | 'dividende' | 'einzahlung' | 'notiz' | 'import'
+export type EntryType = 'kauf' | 'verkauf' | 'dividende' | 'einzahlung' | 'notiz' | 'import' | 'buchung'
 
 export interface Nav {
   view: ViewId

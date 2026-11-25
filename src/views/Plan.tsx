@@ -40,7 +40,7 @@ export function Plan() {
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
       <div className="col-span-12 grid content-start gap-3 sm:gap-4 xl:col-span-7">
-      <Card title="Allokation" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(true)}><Pencil /> Ziele</button>} sub={c.settings.cashExcluded ? 'Ist gegen Plan, in % der Wertpapiere' : c.settings.cashPartial ? 'Ist gegen Plan, in % vom Gesamtwert (Cash nur in einem Teil der Portfolios erfasst)' : 'Ist gegen Plan, in % vom Gesamtwert'}>
+      <Card title="Allokation" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(true)}><Pencil /> Ziele</button>} sub={c.settings.cashExcluded ? 'Ist gegen Plan, in % der Wertpapiere' : c.settings.cashPartial ? 'Ist gegen Plan, in % vom Gesamtwert (Cash nur in einem Teil der Portfolios erfasst)' : 'in % vom Gesamtwert'}>
         <Allocation c={c} />
       </Card>
       <Card title="Cash-Töpfe" action={<button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button>}>
@@ -93,7 +93,7 @@ export function Plan() {
       </Card>
       </div>
 
-      <Card className="col-span-12 xl:col-span-5" title="Termine" sub="Quartalszahlen, geplante Käufe, Stichtage" bodyClassName="!pt-1" action={<button type="button" className="btn btn-sm" onClick={() => setEv({ id: null, n: Date.now() })}><Plus /> Termin</button>}>
+      <Card className="col-span-12 xl:col-span-5" title="Termine" bodyClassName="!pt-1" action={<button type="button" className="btn btn-sm" onClick={() => setEv({ id: null, n: Date.now() })}><Plus /> Termin</button>}>
         {events.length === 0 && <Empty>Keine Termine. Mit «Termin» erfasst du z. B. Quartalszahlen oder geplante Käufe.</Empty>}
         <EventStrip events={upcoming} now={now} className="mt-4" />
         {upcoming.length > 0 && (

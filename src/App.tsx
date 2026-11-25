@@ -369,8 +369,10 @@ function Dashboard() {
                 </h1>
                 <PortfolioSwitcher mini sub={shortDate} className="-ml-1 w-fit max-w-[calc(100%+4px)]" onManage={() => setPortfoliosOpen(true)} />
               </div>
-              <span className="grid h-6 flex-none place-items-center px-1" title={statusText(c, now, live, online) ?? undefined} aria-label={statusText(c, now, live, online) ?? undefined} role="img">
+              {/* Handy: Kursstand nur hier oben (Wort und Uhrzeit), nicht noch einmal beim Gesamtwert */}
+              <span className="flex h-6 flex-none items-center gap-1.5 px-1" title={statusText(c, now, live, online) ?? undefined} aria-label={statusText(c, now, live, online) ?? undefined} role="img">
                 <StatusWord stale={stale} live={c.live} none={!c.lastDate} />
+                {c.live && c.priceLabel?.match(/\d{1,2}:\d{2}$/) && <span className="num text-[11px] leading-none text-faint">{c.priceLabel.match(/\d{1,2}:\d{2}$/)![0]}</span>}
               </span>
               <button type="button" data-tour="account" className="btn btn-ghost btn-icon -mr-1" onClick={() => setAccountOpen(true)} aria-label={CLOUD ? 'Konto und Daten' : 'Daten'}><CircleUser /></button>
               <button type="button" data-tour="refresh" className="btn btn-ghost btn-icon -mr-2" onClick={() => void refresh()} disabled={refreshing} aria-label="Kurse und Daten aktualisieren"><RefreshCw className={clsx(refreshing && 'animate-spin')} /></button>
@@ -381,7 +383,6 @@ function Dashboard() {
                 <div className="min-w-0">
                   {allView && <div className="inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/[0.08] px-2.5 py-1 text-[12px] text-ink-2 lg:mb-2">Gesamtansicht aller Portfolios · nur ansehen</div>}
                   <h1 className="hidden items-center gap-2.5 text-[26px] font-semibold leading-8 tracking-[-0.03em] lg:flex">{meta.label}</h1>
-                  <p className="mt-1 hidden text-[13.5px] text-muted lg:block [@media(max-height:800px)]:hidden">{meta.sub}</p>
                 </div>
                 <div className="hidden items-center gap-2 lg:flex">
                   <span className="mr-2 text-[12.5px] text-muted">{dateLine}</span>

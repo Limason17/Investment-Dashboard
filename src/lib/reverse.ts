@@ -108,3 +108,11 @@ export function replayOps(before: DB, ops: Op[], ticker: string): Op[] {
   if (p) extra.push({ op: 'merge', coll: 'positions', id: ticker, data: { shares, cost: shares > 0 ? r2(cost) : 0 } })
   return [...ops, ...extra]
 }
+
+/** Storno einer Buchung: Gegenbuchung; bei Kauf/Verkauf danach den Einstand des Titels neu durchrechnen. */
+export function stornoOps(db: DB, id: string): Op[] {
+  const x = db.transactions[id]
+  if (!x) return []
+  const ops = reverseTx(db, id, x)
+  return x.ticker && (x.type === 'kauf' || x.type === 'verkauf') ? replayOps(db, ops, x.ticker) : ops
+}

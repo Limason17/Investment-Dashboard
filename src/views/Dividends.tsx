@@ -1,10 +1,10 @@
 import { Check, Pencil, Upload } from 'lucide-react'
 import { Fragment, useMemo, useState } from 'react'
 import { DIV_EXPECTED, DIV_RECEIVED, DividendBars, type DivMonth } from '@/components/charts/DividendBars'
-import { Card, Chip, ConfirmDelete, DemoTag, Empty, Stat, Cur } from '@/components/ui'
+import { Card, Chip, ConfirmDelete, DemoTag, Empty, Stat, StatGroup, Cur } from '@/components/ui'
 import { divAnnual, dividendsList, projectedDividends, wht } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
-import { addMonths, dfmt, pctPlain, qty, usd, cur, curRate, money } from '@/lib/format'
+import { addMonths, dfmt, pctPlain, qty, usd, cur, curRate } from '@/lib/format'
 import { movesCash, reverseDividend } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -28,7 +28,6 @@ export function Dividends() {
   const paidYears = received.map((d) => (d.payDate || '').slice(0, 4)).filter(Boolean).sort()
   const year = !paidYears.length || paidYears.includes(now.slice(0, 4)) ? now.slice(0, 4) : paidYears[paidYears.length - 1]
   const recYear = received.filter((d) => (d.payDate || '').startsWith(year)).reduce((s, d) => s + (d.net || 0), 0)
-  const recYearCount = received.filter((d) => (d.payDate || '').startsWith(year)).length
   const expected = all.filter((d) => d.status === 'erwartet')
   // Geschätzte Zahlungen der nächsten 6 Monate aus den bisherigen Ausschüttungen (nur Anzeige, nichts gespeichert)
   const projected = useMemo(() => projectedDividends(db, now), [db, now])
@@ -68,15 +67,45 @@ export function Dividends() {
 
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
-      <section className="card col-span-12 grid grid-cols-2 divide-line xl:grid-cols-5 xl:divide-x [&>*]:border-line max-xl:[&>*:nth-child(n+3)]:border-t max-xl:[&>*:nth-child(even)]:border-l">
-        <Stat label="Jahresprognose netto" value={a.per.length ? <>{usd(a.net)}<Cur /></> : '–'} sub={<span>{a.per.length ? <>{money(a.gross)} brutto, {pctPlain(w, 0)} Steuer</> : 'erscheint mit den ersten Dividendentiteln'}</span>} />
-        <Stat label="Rendite auf Wertpapiere" value={pctPlain(c.valuationComplete && a.per.length && c.sec ? a.gross / c.sec : null, 2)} sub={<span>brutto, laufende Raten</span>} />
-        <Stat label={<>Erhalten {year} {hasDemo && <DemoTag />}</>} value={<>{usd(recYear)}<Cur /></>} sub={<span>{recYearCount} {recYearCount === 1 ? 'Zahlung' : 'Zahlungen'}, netto</span>} />
-        <Stat label="Erwartet, 6 Monate" value={expected.length || projected.length ? <>{usd(expSum)}<Cur /></> : '–'} sub={<span>{expected.length || projected.length ? [expected.length ? `${expected.length} erfasst` : '', projected.length ? `${projected.length} geschätzt` : ''].filter(Boolean).join(', ') + ', netto' : 'keine Zahlung in Sicht'}</span>} />
-        <Stat className="max-xl:col-span-2" label="Pro Monat im Schnitt" value={a.per.length ? <>{usd(a.net / 12)}<Cur /></> : '–'} sub={<span>netto, Prognose</span>} />
-      </section>
+      {/* Links (ab 1280px): Kennzahlen und Zahler untereinander; rechts der Monats-Chart. Auf Handy und Tablet steht der Zahler zuletzt. */}
+      <div className="contents xl:col-span-4 xl:grid xl:grid-cols-1 xl:content-start xl:gap-2">
+        {/* Kennzahlen als Liste wie im Journal: Name links, Zahl rechts, ohne Beschreibung und Währung */}
+        <StatGroup className="col-span-12 xl:col-span-1">
+          <Stat label="Prognose pro Jahr" value={a.per.length ? usd(a.net) : '–'} />
+          <Stat label="Rendite" value={pctPlain(c.valuationComplete && a.per.length && c.sec ? a.gross / c.sec : null, 2)} />
+          <Stat label={<>Erhalten {year} {hasDemo && <DemoTag />}</>} value={usd(recYear)} />
+          <Stat label="Nächste 6 Monate" value={expected.length || projected.length ? usd(expSum) : '–'} />
+          <Stat label="Pro Monat" value={a.per.length ? usd(a.net / 12) : '–'} />
+        </StatGroup>
+      <Card className="col-span-12 max-xl:order-last xl:col-span-1" title="Dividendenzahler" sub="Rate je Stück" flush>
+        {a.per.length === 0 ? (
+          <Empty>Für die gehaltenen Titel liegt noch keine Dividendenrate vor. Sie wird aus den Ausschüttungen der letzten 12 Monate berechnet und erscheint kurz nach dem Start.</Empty>
+        ) : (
+          <div className="@container overflow-x-auto">
+            <table className="tbl">
+              <thead>
+                {/* Schmale Karte (Handy, Seitenspalte): kurze Spaltennamen, damit «Netto pro Jahr» ohne seitliches Scrollen sichtbar bleibt */}
+                <tr><th>Titel</th><th className="r"><span className="@max-[440px]:hidden">Rate pro Jahr</span><span className="@min-[440px]:hidden">Rate</span> {cur()}</th><th className="r @max-[340px]:hidden">Rendite</th><th className="r"><span className="@max-[440px]:hidden">Netto pro Jahr</span><span className="@min-[440px]:hidden">Netto</span> {cur()}</th></tr>
+              </thead>
+              <tbody>
+                {a.per.map((r) => (
+                  <tr key={r.t} className="row-click" tabIndex={0} onClick={() => nav.openPosition(r.t)} onKeyDown={(e) => e.key === 'Enter' && nav.openPosition(r.t)}>
+                    <td><div className="tk">{r.t}</div><div className="text-[12px] leading-4 text-muted">{r.freq}</div></td>
+                    <td className="r num">{(r.rate * curRate()).toFixed(4)}</td>
+                    <td className="r num text-ink-2 @max-[340px]:hidden">{r.px ? pctPlain(r.rate / r.px, 2) : '–'}</td>
+                    <td className="r num font-medium">{usd(r.v * (1 - w))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+      </div>
 
-      <Card className="col-span-12 self-start xl:col-span-7" title="Dividenden nach Monat" sub={`netto nach Quellensteuer, in ${cur()}`}>
+      {/* Rechts (ab 1280px): Monats-Chart und darunter alle Dividenden, damit keine Lücke neben der linken Spalte bleibt */}
+      <div className="contents xl:col-span-8 xl:grid xl:grid-cols-1 xl:content-start xl:gap-2">
+      <Card className="col-span-12 xl:col-span-1" title="Dividenden nach Monat" sub={`netto, in ${cur()}`}>
         {all.length === 0 ? (
           <Empty title="Noch keine Dividenden erfasst">Erhaltene Beträge trägst du mit «Eintrag» ein, viele auf einmal mit «Hochladen».</Empty>
         ) : (
@@ -90,34 +119,9 @@ export function Dividends() {
         )}
       </Card>
 
-      <Card className="col-span-12 self-start max-xl:order-last xl:col-span-5" title="Dividendenzahler im Depot" sub={c.settings.demo ? 'Jahresrate je Stück' : 'Jahresrate je Stück, letzte 12 Monate'} flush>
-        {a.per.length === 0 ? (
-          <Empty>Für die gehaltenen Titel liegt noch keine Dividendenrate vor. Sie wird aus den Ausschüttungen der letzten 12 Monate berechnet und erscheint kurz nach dem Start.</Empty>
-        ) : (
-          <div className="@container overflow-x-auto">
-            <table className="tbl">
-              <thead>
-                {/* Schmale Karte (Handy, Seitenspalte): kurze Spaltennamen, damit «Netto pro Jahr» ohne seitliches Scrollen sichtbar bleibt */}
-                <tr><th>Titel</th><th className="r"><span className="@max-[440px]:hidden">Rate pro Jahr</span><span className="@min-[440px]:hidden">Rate</span> {cur()}</th><th className="r">Rendite</th><th className="r"><span className="@max-[440px]:hidden">Netto pro Jahr</span><span className="@min-[440px]:hidden">Netto</span> {cur()}</th></tr>
-              </thead>
-              <tbody>
-                {a.per.map((r) => (
-                  <tr key={r.t} className="row-click" tabIndex={0} onClick={() => nav.openPosition(r.t)} onKeyDown={(e) => e.key === 'Enter' && nav.openPosition(r.t)}>
-                    <td><div className="tk">{r.t}</div><div className="text-[12px] leading-4 text-muted">{r.freq}</div></td>
-                    <td className="r num">{(r.rate * curRate()).toFixed(4)}</td>
-                    <td className="r num text-ink-2">{r.px ? pctPlain(r.rate / r.px, 2) : '–'}</td>
-                    <td className="r num font-medium">{usd(r.v * (1 - w))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-
       {/* Zwei Gruppen statt einer Liste mit Status-Spalte: anstehend (nächste zuerst) und erhalten (neueste zuerst).
           Kurz: je Gruppe die ersten RECENT, wie im Journal. «Bestätigen» nur, wenn der Zahltag erreicht ist. */}
-      <Card className="col-span-12" title="Alle Dividenden" sub={total > shownCount ? `${shownCount} von ${total}` : `${total} ${total === 1 ? 'Eintrag' : 'Einträge'}`} flush action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'dividenden' })}><Upload /> Hochladen</button>}>
+      <Card className="col-span-12 xl:col-span-1" title="Alle Dividenden" sub={total > shownCount ? `${shownCount} von ${total}` : `${total} ${total === 1 ? 'Eintrag' : 'Einträge'}`} flush action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => nav.openEntry('import', { kind: 'dividenden' })}><Upload /> Hochladen</button>}>
         {all.length === 0 ? (
           <Empty>Noch keine Einträge.</Empty>
         ) : (
@@ -151,7 +155,7 @@ export function Dividends() {
           <div className="@container hidden overflow-x-auto md:block">
             <table className="tbl">
               <thead>
-                <tr><th>Titel</th>{cols.ex && <th className="@max-[960px]:hidden">Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r @max-[760px]:hidden">je Stück</th>}{cols.shares && <th className="r @max-[800px]:hidden">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r @max-[760px]:hidden">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th><span className="sr-only">Aktion</span></th></tr>
+                <tr><th>Titel</th>{cols.ex && <th className="@max-[960px]:hidden">Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r @max-[800px]:hidden">je Stück</th>}{cols.shares && <th className="r @max-[800px]:hidden">Stück</th>}<th className="r @max-[640px]:hidden">Brutto {cur()}</th><th className="r @max-[760px]:hidden">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th><span className="sr-only">Aktion</span></th></tr>
               </thead>
               <tbody>
                 {groups.map((g) => (
@@ -162,9 +166,9 @@ export function Dividends() {
                         <td><span className="inline-flex items-center gap-2"><span className="tk">{d.ticker}</span>{isDue(d) && <Chip tone="warn">zu bestätigen</Chip>}{d.demo && <DemoTag />}</span></td>
                         {cols.ex && <td className="num text-ink-2 @max-[960px]:hidden">{dfmt(d.exDate)}</td>}
                         <td className="num">{dfmt(d.payDate)}{d.payDateEstimated && <span className="text-muted"> geschätzt</span>}</td>
-                        {cols.per && <td className="r num text-ink-2 @max-[760px]:hidden">{d.perShare != null ? Number(d.perShare).toFixed(4) : '–'}</td>}
+                        {cols.per && <td className="r num text-ink-2 @max-[800px]:hidden">{d.perShare != null ? Number(d.perShare).toFixed(4) : '–'}</td>}
                         {cols.shares && <td className="r num text-ink-2 @max-[800px]:hidden">{qty(d.shares)}</td>}
-                        <td className="r num">{usd(d.gross)}</td>
+                        <td className="r num @max-[640px]:hidden">{usd(d.gross)}</td>
                         <td className="r num text-ink-2 @max-[760px]:hidden">{usd(d.tax)}</td>
                         <td className="r num font-medium">{usd(d.net)}</td>
                         <td className="r"><span className="inline-flex items-center gap-1">{actions(d)}</span></td>
@@ -183,6 +187,7 @@ export function Dividends() {
           </>
         )}
       </Card>
+      </div>
 
     </div>
   )
