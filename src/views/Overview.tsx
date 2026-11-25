@@ -326,7 +326,7 @@ function Limits() {
           <div className="text-[13.5px] font-medium">{priced ? 'Kein Titel an der Grenze' : rows.length ? 'Kurse fehlen' : 'Keine Watchlist erfasst'}</div>
           {priced && next && (
             <p className="mt-1 text-[12.5px] text-muted">
-              Am nächsten: <button type="button" className="tk hover:underline" onClick={() => nav.openWatch(next.w.ticker)}>{next.w.ticker}</button>, {pct(next.s.d, 1)} über {money(next.w.limit)}
+              Am nächsten: <button type="button" className="tk hover:underline" onClick={() => nav.openWatch(next.w.ticker)}>{next.w.ticker}</button>, {pctPlain(Math.abs(next.s.d ?? 0), 1)} über {money(next.w.limit)}
             </p>
           )}
         </div>

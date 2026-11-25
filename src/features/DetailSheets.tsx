@@ -382,7 +382,7 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
               <Chip tone={s.tone}>{s.label}</Chip>
               <div className="mt-2 flex items-center justify-end gap-3">
                 <LimitTrack d={s.d} tone={s.tone} width={120} />
-                <span className={`num text-[15px] font-semibold ${s.d != null && s.d <= 0 ? 'text-up' : ''}`}>{pct(s.d, 1)}</span>
+                <span className={`num text-[15px] font-semibold ${s.d != null && s.d <= 0 ? 'text-up' : ''}`}>{s.d != null ? pctPlain(Math.abs(s.d), 1) : '–'}</span>
               </div>
             </div>
           </div>

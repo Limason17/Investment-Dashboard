@@ -2,7 +2,7 @@ import { Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { LimitRow } from '@/components/blocks'
 import { FluidSparkline, LimitTrack, Sparkline } from '@/components/charts/Small'
-import { Card, Chip, Delta, Empty, Stat, Ticker } from '@/components/ui'
+import { Card, Chip, Delta, Empty, Stat, StatGroup, Ticker } from '@/components/ui'
 import { WatchAddSheet } from '@/features/EditSheets'
 import { watchRows, type WatchRow } from '@/lib/calc'
 import { useChart } from '@/lib/charts'
@@ -39,19 +39,22 @@ export function Watchlist() {
   // Im Fokus: alles unter oder nahe der Grenze; ist nichts so weit, die drei nächsten.
   const hot = [...under, ...near]
   const focus = (hot.length ? hot : rows.filter((r) => r.s.d != null).slice(0, 3)).slice(0, 6)
-  const none = <span>Kurse fehlen</span>
 
   return (
     <div className="grid gap-3 sm:gap-4">
-      {rows.length > 0 && <section className="card grid grid-cols-2 divide-line lg:grid-cols-4 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l">
-        <Stat label="Unter der Grenze" value={priced ? under.length : '–'} sub={priced ? <span>{under.length ? under.map((r) => r.w.ticker).join(', ') : 'kein Titel'}</span> : none} />
-        <Stat label="Davon kaufbereit" value={priced ? ready.length : '–'} sub={priced ? <span>{!under.length ? 'kein Titel unter der Grenze' : ready.length ? 'Bedingung erfüllt oder keine' : 'Bedingung überall noch offen'}</span> : none} />
-        <Stat label="Nahe (bis 5 %)" value={priced ? near.length : '–'} sub={priced ? <span>{near.length ? near.map((r) => r.w.ticker).join(', ') : 'kein Titel'}</span> : none} />
-        <Stat label="Nächster darüber" value={next ? <span className="tk !text-[20px]">{next.w.ticker}</span> : '–'} sub={next ? <span>{pct(next.s.d, 1)} über {money(next.w.limit)}</span> : priced ? undefined : none} />
-      </section>}
+      {/* Oben: Kennzahlen als Liste (wie im Journal) neben «Im Fokus» */}
+      <div className="grid gap-3 sm:gap-4 xl:grid-cols-12 xl:items-start">
+      {rows.length > 0 && (
+        <StatGroup className="xl:col-span-3">
+          <Stat label="Unter der Grenze" value={priced ? under.length : '–'} />
+          <Stat label="Davon kaufbereit" value={priced ? ready.length : '–'} />
+          <Stat label="Nahe (bis 5 %)" value={priced ? near.length : '–'} />
+          <Stat label="Nächster darüber" value={next ? <span className="tk">{next.w.ticker}</span> : '–'} />
+        </StatGroup>
+      )}
 
       {focus.length > 0 && (
-        <Card title="Im Fokus" sub={hot.length ? 'Kurs der letzten 3 Monate' : 'am nächsten an der Grenze, 3 Monate'} bodyClassName="!px-2.5 !pb-2.5 !pt-1.5">
+        <Card className="xl:col-span-9" title="Im Fokus" sub={hot.length ? 'Kurs der letzten 3 Monate' : 'am nächsten an der Grenze, 3 Monate'} bodyClassName="!px-2.5 !pb-2.5 !pt-1.5">
           <div className="grid gap-1 md:grid-cols-2 xl:grid-cols-3">
             {focus.map((r) => {
               const below = r.s.d! <= 0
@@ -74,6 +77,7 @@ export function Watchlist() {
           </div>
         </Card>
       )}
+      </div>
 
       <Card title="Kaufgrenzen nach Planregel" sub={<span className="max-md:hidden">Grenze erreicht heisst noch nicht kaufen: Die Bedingung muss erfüllt sein.</span>} flush action={<button type="button" className="btn btn-sm" onClick={() => setAdd(true)}><Plus /> Titel</button>}>
         {rows.length === 0 ? (
@@ -118,7 +122,7 @@ export function Watchlist() {
                           {r.w.limitNote && <div className="max-w-[150px] text-[11.5px] text-muted">{r.w.limitNote}</div>}
                         </td>
                         <td className="@max-[1000px]:hidden"><LimitTrack d={r.s.d} tone={r.s.tone} width={120} /></td>
-                        <td className={`r num font-medium ${r.s.d != null && r.s.d <= 0 ? 'text-up' : ''}`}>{pct(r.s.d, 1)}</td>
+                        <td className={`r num font-medium ${r.s.d != null && r.s.d <= 0 ? 'text-up' : ''}`}>{r.s.d != null ? pctPlain(Math.abs(r.s.d), 1) : '–'}</td>
                         <td><Chip tone={r.s.tone}>{r.s.label}</Chip></td>
                         <td className="@max-[800px]:hidden"><div className="line-clamp-2 max-w-[300px] text-[12px] leading-[1.4] text-ink-2">{r.w.condition}</div>{r.w.pot && <div className="mt-0.5 text-[11.5px] text-muted">Topf: {r.w.pot}</div>}</td>
                       </tr>
