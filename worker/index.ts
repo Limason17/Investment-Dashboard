@@ -4,7 +4,7 @@
  * Er speichert nichts und kennt keine Konten: Er bekommt nur Ticker und gibt Kurse zurück.
  *
  *   GET /live?held=VTI,UBER&watch=MSFT[&force=1]   wie /api/live im lokalen Server
- *   GET /chart?range=1M&tickers=VTI,UBER[&from=…]   wie /api/chart
+ *   GET /chart?range=1M&tickers=VTI,UBER[&from=…][&ohlc=1]   wie /api/chart
  *
  * Optional: ALPACA_KEY_ID und ALPACA_SECRET_KEY als Secret (Overnight-Kurse), ALLOWED_ORIGINS als Variable.
  */
@@ -73,7 +73,7 @@ export default {
       if (url.pathname === '/chart') {
         const tickers = list(url.searchParams.get('tickers'))
         const { charts } = pool(tickers, [], env)
-        return json(200, await charts(url.searchParams.get('range') ?? '', tickers, url.searchParams.get('from') ?? undefined))
+        return json(200, await charts(url.searchParams.get('range') ?? '', tickers, url.searchParams.get('from') ?? undefined, url.searchParams.get('ohlc') === '1'))
       }
       return json(404, { error: 'unbekannt' })
     } catch (e) {

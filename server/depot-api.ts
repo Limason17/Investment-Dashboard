@@ -11,7 +11,7 @@
  *   GET  /api/db        alle Sammlungen ausser dem Kursverlauf
  *   GET  /api/history   Kursverlauf je Titel
  *   GET  /api/live      Live-Kurse (siehe live-quotes.ts); ?force=1 fragt sofort neu an
- *   GET  /api/chart     Kursverläufe für die Charts (siehe market-charts.ts); ?range=1T|1W|1M|3M|1J|5J|MAX&tickers=A,B
+ *   GET  /api/chart     Kursverläufe für die Charts (siehe market-charts.ts); ?range=1T|1W|1M|3M|1J|5J|MAX&tickers=A,B[&ohlc=1]
  *   POST /api/batch    { ops: [{ op: 'set' | 'merge' | 'delete' | 'clear', coll, id, data }] }  («clear» leert die Sammlung)
  *
  * Ändert jemand eine Datei von aussen (z. B. eine Kurs-Routine), lädt das Dashboard von selbst neu.
@@ -134,7 +134,7 @@ export function depotApi(dataDir: string, opts: { env?: Record<string, string | 
       }
       if (req.method === 'GET' && url === '/api/chart') {
         const p = new URLSearchParams((req.url ?? '').split('?')[1] ?? '')
-        return json(res, 200, await charts(p.get('range') ?? '', (p.get('tickers') ?? '').split(','), p.get('from') ?? undefined))
+        return json(res, 200, await charts(p.get('range') ?? '', (p.get('tickers') ?? '').split(','), p.get('from') ?? undefined, p.get('ohlc') === '1'))
       }
       if (req.method === 'POST' && url === '/api/batch') {
         if (!(req.headers['content-type'] ?? '').includes('application/json')) return json(res, 415, { error: 'JSON erwartet' })

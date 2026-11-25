@@ -1,11 +1,17 @@
 import { curveMonotoneX, line as d3line } from 'd3-shape'
 import { useId } from 'react'
 import type { Tone } from '@/lib/calc'
+import type { Candle } from '@/lib/candles'
+import type { ChartStyle } from '@/lib/charts'
+import { ChartCandlestick, ChartLine } from 'lucide-react'
+import { Segmented } from '../ui'
 import { useMeasure } from '@/lib/useMeasure'
 
 /** Mini-Verlauf: Richtung über den Zeitraum bestimmt die Farbe, Endpunkt markiert. */
-export function Sparkline({ values, width = 88, height = 28, tone = 'flat', label, baseline, baselineColor = '#3a4050', split = true, baselineLabel, endLabel, hi: hov, onHover }: {
+export function Sparkline({ values: valuesIn, candles, width = 88, height = 28, tone = 'flat', label, baseline, baselineColor = '#3a4050', split = true, baselineLabel, endLabel, hi: hov, onHover }: {
   values: number[]
+  /** Kerzen statt Linie (Werte = Schlusskurse der Kerzen) */
+  candles?: Candle[]
   width?: number
   height?: number
   tone?: 'up' | 'down' | 'flat'
@@ -25,12 +31,13 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
   onHover?: (i: number | null) => void
 }) {
   const id = useId().replace(/:/g, '')
+  const values = candles ? candles.map((c) => c.c) : valuesIn
   if (values.length < 2 || width < 12) return <span className="inline-block text-faint" style={{ width, height, lineHeight: height + 'px' }}>–</span>
   const base = baseline ?? (split ? values.find(Number.isFinite) ?? null : null)
-  const all = base != null ? [...values, base] : values
+  const all = [...values, ...(base != null ? [base] : []), ...(candles ? candles.flatMap((c) => [c.h, c.l]) : [])]
   const lo = Math.min(...all), hi = Math.max(...all)
   const n = values.length
-  const x = (i: number) => 1 + (i / (n - 1)) * (width - 6)
+  const x = (i: number) => (candles ? 1 + ((i + 0.5) / n) * (width - 6) : 1 + (i / (n - 1)) * (width - 6))
   const y = (v: number) => 4 + ((hi - v) / (hi - lo || 1)) * (height - 8)
   const d = d3line<number>().x((_, i) => x(i)).y((v) => y(v)).curve(curveMonotoneX)(values) ?? ''
   const color = tone === 'up' ? 'var(--color-up)' : tone === 'down' ? 'var(--color-down)' : 'var(--color-accent)'
@@ -75,9 +82,30 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
         )}
       </defs>
       {!split && baseline != null && <line x1={x(0)} x2={x(n - 1)} y1={y(baseline)} y2={y(baseline)} stroke={baselineColor} strokeWidth="1" />}
-      <path d={`${d}L${x(n - 1)},${floor}L${x(0)},${floor}Z`} fill={`url(#${id})`} />
-      <path d={d} fill="none" stroke={cut != null ? `url(#${id}l)` : color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-      {hov == null || hov >= n ? (
+      {candles ? (
+        // Kerzen: grün bei Schluss über Eröffnung, sonst rot; Docht 1 px, Körper gut zwei Drittel des Feldes
+        <g shapeRendering="crispEdges">
+          {candles.map((c, i) => {
+            const slot = (width - 6) / n
+            const bw = Math.max(1, Math.min(8, Math.round(slot * 0.66)))
+            const col = c.c >= c.o ? UP : DOWN
+            const cx = Math.round(x(i)) + 0.5
+            const top = y(Math.max(c.o, c.c)), bot = y(Math.min(c.o, c.c))
+            return (
+              <g key={i}>
+                <line x1={cx} x2={cx} y1={y(c.h)} y2={y(c.l)} stroke={col} strokeWidth="1" />
+                <rect x={cx - bw / 2} y={top} width={bw} height={Math.max(1, bot - top)} fill={col} />
+              </g>
+            )
+          })}
+        </g>
+      ) : (
+        <>
+          <path d={`${d}L${x(n - 1)},${floor}L${x(0)},${floor}Z`} fill={`url(#${id})`} />
+          <path d={d} fill="none" stroke={cut != null ? `url(#${id}l)` : color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+        </>
+      )}
+      {candles && (hov == null || hov >= n) ? null : hov == null || hov >= n ? (
         <circle cx={x(n - 1)} cy={y(values[n - 1])} r="2.5" fill={end} stroke="var(--color-card)" strokeWidth="1.5" />
       ) : (
         <g pointerEvents="none">
@@ -96,13 +124,29 @@ export function Sparkline({ values, width = 88, height = 28, tone = 'flat', labe
 }
 
 /** Mini-Verlauf, der die Breite seines Platzes füllt. */
-export function FluidSparkline(props: Omit<Parameters<typeof Sparkline>[0], 'width'> & { className?: string }) {
+export function FluidSparkline(props: Omit<Parameters<typeof Sparkline>[0], 'width' | 'candles'> & { className?: string; /** Kerzen passend zur Breite (sonst Linie) */ candlesFor?: (width: number) => Candle[] | undefined }) {
   const [ref, w] = useMeasure<HTMLDivElement>()
-  const { className, ...rest } = props
+  const { className, candlesFor, ...rest } = props
   return (
     <div ref={ref} className={className} style={{ height: props.height ?? 28 }}>
-      {w > 0 && <Sparkline {...rest} width={w} />}
+      {w > 0 && <Sparkline {...rest} width={w} candles={candlesFor?.(w)} />}
     </div>
+  )
+}
+
+/** Umschalter Linie / Kerzen für Kurscharts */
+export function ChartStyleToggle({ value, onChange, className }: { value: ChartStyle; onChange: (v: ChartStyle) => void; className?: string }) {
+  return (
+    <Segmented
+      className={className}
+      label="Darstellung"
+      value={value}
+      onChange={onChange}
+      options={[
+        { value: 'linie', label: <ChartLine className="size-4" aria-label="Linie" />, title: 'Linie' },
+        { value: 'kerzen', label: <ChartCandlestick className="size-4" aria-label="Kerzen" />, title: 'Kerzen (Eröffnung, Hoch, Tief, Schluss)' },
+      ]}
+    />
   )
 }
 

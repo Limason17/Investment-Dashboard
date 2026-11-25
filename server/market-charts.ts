@@ -13,6 +13,7 @@
  *   MAX  ab «from» (erstes Buchungsdatum): Tages-, Wochen- oder Monatskurse je nach Länge
  *
  * Alle Titel einer Antwort liegen auf demselben Zeitraster; Lücken sind mit dem letzten Kurs gefüllt.
+ * Mit «&ohlc=1» kommen Eröffnung, Hoch und Tief je Punkt dazu (für Kerzencharts); Lücken bleiben dort leer (null).
  * Die Kurse sind splitbereinigt (wie bei Yahoo üblich), Dividenden sind nicht eingerechnet.
  * Quelle ist Yahoo Finance, eine inoffizielle Schnittstelle. Antworten werden zwischengespeichert,
  * damit die Quelle nicht öfter als nötig gefragt wird.
@@ -36,12 +37,24 @@ export interface ChartResult {
   failures: string[]
   /** reguläre Sitzung des Tages (nur 1T), Millisekunden */
   session?: { open: number; close: number }
+  /** nur mit «ohlc=1»: Eröffnung, Hoch, Tief je Punkt (Schluss = series); null = kein Handel in diesem Punkt */
+  ohlc?: Record<string, Ohlc>
+}
+
+export interface Ohlc {
+  o: (number | null)[]
+  h: (number | null)[]
+  l: (number | null)[]
 }
 
 interface Raw {
   /** Sekunden */
   t: number[]
   c: number[]
+  /** Eröffnung, Hoch, Tief je Punkt (fehlt bei den Minutenkursen der Live-Kurse) */
+  o?: number[]
+  h?: number[]
+  l?: number[]
   prev: number | null
 }
 
@@ -102,31 +115,55 @@ async function yahooChart(t: string, q: string): Promise<Raw> {
   const j: any = await r.json()
   const res = j?.chart?.result?.[0]
   const ts: number[] = res?.timestamp ?? []
-  const cl: (number | null)[] = res?.indicators?.quote?.[0]?.close ?? []
-  const out: Raw = { t: [], c: [], prev: typeof res?.meta?.chartPreviousClose === 'number' ? res.meta.chartPreviousClose : null }
+  const qt = res?.indicators?.quote?.[0] ?? {}
+  const cl: (number | null)[] = qt.close ?? []
+  const op: (number | null)[] = qt.open ?? [], hi: (number | null)[] = qt.high ?? [], lo: (number | null)[] = qt.low ?? []
+  const o: number[] = [], h: number[] = [], l: number[] = []
+  const out: Raw = { t: [], c: [], o, h, l, prev: typeof res?.meta?.chartPreviousClose === 'number' ? res.meta.chartPreviousClose : null }
+  const ok = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x > 0
   for (let i = 0; i < ts.length; i++) {
     const v = cl[i]
-    if (typeof v === 'number' && Number.isFinite(v) && v > 0) {
+    if (ok(v)) {
       out.t.push(ts[i])
       out.c.push(round(v))
+      // Fehlt ein Wert, gilt der Schluss; Hoch und Tief schliessen Eröffnung und Schluss immer ein.
+      const a = op[i], b = hi[i], z = lo[i]
+      const ov = ok(a) ? a : v
+      o.push(round(ov))
+      h.push(round(Math.max(ok(b) ? b : v, ov, v)))
+      l.push(round(Math.min(ok(z) ? z : v, ov, v)))
     }
   }
   if (!out.t.length) throw new Error('keine Daten')
   return out
 }
 
-/** Mehrere Titel auf ein gemeinsames Raster legen: Schlüssel je Punkt, letzter Kurs je Schlüssel, Lücken gefüllt. */
-function align(raws: Record<string, Raw>, keyOf: (sec: number) => number | string) {
+/**
+ * Mehrere Titel auf ein gemeinsames Raster legen: Schlüssel je Punkt, letzter Kurs je Schlüssel, Lücken gefüllt.
+ * Mit «withOhlc» zusätzlich Eröffnung (erste), Hoch (höchstes) und Tief (tiefstes) je Schlüssel; Lücken bleiben null.
+ */
+function align(raws: Record<string, Raw>, keyOf: (sec: number) => number | string, withOhlc = false) {
   const keys = new Set<number | string>()
   const maps: Record<string, Map<number | string, number>> = {}
+  const bars: Record<string, Map<number | string, { o: number; h: number; l: number }>> = {}
   for (const [t, r] of Object.entries(raws)) {
     const m = new Map<number | string, number>()
+    const b = new Map<number | string, { o: number; h: number; l: number }>()
     for (let i = 0; i < r.t.length; i++) {
       const k = keyOf(r.t[i])
       m.set(k, r.c[i])
       keys.add(k)
+      if (withOhlc) {
+        const o = r.o?.[i] ?? r.c[i], h = r.h?.[i] ?? r.c[i], l = r.l?.[i] ?? r.c[i]
+        const x = b.get(k)
+        if (x) {
+          x.h = Math.max(x.h, h)
+          x.l = Math.min(x.l, l)
+        } else b.set(k, { o, h, l })
+      }
     }
     maps[t] = m
+    bars[t] = b
   }
   const grid = [...keys].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
   const series: Record<string, number[]> = {}
@@ -146,7 +183,21 @@ function align(raws: Record<string, Raw>, keyOf: (sec: number) => number | strin
     if (firstIdx > 0 && Number.isNaN(out[0])) for (let i = 0; i < firstIdx; i++) out[i] = out[firstIdx]
     series[t] = out
   }
-  return { grid, series }
+  let ohlc: Record<string, Ohlc> | undefined
+  if (withOhlc) {
+    ohlc = {}
+    for (const [t, b] of Object.entries(bars)) {
+      const x: Ohlc = { o: [], h: [], l: [] }
+      for (const k of grid) {
+        const v = b.get(k)
+        x.o.push(v ? v.o : null)
+        x.h.push(v ? v.h : null)
+        x.l.push(v ? v.l : null)
+      }
+      ohlc[t] = x
+    }
+  }
+  return { grid, series, ohlc }
 }
 
 export function marketCharts(live: { (force?: boolean): Promise<unknown>; intraday: () => Record<string, IntradayDay> }) {
@@ -186,12 +237,25 @@ export function marketCharts(live: { (force?: boolean): Promise<unknown>; intrad
     return { raws, failures }
   }
 
-  return async function chart(rangeIn: string, tickersIn: string[], from?: string): Promise<ChartResult> {
+  return async function chart(rangeIn: string, tickersIn: string[], from?: string, withOhlc = false): Promise<ChartResult> {
     const range = (RANGES.includes(rangeIn as ChartRange) ? rangeIn : '1M') as ChartRange
     const tickers = [...new Set(tickersIn.map((t) => t.trim().toUpperCase()).filter((t) => /^[A-Z0-9.^=-]{1,12}$/.test(t)))].slice(0, 80).sort()
     const at = new Date().toISOString()
     const today = nyDate(Date.now())
     const prevOf = (raws: Record<string, Raw>) => Object.fromEntries(Object.entries(raws).map(([t, r]) => [t, r.prev]))
+
+    if (range === '1T' && withOhlc) {
+      // Kerzen brauchen Eröffnung, Hoch und Tief je Minute. Die Live-Kurse haben nur Schlusskurse, darum eigene Abfrage.
+      await live().catch(() => null)
+      const reg = Object.values(live.intraday())[0]?.regular
+      const { raws, failures } = await loadAll(tickers, 'range=1d&interval=1m&includePrePost=true', MIN)
+      const { grid, series, ohlc } = align(raws, (s) => s - (s % 60), true)
+      const t = (grid as number[]).map((s) => s * 1000)
+      return {
+        range, kind: 'intraday', interval: '1m', at, t, d: t.map(nyDate), series, ohlc, prev: prevOf(raws), failures,
+        ...(reg ? { session: { open: reg[0] * 1000, close: reg[1] * 1000 } } : {}),
+      }
+    }
 
     if (range === '1T') {
       await live().catch(() => null)
@@ -234,11 +298,11 @@ export function marketCharts(live: { (force?: boolean): Promise<unknown>; intrad
       // Kerzen beginnen zur halben Stunde (09:30 New York): Raster am ersten Zeitpunkt ausrichten.
       const first = Object.values(raws)[0]?.t[0] ?? 0
       const off = first % step
-      const { grid, series } = align(raws, (s) => s - ((((s - off) % step) + step) % step))
+      const { grid, series, ohlc } = align(raws, (s) => s - ((((s - off) % step) + step) % step), withOhlc)
       const t = (grid as number[]).map((s) => s * 1000)
-      return { range, kind, interval, at, t, d: t.map(nyDate), series, prev: prevOf(raws), failures }
+      return { range, kind, interval, at, t, d: t.map(nyDate), series, ...(ohlc ? { ohlc } : {}), prev: prevOf(raws), failures }
     }
-    const { grid, series } = align(raws, (s) => periodEnd(nyDate(s * 1000), interval, today))
+    const { grid, series, ohlc } = align(raws, (s) => periodEnd(nyDate(s * 1000), interval, today), withOhlc)
     let d = grid as string[]
     if (range === 'MAX' && from) {
       // Vorlauf wieder abschneiden; der letzte Kurs davor wird zur Vergleichsbasis.
@@ -247,10 +311,12 @@ export function marketCharts(live: { (force?: boolean): Promise<unknown>; intrad
         for (const [t, s] of Object.entries(series)) {
           raws[t].prev = Number.isFinite(s[cut - 1]) ? s[cut - 1] : raws[t].prev
           series[t] = s.slice(cut)
+          const x = ohlc?.[t]
+          if (ohlc && x) ohlc[t] = { o: x.o.slice(cut), h: x.h.slice(cut), l: x.l.slice(cut) }
         }
         d = d.slice(cut)
       }
     }
-    return { range, kind, interval, at, t: d.map(noon), d, series, prev: prevOf(raws), failures }
+    return { range, kind, interval, at, t: d.map(noon), d, series, ...(ohlc ? { ohlc } : {}), prev: prevOf(raws), failures }
   }
 }

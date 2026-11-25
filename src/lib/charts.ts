@@ -13,6 +13,44 @@ const MIN = 60_000
 /** So lange gilt ein geladener Verlauf als frisch; danach wird im Hintergrund neu geholt. */
 const MAX_AGE: Record<RangeId, number> = { '1T': MIN, '1W': 5 * MIN, '1M': 15 * MIN, '3M': 30 * MIN, '1J': 30 * MIN, '5J': 120 * MIN, MAX: 30 * MIN }
 
+/* ------------------------------------------------------------------ Darstellung: Linie oder Kerzen */
+export type ChartStyle = 'linie' | 'kerzen'
+const STYLE_KEY = 'depot.chart.art'
+const styleSubs = new Set<() => void>()
+const readStyle = (): ChartStyle => {
+  try {
+    return localStorage.getItem(STYLE_KEY) === 'kerzen' ? 'kerzen' : 'linie'
+  } catch {
+    return 'linie'
+  }
+}
+let style: ChartStyle = readStyle()
+/**
+ * Linie oder Kerzen, für alle Kurscharts gleich (Watchlist und Detailblätter) und gespeichert.
+ * Ein Wechsel an einer Stelle gilt sofort überall.
+ */
+export function useChartStyle() {
+  const v = useSyncExternalStore(
+    (l) => {
+      styleSubs.add(l)
+      return () => {
+        styleSubs.delete(l)
+      }
+    },
+    () => style,
+  )
+  const set = (next: ChartStyle) => {
+    style = next
+    try {
+      localStorage.setItem(STYLE_KEY, next)
+    } catch {
+      /* ohne Speicher gilt die Wahl bis zum Neuladen */
+    }
+    styleSubs.forEach((l) => l())
+  }
+  return [v, set] as const
+}
+
 const cache = new Map<string, { at: number; data: ChartData }>()
 const inflight = new Map<string, Promise<ChartData>>()
 let version = 0
@@ -52,9 +90,9 @@ function load(key: string, url: string | null) {
  * Kursverlauf mehrerer Titel für einen Zeitraum. Beim Wechsel des Zeitraums bleibt der bisherige
  * Verlauf sichtbar («pending»), bis der neue geladen ist.
  */
-export function useChart(range: RangeId, tickers: string[], from?: string | null) {
+export function useChart(range: RangeId, tickers: string[], from?: string | null, ohlc = false) {
   const list = [...new Set(tickers)].sort().join(',')
-  const key = list ? `${range}|${range === 'MAX' ? (from ?? '') : ''}|${list}` : ''
+  const key = list ? `${range}|${range === 'MAX' ? (from ?? '') : ''}|${list}${ohlc ? '|ohlc' : ''}` : ''
   const v = useSyncExternalStore(subscribe, () => version)
   const [res, setRes] = useState<{ key: string; data: ChartData } | null>(null)
   const [err, setErr] = useState<{ key: string; msg: string } | null>(null)
@@ -62,7 +100,7 @@ export function useChart(range: RangeId, tickers: string[], from?: string | null
   useEffect(() => {
     if (!key) return
     let alive = true
-    const url = apiUrl('chart', { range, tickers: list, ...(range === 'MAX' && from ? { from } : {}) })
+    const url = apiUrl('chart', { range, tickers: list, ...(range === 'MAX' && from ? { from } : {}), ...(ohlc ? { ohlc: '1' } : {}) })
     const run = () =>
       load(key, url)
         .then((data) => {
@@ -80,7 +118,7 @@ export function useChart(range: RangeId, tickers: string[], from?: string | null
       alive = false
       clearInterval(id)
     }
-  }, [key, v, range, list, from])
+  }, [key, v, range, list, from, ohlc])
 
   const fresh = key ? (res?.key === key ? res.data : (cache.get(key)?.data ?? null)) : null
   return {

@@ -128,13 +128,24 @@ function timeTicks(t: number[], d: string[], kind: 'intraday' | 'daily', iw: num
 const NO_REFS: RefLine[] = []
 const NO_MARKERS: Marker[] = []
 
-export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260, refs: refsIn = NO_REFS, markers = NO_MARKERS, vlines = [], baseline: baselineIn, split: splitIn, signs, format: formatIn = usd, tickFormat, onHover, tooltipExtra, ariaLabel, animateKey, pending, live, empty }: {
+/** Kerzen für die erste Reihe: Eröffnung, Hoch, Tief je Punkt; der Schluss ist der Wert der Reihe. */
+export interface CandleData {
+  o: number[]
+  h: number[]
+  l: number[]
+}
+
+export function TimeChart({ t, d, kind = 'daily', series: seriesIn, candles: candlesIn, titleOf, height = 260, refs: refsIn = NO_REFS, markers = NO_MARKERS, vlines = [], baseline: baselineIn, split: splitIn, signs, format: formatIn = usd, tickFormat, onHover, tooltipExtra, ariaLabel, animateKey, pending, live, empty }: {
   /** Zeitpunkt je Punkt, Millisekunden */
   t: number[]
   /** Handelstag je Punkt, JJJJ-MM-TT */
   d: string[]
   kind?: 'intraday' | 'daily'
   series: TimeSeries[]
+  /** erste Reihe als Kerzen statt als Linie zeichnen */
+  candles?: CandleData
+  /** Überschrift im Tooltip je Punkt (z. B. «Woche bis …» bei Wochenkerzen) */
+  titleOf?: (i: number) => string
   height?: number
   refs?: RefLine[]
   markers?: Marker[]
@@ -161,6 +172,7 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
   const k = formatIn === usd ? curRate() : 1
   const series = useMemo(() => (k === 1 ? seriesIn : seriesIn.map((s) => ({ ...s, values: s.values.map((v) => v * k) }))), [seriesIn, k])
   const refs = useMemo(() => (k === 1 ? refsIn : refsIn.map((r) => ({ ...r, y: r.y * k }))), [refsIn, k])
+  const candles = useMemo(() => (!candlesIn || k === 1 ? candlesIn : { o: candlesIn.o.map((v) => v * k), h: candlesIn.h.map((v) => v * k), l: candlesIn.l.map((v) => v * k) }), [candlesIn, k])
   const baseline = baselineIn != null ? baselineIn * k : undefined
   const split = typeof splitIn === 'number' ? splitIn * k : splitIn
   const format = formatIn === usd ? (v: number) => `${usdRaw(v)} ${cur()}` : formatIn
@@ -176,12 +188,14 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
   const L = narrow ? 42 : 48, R = narrow ? 10 : 14, T = 14, B = 28
   const iw = Math.max(10, W - L - R)
   const ih = height - T - B
-  const x = useCallback((i: number) => L + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw), [n, iw, L])
+  // Kerzen stehen in der Mitte ihres Feldes, damit die erste und die letzte nicht am Rand abgeschnitten werden.
+  const cdl = !!candles && candles.o.length === n
+  const x = useCallback((i: number) => (cdl ? L + ((i + 0.5) / n) * iw : L + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw)), [n, iw, L, cdl])
   // Bezugswert der gestrichelten Linie: eine Zahl (z. B. Vortagesschluss) oder der Startwert
   const sv = split == null || split === false ? undefined : typeof split === 'number' ? split : (baseline ?? series[0]?.values.find(Number.isFinite))
 
   const { y, ticks, tickFmt } = useMemo(() => {
-    const all = series.flatMap((s) => s.values).concat(refs.map((r) => r.y), baseline != null ? [baseline] : [], sv != null ? [sv] : [], markers.map((m) => (m.price != null && m.price > 0 ? m.price * k : NaN))).filter(Number.isFinite)
+    const all = series.flatMap((s) => s.values).concat(cdl ? [...candles!.h, ...candles!.l] : [], refs.map((r) => r.y),baseline != null ? [baseline] : [], sv != null ? [sv] : [], markers.map((m) => (m.price != null && m.price > 0 ? m.price * k : NaN))).filter(Number.isFinite)
     let lo = Math.min(...all), hi2 = Math.max(...all)
     if (!Number.isFinite(lo)) { lo = 0; hi2 = 1 }
     const pad = (hi2 - lo) * 0.1 || Math.abs(hi2) * 0.02 || 1
@@ -189,7 +203,7 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
     const sc = scaleLinear().domain([lo >= 0 ? Math.max(0, lo - pad) : lo - pad, hi2 <= 0 ? Math.min(0, hi2 + pad) : hi2 + pad]).range([T + ih, T]).nice(5)
     const tk = sc.ticks(5)
     return { y: sc, ticks: tk, tickFmt: tickFormat ?? axisFormatter(tk) }
-  }, [series, refs, baseline, sv, ih, tickFormat, markers, k])
+  }, [series, refs, baseline, sv, ih, tickFormat, markers, k, cdl, candles])
 
   const axis = useMemo(() => timeTicks(t, d, kind, iw), [t, d, kind, iw])
 
@@ -218,7 +232,7 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
   const at = (e: PointerEvent<SVGSVGElement>) => {
     const r = e.currentTarget.getBoundingClientRect()
     const px = e.clientX - r.left
-    let i = Math.max(0, Math.min(n - 1, Math.round(((px - L) / iw) * (n - 1))))
+    let i = Math.max(0, Math.min(n - 1, cdl ? Math.floor(((px - L) / iw) * n) : Math.round(((px - L) / iw) * (n - 1))))
     // In der Nähe eines Kaufs/Verkaufs rastet das Fadenkreuz darauf ein, damit der Tooltip die Buchung zeigt.
     const reach = e.pointerType === 'touch' ? 16 : 9
     let best = reach
@@ -296,7 +310,10 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
     }
     tradeTags.push({ m, c: TRADE_COLOR[m.type], cx, cy, px, by: below ? cy + off : cy - off, w, below, sign, rest })
   }
-  const title = (i: number) => (kind === 'intraday' ? `${weekday(localDate(t[i]))}, ${dfmt(localDate(t[i]))} · ${hhmm(t[i])}` : dlong(d[i]))
+  // Kerzen: Feldbreite je Punkt, Körper gut zwei Drittel davon (mind. 1 px), Docht 1 px
+  const slot = iw / Math.max(1, n)
+  const bw = Math.max(1, Math.min(14, slot >= 4 ? slot * 0.68 : slot - 1))
+  const title = (i: number) => titleOf ? titleOf(i) : (kind === 'intraday' ?`${weekday(localDate(t[i]))}, ${dfmt(localDate(t[i]))} · ${hhmm(t[i])}` : dlong(d[i]))
 
   return (
     <div
@@ -392,14 +409,34 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
             </g>
           ))}
 
+          {/* Kerzen: grün, wenn der Schluss über der Eröffnung liegt, sonst rot; eckig wie die Felder */}
+          {cdl && (
+            <motion.g key={'c' + animateKey} initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.35 }} shapeRendering="crispEdges">
+              {main.values.map((c, i) => {
+                const o = candles!.o[i], up = c >= o
+                const col = up ? UP : DOWN
+                const cx = Math.round(x(i)) + (Math.round(bw) % 2 ? 0.5 : 0)
+                const top = y(Math.max(o, c)), bot = y(Math.min(o, c))
+                const dim = hi != null && hi !== i
+                return (
+                  <g key={i} opacity={dim ? 0.55 : 1}>
+                    <line x1={cx} x2={cx} y1={y(candles!.h[i])} y2={y(candles!.l[i])} stroke={col} strokeWidth="1" />
+                    <rect x={cx - bw / 2} y={top} width={bw} height={Math.max(1, bot - top)} fill={col} />
+                  </g>
+                )
+              })}
+            </motion.g>
+          )}
+
           <g key={animateKey}>
             {series.map((s, k) =>
-              s.area ? (
+              s.area && !(cdl && s === main) ? (
                 <motion.path key={s.key + 'a'} d={paths[k].ar} fill={`url(#${id}-a${k})`} initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.2 }} />
               ) : null,
             )}
             {[...series].reverse().map((s) => {
               const k = series.indexOf(s)
+              if (cdl && s === main) return null
               return (
                 <motion.path
                   key={s.key}
@@ -442,7 +479,7 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
           ))}
 
           {/* Endpunkt */}
-          {hi == null && (
+          {hi == null && !cdl && (
             <g>
               {live && <circle cx={x(lastI)} cy={y(main.values[lastI])} r="5" fill={colorAt(main, lastI)} opacity="0.5" className="pulse-ring" />}
               <circle cx={x(lastI)} cy={y(main.values[lastI])} r="4.5" fill={colorAt(main, lastI)} stroke="var(--color-card)" strokeWidth="2" />
@@ -453,9 +490,9 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
           {hi != null && (
             <g pointerEvents="none">
               <line x1={hx} x2={hx} y1={T} y2={T + ih} stroke="#4a5162" strokeWidth="1" shapeRendering="crispEdges" />
-              {series.map((s) => (
+              {series.map((s) => (cdl && s === main ? null : (
                 <circle key={s.key} cx={hx} cy={y(s.values[hi])} r={s === main ? 4.5 : 3.5} fill={colorAt(s, hi)} stroke="var(--color-card)" strokeWidth="2" />
-              ))}
+              )))}
             </g>
           )}
           <rect x={L} y={T} width={iw} height={ih} fill="transparent" />
@@ -465,7 +502,16 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, height = 260
       {hi != null && (
         <div ref={tipRef} className="tip" style={{ left: tipLeft, top: T }}>
           <div className="whitespace-nowrap text-[11.5px] text-muted">{title(hi)}</div>
-          {series.map((s) => (
+          {series.map((s) => cdl && s === main ? (
+            <div key={s.key}>
+              {([['Eröffnung', candles!.o[hi]], ['Hoch', candles!.h[hi]], ['Tief', candles!.l[hi]], ['Schluss', s.values[hi]]] as const).map(([name, v]) => (
+                <div className="tip-row" key={name}>
+                  <span className="whitespace-nowrap">{name}</span>
+                  <b className={name === 'Schluss' ? (s.values[hi] >= candles!.o[hi] ? '!text-up' : '!text-down') : undefined}>{format(v)}</b>
+                </div>
+              ))}
+            </div>
+          ) : (
             <div className="tip-row" key={s.key}>
               <span className="whitespace-nowrap"><i className="linekey" style={{ background: s.color2 ?? s.color }} />{s.label}</span>
               <b>{format(s.values[hi])}</b>

@@ -1,11 +1,12 @@
 import { Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { LimitRow } from '@/components/blocks'
-import { FluidSparkline, LimitTrack, Sparkline } from '@/components/charts/Small'
+import { ChartStyleToggle, FluidSparkline, LimitTrack, Sparkline } from '@/components/charts/Small'
 import { Card, Chip, Delta, Empty, Stat, StatGroup, Ticker } from '@/components/ui'
 import { WatchAddSheet } from '@/features/EditSheets'
 import { watchRows, type WatchRow } from '@/lib/calc'
-import { useChart } from '@/lib/charts'
+import { toCandles } from '@/lib/candles'
+import { useChart, useChartStyle } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
 import { pct, pctPlain, sign, usd, money, cur } from '@/lib/format'
 import { rangeChange, withNow } from '@/lib/history'
@@ -29,8 +30,14 @@ export function Watchlist() {
   const nav = useNav()
   const rows = useMemo(() => watchRows(db), [db])
   const tickers = useMemo(() => rows.map((r) => r.w.ticker), [rows])
-  const { data } = useChart('3M', tickers)
+  const [style, setStyle] = useChartStyle()
+  const candle = style === 'kerzen'
+  const { data, pending } = useChart('3M', tickers, null, candle)
   const chart = useMemo(() => (data ? withNow(db, data) : null), [db, data])
+  /** Kerzen eines Titels, so viele wie in die Breite passen (mind. 3.5 px je Kerze) */
+  const candlesOf = (t: string, width: number) => (candle && chart ? toCandles(chart, t, Math.floor((width - 6) / 3.5))?.candles : undefined)
+  // Kurs-Dienst ohne Eröffnung/Hoch/Tief (ältere Version): Kerzen sind aus Schlusskursen genähert
+  const approx = candle && !!chart && !pending && !chart.ohlc
   const under = rows.filter((r) => r.s.d != null && r.s.d <= 0)
   const near = rows.filter((r) => r.s.d != null && r.s.d > 0 && r.s.d <= 0.05)
   const ready = under.filter((r) => r.w.conditionMet !== false)
@@ -54,7 +61,7 @@ export function Watchlist() {
       )}
 
       {focus.length > 0 && (
-        <Card className="xl:col-span-9" title="Im Fokus" sub={hot.length ? 'Kurs der letzten 3 Monate' : 'am nächsten an der Grenze, 3 Monate'} bodyClassName="!px-2.5 !pb-2.5 !pt-1.5">
+        <Card className="xl:col-span-9" title="Im Fokus" sub={approx ? 'Kerzen aus Schlusskursen genähert' : hot.length ? 'Kurs der letzten 3 Monate' : 'am nächsten an der Grenze, 3 Monate'} action={<ChartStyleToggle value={style} onChange={setStyle} />} bodyClassName="!px-2.5 !pb-2.5 !pt-1.5">
           <div className="grid gap-1 md:grid-cols-2 xl:grid-cols-3">
             {focus.map((r) => {
               const below = r.s.d! <= 0
@@ -70,7 +77,7 @@ export function Watchlist() {
                       <span className="mt-0.5 block text-[11.5px] text-muted">{Math.abs(r.s.d ?? 1) < 0.0005 ? 'an der Grenze' : below ? 'unter der Grenze' : 'bis zur Grenze'}</span>
                     </span>
                   </span>
-                  <FluidSparkline className="mt-3" height={56} values={chart?.series[r.w.ticker] ?? []} baseline={r.w.limit} baselineColor="rgb(255 255 255 / 0.82)" baselineLabel={`Kaufgrenze ${money(r.w.limit)}`} endLabel={usd(r.px)} split={false} tone={trendOf(chart?.series[r.w.ticker])} label={`${r.w.ticker}: Kurs der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
+                  <FluidSparkline className="mt-3" height={candle ? 84 : 56} values={chart?.series[r.w.ticker] ?? []} candlesFor={(w) => candlesOf(r.w.ticker, w)} baseline={r.w.limit} baselineColor="rgb(255 255 255 / 0.82)" baselineLabel={`Kaufgrenze ${money(r.w.limit)}`} endLabel={usd(r.px)} split={false} tone={trendOf(chart?.series[r.w.ticker])} label={`${r.w.ticker}: ${candle ? 'Kerzen' : 'Kurs'} der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
                 </button>
               )
             })}
@@ -90,7 +97,7 @@ export function Watchlist() {
                 <thead>
                   <tr>
                     <th>Titel</th>
-                    <th title="Kursverlauf der letzten 3 Monate">3 Monate</th>
+                    <th title={candle ? 'Wochenkerzen der letzten 3 Monate' : 'Kursverlauf der letzten 3 Monate'}>3 Monate</th>
                     <th className="r">Kurs {cur()} · Tag</th>
                     <th className="r">Grenze {cur()}</th>
                     {/* Schmale Karte: Balken weglassen (der Abstand steht daneben), damit «Status» ohne seitliches Scrollen sichtbar bleibt */}
@@ -108,7 +115,7 @@ export function Watchlist() {
                         <td><Ticker t={r.w.ticker} name={r.w.name} className="@max-[800px]:[&>div:last-child]:max-w-[104px]" /></td>
                         <td>
                           <span className="flex items-center gap-2.5">
-                            <Sparkline width={72} values={chart?.series[r.w.ticker] ?? []} tone={sign(chg)} label={`${r.w.ticker}: ${pct(chg, 1)} in 3 Monaten`} />
+                            <Sparkline width={72} values={chart?.series[r.w.ticker] ?? []} candles={candlesOf(r.w.ticker, 72)} tone={sign(chg)} label={`${r.w.ticker}: ${pct(chg, 1)} in 3 Monaten`} />
                             <Delta value={chg} digits={0} icon={false} className="text-[12px] @max-[700px]:hidden" />
                           </span>
                         </td>

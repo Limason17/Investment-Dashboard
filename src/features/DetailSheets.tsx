@@ -1,16 +1,18 @@
 import { Pencil, RefreshCw } from 'lucide-react'
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
-import { LimitTrack } from '@/components/charts/Small'
+import { ChartStyleToggle, LimitTrack } from '@/components/charts/Small'
 import { TimeChart, TradeGlyph, type Marker, type RefLine, type VLine } from '@/components/charts/TimeChart'
 import { Sheet } from '@/components/Sheet'
 import { Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Switch, Cur } from '@/components/ui'
 import { bucketOf, catOf, HOLDING_BUCKETS } from '@/lib/buckets'
 import { quote, quoteLabel, withIds, wlState, wht } from '@/lib/calc'
-import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE, refreshCharts, useChart } from '@/lib/charts'
+import { sliceChart, toCandles, UNIT_TEXT, weekOf } from '@/lib/candles'
+import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE, refreshCharts, useChart, useChartStyle } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { dfmt, parseNum, pct, pctPlain, qty, usd, cur, money } from '@/lib/format'
+import { dfmt, dlong, hhmm, MONTHS, parseNum, pct, pctPlain, qty, usd, cur, money } from '@/lib/format'
 import { withNow } from '@/lib/history'
 import { useStored } from '@/lib/hooks'
+import { useMeasure } from '@/lib/useMeasure'
 import { txLabel } from '@/lib/labels'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -39,9 +41,14 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
   // Käufe und Verkäufe im Chart ein- oder ausblenden (gilt für alle Titel, bleibt gespeichert)
   const [tradesPref, setTradesPref] = useStored<'an' | 'aus'>('depot.trades.titel', 'an', ['an', 'aus'])
   const showTrades = tradesPref === 'an'
+  // Linie oder Kerzen (gilt für alle Kurscharts); Kerzen so viele, wie in die Breite passen (mind. 4 px je Kerze)
+  const [style, setStyle] = useChartStyle()
+  const candle = style === 'kerzen'
+  const [boxRef, boxW] = useMeasure<HTMLDivElement>()
+  const maxCandles = Math.max(12, Math.floor((boxW - 62) / 4))
   const tickers = useMemo(() => [t], [t])
-  const { data, pending, error } = useChart(range, tickers, range === 'MAX' ? firstBuy : null)
-  const chart = useMemo(() => {
+  const { data, pending, error } = useChart(range, tickers, range === 'MAX' ? firstBuy : null, candle)
+  const raw = useMemo(() => {
     if (!data) return null
     const full = withNow(db, data)
     // «Max»: genau ab dem Tag des ersten Kaufs; der Kurs davor wird zur Vergleichsbasis.
@@ -49,8 +56,15 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
     const cut = full.d.findIndex((d) => d >= firstBuy)
     const values = full.series[t]
     if (cut <= 0 || !values || full.d.length - cut < 2) return full
-    return { ...full, t: full.t.slice(cut), d: full.d.slice(cut), series: { ...full.series, [t]: values.slice(cut) }, prev: { ...full.prev, [t]: values[cut - 1] ?? full.prev[t] } }
+    return sliceChart(full, t, cut)
   }, [db, data, firstBuy, t])
+  // Kerzen: derselbe Verlauf, zu Kerzen gebündelt (Schluss je Kerze als Reihe, damit Käufe und Schwellen gleich bleiben)
+  const cs = useMemo(() => (candle && raw && boxW > 0 ? toCandles(raw, t, maxCandles) : null), [candle, raw, t, maxCandles, boxW])
+  const chart = useMemo(() => {
+    if (!raw || !cs || cs.candles.length < 2) return raw
+    return { ...raw, kind: cs.kind, t: cs.candles.map((k) => k.t), d: cs.candles.map((k) => k.d), series: { ...raw.series, [t]: cs.candles.map((k) => k.c) } }
+  }, [raw, cs, t])
+  const ohlc = useMemo(() => (cs && chart !== raw ? { o: cs.candles.map((k) => k.o), h: cs.candles.map((k) => k.h), l: cs.candles.map((k) => k.l) } : undefined), [cs, chart, raw])
   const view = useMemo(() => {
     const values = chart?.series[t]
     if (!chart || !values || values.length < 2) return null
@@ -89,11 +103,14 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
 
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+      <div ref={boxRef} className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-[12.5px] text-muted">
           {view && chart ? <><Delta value={view.chg} digits={1} className="font-medium" /> {chart.range === '1T' && !c.live ? 'letzter Handelstag' : chart.range === 'MAX' && firstBuy ? `seit erstem Kauf (${dfmt(firstBuy)})` : RANGE_TEXT[chart.range]}</> : <span>Kursverlauf</span>}
         </div>
-        <Segmented className="max-sm:flex max-sm:w-full [&>button]:max-sm:flex-1" label="Zeitraum" value={range} onChange={setRange} options={RANGES.map((r) => ({ value: r, label: RANGE_LABEL[r], title: r === 'MAX' && firstBuy ? `seit dem ersten Kauf am ${dfmt(firstBuy)}` : RANGE_TITLE[r] }))} />
+        <div className="flex items-center gap-2 max-sm:w-full">
+          <ChartStyleToggle value={style} onChange={setStyle} className="flex-none" />
+          <Segmented className="max-sm:flex max-sm:min-w-0 max-sm:flex-1 [&>button]:max-sm:flex-1 [&>button]:max-sm:!px-1" label="Zeitraum" value={range} onChange={setRange} options={RANGES.map((r) => ({ value: r, label: RANGE_LABEL[r], title: r === 'MAX' && firstBuy ? `seit dem ersten Kauf am ${dfmt(firstBuy)}` : RANGE_TITLE[r] }))} />
+        </div>
       </div>
       {view && chart ? (
         <div className="-mx-2">
@@ -102,12 +119,14 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
             d={chart.d}
             kind={chart.kind}
             series={[{ key: 'px', label: chart.kind === 'intraday' ? 'Kurs' : 'Schlusskurs', values: view.values, color: 'var(--color-accent)', color2: 'var(--color-accent-2)', area: true }]}
+            candles={ohlc}
+            titleOf={ohlc && cs ? (i) => (cs.unit === 'woche' ? `Woche ab ${dfmt(weekOf(chart.d[i]))}` : cs.unit === 'monat' ? `${MONTHS[+chart.d[i].slice(5, 7) - 1]} ${chart.d[i].slice(0, 4)}` : cs.unit === 'tag' ? dlong(chart.d[i]) : `${dfmt(chart.d[i])} · ${hhmm(chart.t[i])}, ${UNIT_TEXT[cs.unit]}`) : undefined}
             split={view.base}
             refs={view.refs}
             markers={showTrades ? view.markers : NO_MARKERS}
             vlines={view.vlines}
             height={220}
-            animateKey={t + chart.range}
+            animateKey={t + chart.range + (ohlc ? 'k' : '')}
             pending={pending}
             live={c.live}
             ariaLabel={`Kursverlauf ${t}`}

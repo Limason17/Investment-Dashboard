@@ -213,6 +213,8 @@ export interface ChartData {
   failures: string[]
   /** reguläre Sitzung des Tages (nur 1T) */
   session?: { open: number; close: number }
+  /** nur auf Anfrage (Kerzen): Eröffnung, Hoch, Tief je Punkt; null = kein Handel in diesem Punkt */
+  ohlc?: Record<string, { o: (number | null)[]; h: (number | null)[]; l: (number | null)[] }>
 }
 
 export type WithId<T> = T & { id: string }
