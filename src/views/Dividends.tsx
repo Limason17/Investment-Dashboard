@@ -68,12 +68,12 @@ export function Dividends() {
 
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
-      <section className="card col-span-12 grid grid-cols-2 divide-line lg:grid-cols-5 lg:divide-x [&>*]:border-line max-lg:[&>*:nth-child(n+3)]:border-t max-lg:[&>*:nth-child(even)]:border-l">
+      <section className="card col-span-12 grid grid-cols-2 divide-line xl:grid-cols-5 xl:divide-x [&>*]:border-line max-xl:[&>*:nth-child(n+3)]:border-t max-xl:[&>*:nth-child(even)]:border-l">
         <Stat label="Jahresprognose netto" value={a.per.length ? <>{usd(a.net)}<Cur /></> : '–'} sub={<span>{a.per.length ? <>{money(a.gross)} brutto, {pctPlain(w, 0)} Steuer</> : 'erscheint mit den ersten Dividendentiteln'}</span>} />
         <Stat label="Rendite auf Wertpapiere" value={pctPlain(c.valuationComplete && a.per.length && c.sec ? a.gross / c.sec : null, 2)} sub={<span>brutto, laufende Raten</span>} />
         <Stat label={<>Erhalten {year} {hasDemo && <DemoTag />}</>} value={<>{usd(recYear)}<Cur /></>} sub={<span>{recYearCount} {recYearCount === 1 ? 'Zahlung' : 'Zahlungen'}, netto</span>} />
         <Stat label="Erwartet, 6 Monate" value={expected.length || projected.length ? <>{usd(expSum)}<Cur /></> : '–'} sub={<span>{expected.length || projected.length ? [expected.length ? `${expected.length} erfasst` : '', projected.length ? `${projected.length} geschätzt` : ''].filter(Boolean).join(', ') + ', netto' : 'keine Zahlung in Sicht'}</span>} />
-        <Stat className="max-lg:col-span-2" label="Pro Monat im Schnitt" value={a.per.length ? <>{usd(a.net / 12)}<Cur /></> : '–'} sub={<span>netto, Prognose</span>} />
+        <Stat className="max-xl:col-span-2" label="Pro Monat im Schnitt" value={a.per.length ? <>{usd(a.net / 12)}<Cur /></> : '–'} sub={<span>netto, Prognose</span>} />
       </section>
 
       <Card className="col-span-12 self-start xl:col-span-7" title="Dividenden nach Monat" sub={`netto nach Quellensteuer, in ${cur()}`}>
@@ -151,7 +151,7 @@ export function Dividends() {
           <div className="@container hidden overflow-x-auto md:block">
             <table className="tbl">
               <thead>
-                <tr><th>Titel</th>{cols.ex && <th className="@max-[860px]:hidden">Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r @max-[760px]:hidden">je Stück</th>}{cols.shares && <th className="r @max-[800px]:hidden">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r @max-[600px]:hidden">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th><span className="sr-only">Aktion</span></th></tr>
+                <tr><th>Titel</th>{cols.ex && <th className="@max-[860px]:hidden">Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r @max-[760px]:hidden">je Stück</th>}{cols.shares && <th className="r @max-[800px]:hidden">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r @max-[700px]:hidden">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th><span className="sr-only">Aktion</span></th></tr>
               </thead>
               <tbody>
                 {groups.map((g) => (
@@ -165,7 +165,7 @@ export function Dividends() {
                         {cols.per && <td className="r num text-ink-2 @max-[760px]:hidden">{d.perShare != null ? Number(d.perShare).toFixed(4) : '–'}</td>}
                         {cols.shares && <td className="r num text-ink-2 @max-[800px]:hidden">{qty(d.shares)}</td>}
                         <td className="r num">{usd(d.gross)}</td>
-                        <td className="r num text-ink-2 @max-[600px]:hidden">{usd(d.tax)}</td>
+                        <td className="r num text-ink-2 @max-[700px]:hidden">{usd(d.tax)}</td>
                         <td className="r num font-medium">{usd(d.net)}</td>
                         <td className="r"><span className="inline-flex items-center gap-1">{actions(d)}</span></td>
                       </tr>

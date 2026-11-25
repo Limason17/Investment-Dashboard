@@ -105,7 +105,7 @@ function DataStatus({ db, c, now, live }: { db: DB; c: Calc; now: string; live: 
       <div className="flex items-center gap-2 text-[12.5px] font-medium">
         <StatusWord stale={stale} live={c.live} />
         {/* Das Wort davor sagt schon «Live» bzw. «Offline»: hier nicht wiederholen (sonst «LIVE Live 17:04») */}
-        <span className="min-w-0 truncate">{statusText(c, now, live, online)?.replace(/^(Live |Offline · )/, '')}</span>
+        <span className="min-w-0 truncate">{statusText(c, now, live, online)?.replace(/^(Live |Offline · |Stand )/, '')}</span>
       </div>
       {live ? (
         <div className="mt-1 pl-4 text-[11.5px] text-muted">

@@ -244,7 +244,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
       }
     >
       {p && !edit && (
-        <div className="grid gap-5">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <div className="label">{quoteLabel(q)}</div>
@@ -368,7 +368,7 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
       }
     >
       {w && s && !edit && (
-        <div className="grid gap-5">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <div className="label">{quoteLabel(q, w.priceDate)}</div>
@@ -377,7 +377,8 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
                 {q?.prev ? <Delta value={q.close / q.prev - 1} digits={2} className="text-[13.5px] font-medium" /> : null}
               </div>
             </div>
-            <div className="text-right">
+            {/* Bricht der Block auf dem Handy um, bleibt er rechtsbündig (sonst hängt er schief links unter dem Kurs) */}
+            <div className="ml-auto text-right">
               <Chip tone={s.tone}>{s.label}</Chip>
               <div className="mt-2 flex items-center justify-end gap-3">
                 <LimitTrack d={s.d} tone={s.tone} width={120} />
@@ -390,7 +391,8 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
             <Fact label="Grenze">{w.limit ? money(w.limit) : '–'}</Fact>
-            <Fact label="Vorsichtige Grenze">{w.limitCautious != null ? money(w.limitCautious) : <span className="text-muted">–</span>}</Fact>
+            {/* Ohne vorsichtige Grenze keine leere Kachel mit «–» */}
+            {w.limitCautious != null && <Fact label="Vorsichtige Grenze">{money(w.limitCautious)}</Fact>}
             <Fact label="Bis zur Grenze">{px != null && w.limit ? (px <= w.limit ? <span className="text-up">erreicht</span> : money(px - w.limit)) : '–'}</Fact>
           </div>
 
