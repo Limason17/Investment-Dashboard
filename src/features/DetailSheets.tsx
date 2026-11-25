@@ -70,16 +70,30 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
     if (!chart || !values || values.length < 2) return null
     const markers: Marker[] = []
     const byIndex = new Map<number, WithId<Tx>[]>()
+    const offTx = new Set<string>()
     for (const x of txs) {
       // Bei «Max» zählt auch ein Kauf an einem Tag ohne Handel (er erscheint am nächsten Handelstag)
       if ((x.type !== 'kauf' && x.type !== 'verkauf') || x.date < (chart.range === 'MAX' && firstBuy ? firstBuy : chart.d[0])) continue
-      const i = chart.d.findIndex((d) => d >= x.date)
+      let i = chart.d.findIndex((d) => d >= x.date)
       if (i < 0) continue
+      // Mehrere Punkte am selben Tag (Stunden- oder Minutenkerzen): den Punkt nehmen, an dem der Kurs dem bezahlten Preis
+      // am nächsten war (bei Kerzen: dessen Spanne Tief bis Hoch den Preis enthält). So sitzt die Marke dort, wo der Kurs war.
+      if (x.price != null && x.price > 0) {
+        const dist = (j: number) => (ohlc ? Math.max(0, ohlc.l[j] - x.price!, x.price! - ohlc.h[j]) : Math.abs(values[j] - x.price!))
+        let best = i
+        for (let j = i + 1; j < chart.d.length && chart.d[j] === chart.d[i]; j++) if (dist(j) < dist(best)) best = j
+        i = best
+      }
+      // Preis ausserhalb von Tief bis Hoch der Kerze (0.5 % Spielraum): so wurde nie gehandelt. Meist ein Tippfehler,
+      // ein Split oder erfundene Testdaten. Die Marke bleibt auf dem Kurs, Etikett und Tooltip warnen.
+      const off = !!ohlc && x.price != null && x.price > 0 && (x.price < ohlc.l[i] * 0.995 || x.price > ohlc.h[i] * 1.005)
+      if (off) offTx.add(x.id)
       const mk = markers.find((m) => m.i === i && m.type === x.type)
       if (mk) {
         mk.price = (mk.price! * mk.shares! + (x.price ?? 0) * (x.shares ?? 0)) / (mk.shares! + (x.shares ?? 0) || 1)
         mk.shares! += x.shares ?? 0
-      } else markers.push({ i, type: x.type, shares: x.shares, price: x.price })
+        mk.off = mk.off || off
+      } else markers.push({ i, type: x.type, shares: x.shares, price: x.price, off })
       byIndex.set(i, [...(byIndex.get(i) ?? []), x])
     }
     markers.sort((a, b) => a.i - b.i).forEach((m, k) => (m.seq = k + 1))
@@ -98,8 +112,8 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
       if (close > 0 && close < chart.t.length - 1) vlines.push({ i: close, label: 'Schluss' })
     }
     const shown: RefLine[] = near
-    return { values, markers, byIndex, base, chg: base > 0 ? values[values.length - 1] / base - 1 : null, refs: shown, away: refs.filter((r) => !near.includes(r)), vlines }
-  }, [chart, t, txs, refs, firstBuy, firstPx, buys, avg])
+    return { values, markers, byIndex, offTx, base, chg: base > 0 ? values[values.length - 1] / base - 1 : null, refs: shown, away: refs.filter((r) => !near.includes(r)), vlines }
+  }, [chart, ohlc, t, txs, refs, firstBuy, firstPx, buys, avg])
 
   return (
     <div>
@@ -140,6 +154,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
                       <span className="num text-muted">{dfmt(x.date)}</span>
                     </div>
                     <div className="num mt-0.5 text-ink-2">{qty(x.shares)} Stk. × {money(x.price)}</div>
+                    {view.offTx.has(x.id) && <div className="mt-1 max-w-[220px] whitespace-normal text-warn">Preis lag nicht in der Kursspanne (Tief bis Hoch). Buchung prüfen.</div>}
                   </div>
                 ))}
               </>

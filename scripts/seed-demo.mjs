@@ -106,7 +106,48 @@ for (const [t, [pStart, pEnd, vol, beta]] of Object.entries(CFG)) {
   series[t][iA] = real.close
   if (real.prev != null) series[t][iA - 1] = real.prev
 }
+/* ------------------------------------------------------------------ Echte Tageskurse
+   Wo Yahoo erreichbar ist, ersetzen echte Schlusskurse den Zufallspfad. So passen Testkäufe und Kerzencharts zusammen
+   (ein Testkauf liegt dann immer zwischen Tief und Hoch seines Tages). Ohne Netz («--offline» oder Fehler): Zufallspfad. */
+const range = {} // Ticker → Datum → [Tief, Hoch]
+async function realDays(t) {
+  const p1 = Math.floor(Date.parse(addDays(START, -7) + 'T12:00:00Z') / 1000)
+  const p2 = Math.floor(Date.parse(addDays(END, 2) + 'T12:00:00Z') / 1000)
+  const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t)}?period1=${p1}&period2=${p2}&interval=1d`, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (depot-dashboard lokal)' },
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!r.ok) throw new Error('HTTP ' + r.status)
+  const res = (await r.json())?.chart?.result?.[0]
+  const q = res?.indicators?.quote?.[0] ?? {}
+  const out = {}
+  ;(res?.timestamp ?? []).forEach((s, i) => {
+    const c = q.close?.[i], h = q.high?.[i], l = q.low?.[i]
+    if (c > 0) out[new Date(s * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })] = { c, h: h > 0 ? h : c, l: l > 0 ? l : c }
+  })
+  return out
+}
+if (!args.includes('--offline')) {
+  const got = await Promise.allSettled(Object.keys(CFG).map(async (t) => [t, await realDays(t)]))
+  let ok = 0
+  for (const g of got) {
+    if (g.status !== 'fulfilled') continue
+    const [t, real] = g.value
+    if (Object.keys(real).length < days.length * 0.8) continue
+    let last = series[t][0]
+    series[t] = days.map((d) => (real[d] ? (last = r2(real[d].c)) : last))
+    range[t] = Object.fromEntries(Object.entries(real).map(([d, v]) => [d, [v.l, v.h]]))
+    ok++
+  }
+  console.log(ok ? `Echte Tageskurse für ${ok} von ${Object.keys(CFG).length} Titeln (Yahoo).` : 'Yahoo nicht erreichbar: Zufallspfad.')
+}
 const px = (t, date) => series[t][idx[date]]
+/** Preis eines Testkaufs: nahe am Schlusskurs, aber nie ausserhalb von Tief bis Hoch des Tages */
+const fill = (t, date) => {
+  const p = px(t, date) * (1 + gauss() * 0.004)
+  const lh = range[t]?.[date]
+  return r2(lh ? Math.min(lh[1], Math.max(lh[0], p)) : p)
+}
 
 /* ------------------------------------------------------------------ Testbuchungen
    Käufe so gewählt, dass am Ende exakt der echte Bestand herauskommt. */
@@ -133,7 +174,7 @@ let n = 0
 const demoId = () => 'd' + String(++n).padStart(3, '0')
 for (const [date, ticker, shares] of BUYS) {
   const d = nextTrading(date)
-  const price = r2(px(ticker, d) * (1 + gauss() * 0.004))
+  const price = fill(ticker, d)
   tx[demoId()] = { type: 'kauf', date: d, ticker, shares, price, fees: 0, cashDelta: -r2(shares * price), note: 'Testbuchung', by: 'Testdaten', demo: true }
 }
 for (const [id, t] of Object.entries(seed.transactions)) tx[id] = { ...t }
