@@ -8,7 +8,7 @@ import { getAccount } from '@/lib/cloud'
 import { CLOUD } from '@/lib/config'
 import { useDepot, type EntryType } from '@/lib/context'
 import { normTicker } from '@/lib/ticker'
-import { dfmt, parseNum, pctPlain, qty, r2, today, uid, sUsdRaw as sUsd, usdRaw as usd } from '@/lib/format'
+import { dfmt, parseNum, pctPlain, qty, r2, today, uid, usdRaw as usd } from '@/lib/format'
 import { MIN_DATE, type ImportKind } from '@/lib/bulk'
 import { ImportForm } from './ImportForm'
 import { applyOps, emptyDepot, movesCash, replayOps, reverseTx } from '@/lib/reverse'
@@ -212,7 +212,7 @@ function TradeForm({ type, ticker: preset, fromId, ...fp }: FormProps & { type: 
           <>
             Erlös <b className="num">{usd(amt - nFee)} USD</b>{moves ? ' ins Cash' : ''}. Bestand danach: {qty(have - nSh!)} {t}{have - nSh! < 1e-9 ? ' (Position geschlossen)' : ''}.
             {inBalance && <><br />{balanceNote}</>}
-            {avg != null && <><br />Realisiert: <b className={`num font-semibold ${amt - nFee - avg * nSh! >= 0 ? 'text-up' : 'text-down'}`}>{sUsd(amt - nFee - avg * nSh!)}</b> USD gegen Ø-Einstand {usd(avg)}.</>}
+            {avg != null && <><br />Realisiert: <b className={`num font-semibold ${amt - nFee - avg * nSh! >= 0 ? 'text-up' : 'text-down'}`}>{usd(Math.abs(amt - nFee - avg * nSh!))}</b> USD gegen Ø-Einstand {usd(avg)}.</>}
           </>
         )}
       </CalcBox>

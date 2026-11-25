@@ -385,7 +385,7 @@ function Dashboard() {
                 </div>
                 <div className="hidden items-center gap-2 lg:flex">
                   <span className="mr-2 text-[12.5px] text-muted">{dateLine}</span>
-                  <button type="button" data-tour="refresh" className="btn" onClick={() => void refresh()} disabled={refreshing} title="Kurse und Daten jetzt neu holen (R)"><RefreshCw className={clsx(refreshing && 'animate-spin')} /> {refreshing ? 'Aktualisiere …' : 'Aktualisieren'}</button>
+                  <button type="button" data-tour="refresh" className="btn btn-ghost btn-icon" onClick={() => void refresh()} disabled={refreshing} title="Kurse und Daten jetzt neu holen (R)" aria-label={refreshing ? 'Aktualisiere …' : 'Aktualisieren'}><RefreshCw className={clsx(refreshing && 'animate-spin')} /></button>
                   <button type="button" data-tour="entry" className="btn btn-primary" onClick={() => nav.openEntry('kauf')} title="Kauf, Verkauf, Dividende, Cash oder Notiz erfassen (N)"><Plus /> Eintrag</button>
                 </div>
               </header>
@@ -411,8 +411,8 @@ function Dashboard() {
           </div>
 
           {/* Handy: neuer Eintrag mit dem Daumen */}
-          <button type="button" data-tour="entry" onClick={() => nav.openEntry('kauf')} aria-label="Neuer Eintrag" className={`fixed bottom-[calc(72px+env(safe-area-inset-bottom))] right-4 z-30 grid size-[52px] place-items-center rounded-full bg-gradient-to-b from-white to-[#dfe2ee] text-[#0b0c10] shadow-[inset_0_1px_0_#fff,0_2px_4px_rgb(0_0_0/0.5),0_14px_30px_-8px_rgb(143_125_255/0.6)] transition-[transform,opacity] duration-200 active:scale-95 lg:hidden ${fabAway ? 'pointer-events-none translate-y-24 opacity-0' : ''}`}>
-            <Plus className="size-6" strokeWidth={2.2} />
+          <button type="button" data-tour="entry" onClick={() => nav.openEntry('kauf')} aria-label="Neuer Eintrag" className={`fixed bottom-[calc(72px+env(safe-area-inset-bottom))] right-4 z-30 grid size-11 place-items-center rounded-full bg-gradient-to-b from-white to-[#dfe2ee] text-[#0b0c10] shadow-[inset_0_1px_0_#fff,0_2px_4px_rgb(0_0_0/0.5),0_14px_30px_-8px_rgb(143_125_255/0.6)] transition-[transform,opacity] duration-200 active:scale-95 lg:hidden ${fabAway ? 'pointer-events-none translate-y-24 opacity-0' : ''}`}>
+            <Plus className="size-5" strokeWidth={2.2} />
           </button>
           <TabBar view={view} goto={goto} />
 

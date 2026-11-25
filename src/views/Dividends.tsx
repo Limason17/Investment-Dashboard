@@ -136,7 +136,7 @@ export function Dividends() {
                           {isDue(d) && <Chip tone="warn">zu bestätigen</Chip>}
                           {d.demo && <DemoTag />}
                         </div>
-                        <div className="num mt-1 truncate text-[12px] text-muted">{dfmt(d.payDate)}{d.payDateEstimated ? ' (geschätzt)' : ''} · brutto {money(d.gross)}</div>
+                        <div className="num mt-1 truncate text-[12px] text-muted">{dfmt(d.payDate)}{d.payDateEstimated ? ' geschätzt' : ''}</div>
                       </div>
                       <div className="text-right">
                         <div className="num text-[14px] font-medium">{usd(d.net)}<Cur /></div>
@@ -151,7 +151,7 @@ export function Dividends() {
           <div className="@container hidden overflow-x-auto md:block">
             <table className="tbl">
               <thead>
-                <tr><th>Titel</th>{cols.ex && <th className="@max-[860px]:hidden">Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r @max-[760px]:hidden">je Stück</th>}{cols.shares && <th className="r @max-[800px]:hidden">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r @max-[700px]:hidden">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th><span className="sr-only">Aktion</span></th></tr>
+                <tr><th>Titel</th>{cols.ex && <th className="@max-[960px]:hidden">Ex-Tag</th>}<th>Zahltag</th>{cols.per && <th className="r @max-[760px]:hidden">je Stück</th>}{cols.shares && <th className="r @max-[800px]:hidden">Stück</th>}<th className="r">Brutto {cur()}</th><th className="r @max-[760px]:hidden">Steuer {cur()}</th><th className="r">Netto {cur()}</th><th><span className="sr-only">Aktion</span></th></tr>
               </thead>
               <tbody>
                 {groups.map((g) => (
@@ -160,12 +160,12 @@ export function Dividends() {
                     {g.shown.map((d) => (
                       <tr key={d.id}>
                         <td><span className="inline-flex items-center gap-2"><span className="tk">{d.ticker}</span>{isDue(d) && <Chip tone="warn">zu bestätigen</Chip>}{d.demo && <DemoTag />}</span></td>
-                        {cols.ex && <td className="num text-ink-2 @max-[860px]:hidden">{dfmt(d.exDate)}</td>}
+                        {cols.ex && <td className="num text-ink-2 @max-[960px]:hidden">{dfmt(d.exDate)}</td>}
                         <td className="num">{dfmt(d.payDate)}{d.payDateEstimated && <span className="text-muted"> geschätzt</span>}</td>
                         {cols.per && <td className="r num text-ink-2 @max-[760px]:hidden">{d.perShare != null ? Number(d.perShare).toFixed(4) : '–'}</td>}
                         {cols.shares && <td className="r num text-ink-2 @max-[800px]:hidden">{qty(d.shares)}</td>}
                         <td className="r num">{usd(d.gross)}</td>
-                        <td className="r num text-ink-2 @max-[700px]:hidden">{usd(d.tax)}</td>
+                        <td className="r num text-ink-2 @max-[760px]:hidden">{usd(d.tax)}</td>
                         <td className="r num font-medium">{usd(d.net)}</td>
                         <td className="r"><span className="inline-flex items-center gap-1">{actions(d)}</span></td>
                       </tr>

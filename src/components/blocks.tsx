@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { CalendarClock, ChartNoAxesColumn, Check, ChevronRight, CircleDot, Eye, Flag, Layers, OctagonAlert, Target, TriangleAlert, type LucideIcon } from 'lucide-react'
+import { CalendarClock, ChartNoAxesColumn, Check, ChevronRight, Eye, Flag, Layers, type LucideIcon } from 'lucide-react'
 import type { Attention, WatchRow } from '@/lib/calc'
 import { daysBetween, dshort, pctPlain, weekday, money } from '@/lib/format'
 import type { DepotEvent, WithId } from '@/lib/types'
@@ -99,27 +99,17 @@ export function EventStrip({ events, now, days = 56, className }: { events: With
 }
 
 /* ------------------------------------------------------------------ Hinweis, der eine Handlung braucht */
-const ATT_ICON: Record<Attention['kind'], LucideIcon> = { Achtung: OctagonAlert, Prüfen: TriangleAlert, Grenze: Target, Offen: CircleDot, Bald: CalendarClock }
-const ATT_TILE: Record<Attention['tone'], string> = {
-  down: 'bg-down/12 text-down border-down/20',
-  warn: 'bg-warn/12 text-warn border-warn/20',
-  up: 'bg-up/12 text-up border-up/20',
-  info: 'bg-accent/12 text-accent-2 border-accent/20',
-  mute: 'bg-white/[0.05] text-ink-2 border-line',
-}
+/* Hinweis als schlichte Terminal-Zeile: farbiger Strich links, Art in Grossbuchstaben, Titel und Detail in einer Zeile */
+const ATT_TEXT: Record<Attention['tone'], string> = { down: 'text-down', warn: 'text-warn', up: 'text-up', info: 'text-accent-2', mute: 'text-ink-2' }
+const ATT_BAR: Record<Attention['tone'], string> = { down: 'bg-down', warn: 'bg-warn', up: 'bg-up', info: 'bg-accent', mute: 'bg-line-2' }
 export function AlertItem({ a, onClick }: { a: Attention; onClick?: () => void }) {
-  const Icon = ATT_ICON[a.kind]
   const Tag = onClick ? 'button' : 'div'
   return (
-    <Tag type={onClick ? 'button' : undefined} onClick={onClick} className={clsx('card group grid min-h-[56px] w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-3 !rounded-[14px] px-3 py-2.5 text-left transition-colors', onClick && 'hover:border-line-2')}>
-      <span className={clsx('grid size-8 place-items-center rounded-[10px] border', ATT_TILE[a.tone])}>
-        <Icon className="size-4" strokeWidth={2} />
-      </span>
-      <span className="min-w-0">
-        <span className="block truncate text-[13.5px] font-medium leading-5">{a.title}</span>
-        <span className="block truncate text-[12.5px] leading-[1.45] text-muted">{a.detail}</span>
-      </span>
-      {onClick && <ChevronRight className="size-4 text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-muted" />}
+    <Tag type={onClick ? 'button' : undefined} onClick={onClick} className={clsx('card group relative flex min-h-[38px] w-full items-center gap-3 py-2 pl-4 pr-3 text-left transition-colors', onClick && 'hover:border-line-2')}>
+      <span className={clsx('absolute inset-y-0 left-0 w-[3px]', ATT_BAR[a.tone])} />
+      <span className={clsx('num flex-none text-[11px] font-semibold uppercase tracking-[0.08em]', ATT_TEXT[a.tone])}>{a.kind}</span>
+      <span className="min-w-0 flex-1 truncate text-[13px]"><span className="font-medium">{a.title}</span><span className="text-muted"> · {a.detail}</span></span>
+      {onClick && <ChevronRight className="size-4 flex-none text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-muted" />}
     </Tag>
   )
 }

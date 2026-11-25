@@ -1,23 +1,26 @@
 import { NotebookPen, Pencil } from 'lucide-react'
+import clsx from 'clsx'
 import { useMemo, useState } from 'react'
 import { MonthBars, type MonthPair } from '@/components/charts/MonthBars'
-import { Card, Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Stat, Cur } from '@/components/ui'
+import { Card, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Stat, StatGroup } from '@/components/ui'
 import { withIds, yearStats } from '@/lib/calc'
 import { useDepot, useNav } from '@/lib/context'
-import { addMonths, dfmt, pct, qty, sUsd, usd, weekday, cur, cur0, money } from '@/lib/format'
+import { addMonths, dfmt, qty, usd, weekday, cur, cur0, money } from '@/lib/format'
 import { txLabel } from '@/lib/labels'
 import { replayOps, reverseTx } from '@/lib/reverse'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
-import type { Tx } from '@/lib/types'
 
 
 const RECENT = 12
 
 const DeleteButton = ({ onConfirm, label = 'Buchung stornieren' }: { onConfirm: () => void; label?: string }) => <ConfirmDelete onConfirm={onConfirm} label={label} />
 
+/** Betrag ohne Vorzeichen: Rot heisst Geld geht weg, Grün heisst Geld kommt herein */
+const signTone = (v: number | null | undefined) => (v == null || v === 0 ? 'text-ink' : v < 0 ? 'text-down' : 'text-up')
+
 export function Journal() {
-  const { db, now } = useDepot()
+  const { db, c, now } = useDepot()
   const nav = useNav()
   const [filter, setFilter] = useState<'alle' | 'handel' | 'cash'>('alle')
   const tx = useMemo(() => withIds(db.transactions).sort((a, b) => ((b.date || '') > (a.date || '') ? 1 : (b.date || '') < (a.date || '') ? -1 : 0)), [db])
@@ -43,7 +46,6 @@ export function Journal() {
       .catch((e) => toast('Nicht gelöscht: ' + e.message))
 
   // Handel der letzten zwölf Monate; die Kennzahlen zählen alle Buchungen seit der ersten.
-  const since = tx.length ? tx[tx.length - 1].date : null
   const stats = useMemo(() => {
     const months: MonthPair[] = Array.from({ length: 12 }, (_, i) => ({ key: addMonths(now.slice(0, 8) + '01', i - 11).slice(0, 7), a: 0, b: 0 }))
     const at = new Map(months.map((m) => [m.key, m]))
@@ -62,24 +64,26 @@ export function Journal() {
     return { months: months.slice(Math.max(0, Math.min(firstUsed, 6))), y, any: firstUsed >= 0 }
   }, [tx, now])
   const ys = useMemo(() => yearStats(db, ''), [db])
-  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
-      <section className="card col-span-12 grid grid-cols-2 divide-line xl:grid-cols-5 xl:divide-x [&>*]:border-line max-xl:[&>*:nth-child(n+3)]:border-t max-xl:[&>*:nth-child(even)]:border-l">
-        <Stat label="Käufe insgesamt" value={<>{usd(stats.y.buys)}<Cur /></>} sub={<span>{plural(stats.y.nBuys, 'Kauf', 'Käufe')}{since ? ` seit ${dfmt(since)}` : ''}</span>} />
-        <Stat label="Verkäufe insgesamt" value={<>{usd(stats.y.sells)}<Cur /></>} sub={<span>{plural(stats.y.nSells, 'Verkauf', 'Verkäufe')}</span>} />
-        <Stat label="Realisiert insgesamt" value={ys.sales ? <><Delta value={ys.realized} kind="usd" icon={false} /><Cur /></> : '–'} sub={<span>{ys.sales ? `aus ${plural(ys.sales, 'Verkauf', 'Verkäufen')}${ys.fifo ? ', FIFO' : ''}` : 'noch kein Verkauf mit Ergebnis'}</span>} />
-        <Stat label="Dividenden erhalten" value={ys.divCount ? <>{usd(ys.divNet)}<Cur /></> : '–'} sub={<span>{ys.divCount ? `netto, ${plural(ys.divCount, 'Zahlung', 'Zahlungen')}` : 'noch keine Zahlung'}</span>} />
+      {/* Kennzahlen: eine Zeile je Zahl, Name links, Zahl rechts; ohne Beschreibung, ohne Vorzeichen und Währung (Rot = Minus, Grün = Plus) */}
+      <StatGroup className="col-span-12 self-start xl:col-span-4">
+        <Stat label="Gesamtwert" value={c.valuationComplete ? usd(c.settings.cashExcluded ? c.sec : c.total) : '–'} />
+        <Stat label="Einstand" value={usd(stats.y.buys)} />
+        <Stat label="Verkauft" value={usd(stats.y.sells)} />
+        <Stat label="Unrealisiert" value={c.pl != null ? <Delta value={c.pl} kind="usd" icon={false} /> : '–'} />
+        <Stat label="Realisiert" value={ys.sales ? <Delta value={ys.realized} kind="usd" icon={false} /> : '–'} />
+        <Stat label="Dividenden" value={ys.divCount ? usd(ys.divNet) : '–'} />
         {stats.y.nFlow ? (
-          <Stat className="max-xl:col-span-2" label="Einzahlungen netto" value={<><Delta value={stats.y.flow} kind="usd" icon={false} className="!text-ink" /><Cur /></>} sub={<span>{plural(stats.y.nFlow, 'Buchung', 'Buchungen')}</span>} />
+          <Stat label="Einzahlungen" value={<span className={stats.y.flow < 0 ? 'text-down' : ''}>{usd(Math.abs(stats.y.flow))}</span>} />
         ) : (
-          <Stat className="max-xl:col-span-2" label="Netto investiert" value={<>{usd(stats.y.buys - stats.y.sells)}<Cur /></>} sub={<span>Käufe abzüglich Verkäufe</span>} />
+          <Stat label="Investiert" value={usd(stats.y.buys - stats.y.sells)} />
         )}
-      </section>
+      </StatGroup>
 
       {stats.any && (
-        <Card className="col-span-12" title="Käufe und Verkäufe" sub={`je Monat, letzte ${stats.months.length} Monate, in ${cur()}`}>
+        <Card className={"col-span-12 xl:col-span-8"} title="Käufe und Verkäufe" sub={`je Monat, letzte ${stats.months.length} Monate, in ${cur()}`}>
           <MonthBars months={stats.months} labels={['Käufe', 'Verkäufe']} colors={['var(--color-accent)', 'var(--color-ref)']} format={cur0} current={now.slice(0, 7)} />
         </Card>
       )}
@@ -101,7 +105,7 @@ export function Journal() {
               <li key={x.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 py-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <Chip tone={x.type === 'kauf' ? 'info' : 'mute'} icon={false}>{txLabel(x)}</Chip>
+                    <span className="text-ink-2">{txLabel(x)}</span>
                     {x.ticker && <button type="button" className="tk" onClick={() => db.positions[x.ticker!] && nav.openPosition(x.ticker!)}>{x.ticker}</button>}
                     {x.demo && <DemoTag />}
                   </div>
@@ -114,12 +118,10 @@ export function Journal() {
                 </div>
                 <div className="flex items-start gap-0.5">
                   <div className="pt-0.5 text-right leading-tight">
-                    <span className="num text-[13.5px] font-medium text-ink">{sUsd(x.cashDelta)}<Cur /></span>
+                    <span className={clsx('num text-[13.5px] font-medium', signTone(x.cashDelta))}>{usd(Math.abs(x.cashDelta ?? 0))}</span>
                   </div>
                   <span className="flex">{(x.type === 'kauf' || x.type === 'verkauf') && <button type="button" className="btn btn-ghost btn-sm" aria-label="Buchung bearbeiten" title="Buchung bearbeiten" onClick={() => nav.openEntry(x.type as 'kauf' | 'verkauf', { fromId: x.id })}><Pencil /></button>}<DeleteButton onConfirm={() => del(x.id)} /></span>
                 </div>
-                {/* Gewinn/Verlust auf eigener Zeile: neben dem Betrag hat er auf dem Handy keinen Platz */}
-                {x.type === 'verkauf' && x.realized != null && <div className="col-span-2"><Result tx={x} /></div>}
               </li>
             ))}
           </ul>
@@ -132,14 +134,12 @@ export function Journal() {
                 {shown.map((x) => (
                   <tr key={x.id}>
                     <td className="num whitespace-nowrap text-ink-2">{dfmt(x.date)}</td>
-                    <td><Chip tone={x.type === 'kauf' ? 'info' : 'mute'} icon={false}>{txLabel(x)}</Chip></td>
+                    <td><span className="text-ink-2">{txLabel(x)}</span></td>
                     <td>{x.ticker ? <button type="button" className="tk hover:underline" onClick={() => db.positions[x.ticker!] && nav.openPosition(x.ticker!)}>{x.ticker}</button> : null}</td>
                     <td className="r num text-ink-2">{x.shares != null ? qty(x.shares) : ''}</td>
                     <td className="r num text-ink-2">{x.price != null ? usd(x.price) : ''}</td>
                     <td className="r leading-tight">
-                      <span className="num font-medium text-ink">{sUsd(x.cashDelta)}</span>
-                      {/* Ein realisiertes Ergebnis gibt es nur bei Verkäufen. */}
-                      {x.type === 'verkauf' && x.realized != null && <Result tx={x} />}
+                      <span className={clsx('num font-medium', signTone(x.cashDelta))}>{usd(Math.abs(x.cashDelta ?? 0))}</span>
                     </td>
                     <td className="@max-[880px]:hidden">
                       <span className="inline-flex items-center gap-1.5 text-[12px] text-muted">
@@ -194,14 +194,3 @@ export function Journal() {
 }
 
 /** Ergebnis eines Verkaufs: Gewinn oder Verlust gegenüber dem Einstand, in USD und Prozent */
-function Result({ tx }: { tx: Tx }) {
-  const r = tx.realized ?? 0
-  const cost = (tx.cashDelta ?? 0) - r
-  const tone = r > 0 ? 'text-up' : r < 0 ? 'text-down' : 'text-muted'
-  return (
-    <div className={`num mt-0.5 text-[11.5px] @max-[880px]:whitespace-normal font-medium ${tone}`} title={`Erlös minus Einstand${tx.costMethod ? ' (' + tx.costMethod + ')' : ''}`}>
-      {/* In schmaler Karte darf nur beim «·» umgebrochen werden, nicht zwischen Zahl und Einheit */}
-      {`${r >= 0 ? 'Gewinn' : 'Verlust'} ${sUsd(r)} ${cur()}`.replace(/ /g, ' ')}{cost > 0 ? ` · ${pct(r / cost, 1).replace(/ /g, ' ')}` : ''}
-    </div>
-  )
-}

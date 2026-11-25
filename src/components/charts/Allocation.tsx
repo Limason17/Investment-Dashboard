@@ -116,14 +116,14 @@ export function Allocation({ c }: { c: Calc }) {
         {/* Je Kategorie: Name und Betrag, rechts Ist-Anteil; darunter Balken mit Zielstrich und die Abweichung in Worten */}
         <ul className="grid grid-cols-[minmax(0,1fr)] gap-0.5">
           {rows.map((r) => {
-            const pp = r.diff != null ? Math.abs(r.diff * 100).toFixed(1).replace('.0', '') : null
             // Abweichung auch als Betrag: so viel fehlt bis zum Ziel bzw. ist zu viel (beim heutigen Gesamtwert)
             const amt = r.diff != null ? `${usd(Math.abs(r.diff) * total)} ${cur()}` : ''
+            // Nur der Betrag: «noch …» bis zur Obergrenze, «fehlen …» bis zum Ziel, «… zu viel» darüber. Das Ziel selbst steht klein über dem Strich.
             const note = r.tgt == null ? 'kein Ziel'
-              : r.state === 'over' ? `${pp} Pp über der Obergrenze · ${amt} zu viel`
-              : r.cap ? `${pp} Pp Spielraum bis max ${pctPlain(r.tgt, 0)} · noch ${amt}`
-              : Math.abs(r.diff!) < 0.0005 ? `genau im Ziel ${pctPlain(r.tgt, 0)}`
-              : `${pp} Pp ${r.diff! > 0 ? 'über' : 'unter'} Ziel ${pctPlain(r.tgt, 0)} · ${r.diff! > 0 ? amt + ' zu viel' : 'fehlen ' + amt}`
+              : r.state === 'over' ? `${amt} zu viel`
+              : r.cap ? `noch ${amt}`
+              : Math.abs(r.diff!) < 0.0005 ? 'im Ziel'
+              : r.diff! > 0 ? `${amt} zu viel` : `fehlen ${amt}`
             return (
               <li
                 key={r.b.id}
@@ -133,21 +133,26 @@ export function Allocation({ c }: { c: Calc }) {
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="flex min-w-0 items-center gap-2">
-                    <i className="swatch" style={{ background: r.b.color }} />
                     <span className="truncate text-[13.5px] font-medium">{r.b.name}</span>
                     <span className="num truncate text-[12px] text-muted max-[380px]:hidden">{usd(r.v)} {cur()}</span>
                   </span>
                   <span className="num text-[15px] font-semibold tracking-[-0.01em]">{pctPlain(r.w)}</span>
                 </div>
-                <Meter className="mt-2" value={r.w / scale} mark={r.tgt != null ? r.tgt / scale : undefined} color={r.b.color} height={5} />
+                {/* Ziel in % klein über dem Zielstrich (am Rand nach innen geschoben, damit nichts abgeschnitten wird) */}
+                {r.tgt != null && (
+                  <div className="relative mt-1 h-3.5">
+                    <span className="num absolute bottom-0 text-[10.5px] leading-none text-muted" style={{ left: `${Math.min(Math.max((r.tgt / scale) * 100, 3), 97)}%`, transform: 'translateX(-50%)' }}>{(r.cap ? 'max ' : '') + pctPlain(r.tgt, 0)}</span>
+                  </div>
+                )}
+                <Meter className={r.tgt != null ? 'mt-0.5' : 'mt-2'} value={r.w / scale} mark={r.tgt != null ? r.tgt / scale : undefined} color={r.b.color} height={5} />
                 <div className={clsx('mt-1.5 text-[11.5px]', r.state === 'over' ? 'text-down' : r.state === 'off' ? 'text-warn' : 'text-muted')}>{note}</div>
               </li>
             )
           })}
         </ul>
-        <p className="mt-2 px-3 text-[11.5px] leading-[1.5] text-muted">
-          {anyTarget ? 'Innerer Ring: aktuelle Anteile. Äusserer Ring und weisser Strich im Balken: Ziele. Gelb: mehr als 5 Pp vom Ziel entfernt.' : 'Noch keine Zielanteile. Unter «Ziele» legst du sie fest.'}
-        </p>
+        {!anyTarget && <p className="mt-2 px-3 text-[11.5px] leading-[1.5] text-muted">
+          Noch keine Zielanteile. Unter «Ziele» legst du sie fest.
+        </p>}
         {noCash && <p className="mt-2 px-3 text-[12px] leading-[1.5] text-muted">Anteile an den Wertpapieren, ohne Cash. Mit erfasstem Cash-Stand rechnet die Ansicht mit dem Gesamtwert.</p>}
       </div>
     </div>

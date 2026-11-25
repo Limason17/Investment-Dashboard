@@ -1,23 +1,23 @@
 @import "tailwindcss";
 
-/* Depot Liam: dunkles Material mit Tiefe. Fast schwarze Ebene, leicht angehobene Karten mit Lichtkante,
-   ein ruhiger Akzent (Periwinkle) für Bedienung, Farbe sonst nur in den Daten. */
+/* Depot Liam: Terminal-Look (wie Bloomberg, thinkorswim). Schwarz, eckige Felder mit Kopfleiste, Zahlen in fester Schrift,
+   Violett als einziger Akzent für Bedienung, Farbe sonst nur in den Daten. */
 @theme {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", Consolas, monospace;
 
-  --color-bg: #07080a;
-  --color-card: #0e1014;
-  --color-raised: #14171d;
-  --color-raised-2: #1b1f27;
-  --color-line: rgb(255 255 255 / 0.07);
-  --color-line-2: rgb(255 255 255 / 0.12);
+  --color-bg: #000;
+  --color-card: #000;
+  --color-raised: #0c0c0c;
+  --color-raised-2: #161616;
+  --color-line: #262626;
+  --color-line-2: #3a3a3a;
   --color-grid: #1d2028;
 
-  --color-ink: #edeef2;
-  --color-ink-2: #bcc1cc;
-  --color-muted: #8d94a2;
-  --color-faint: #7a8190; /* WCAG AA: mind. 4.5:1 auf Hintergrund und Karten */
+  --color-ink: #f2f2f2;
+  --color-ink-2: #c9c9c9;
+  --color-muted: #8f8f8f;
+  --color-faint: #808080; /* WCAG AA: mind. 4.5:1 auf Hintergrund und Karten */
 
   --color-accent: #9174ff;
   --color-accent-2: #b39fff;
@@ -747,3 +747,24 @@
     height: 44px;
   }
 }
+
+/* Terminal-Look: eckig, ohne Schatten, Kopfleiste je Feld, dichte Abstände. Steht ausserhalb der Layer, damit er die Grundstile oben überschreibt. */
+html body { background: #000; }
+html *:not(svg *) { border-radius: 0 !important; box-shadow: none !important; }
+html .card { background: #000; border-color: #262626; }
+html .card-head { min-height: 42px; padding: 0 14px; border-bottom: 1px solid #262626; background: #0a0a0a; }
+html .card-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+html .card-body { padding: 12px 14px 14px; }
+html .num, html .tk { font-family: var(--font-mono); letter-spacing: 0; }
+html aside, html nav[data-tour='nav'].fixed { background: #000 !important; backdrop-filter: none; }
+html main .bg-white\/\[0\.02\], html main .bg-white\/\[0\.025\] { background: transparent; }
+html .seg-pill { background: #1f1f1f; }
+
+html .card-title,
+html main h1,
+html main header p { font-family: var(--font-mono); }
+html main .grid.gap-3 { gap: 8px; }
+html .card-head { min-height: 36px; }
+html .card-title { font-size: 15px; }
+html .card-body { padding: 8px 12px 10px; }
+html .tbl td { padding-top: 7px; padding-bottom: 7px; }

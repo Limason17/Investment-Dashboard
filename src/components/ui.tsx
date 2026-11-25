@@ -1,9 +1,9 @@
 import clsx from 'clsx'
 import { ArrowDownRight, ArrowUpRight, Minus, Trash2 } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import type { Tone } from '@/lib/calc'
-import { pct, sign, sUsd, cur } from '@/lib/format'
+import { pctPlain, sign, usd, cur } from '@/lib/format'
 
 /* ------------------------------------------------------------------ Karte */
 export function Card({ title, sub, action, children, className, bodyClassName, flush }: {
@@ -67,7 +67,8 @@ export function Delta({ value, kind = 'pct', digits, className, icon = true }: {
   return (
     <span className={clsx('num inline-flex items-center gap-0.5 whitespace-nowrap', TONE_TEXT[s], className)}>
       {icon && value != null && <Icon className="size-[1.05em] flex-none" strokeWidth={2.4} />}
-      {kind === 'pct' ? pct(value, digits ?? 2) : sUsd(value)}
+      {/* Ohne Plus und Minus: die Farbe (und der Pfeil) zeigt die Richtung */}
+      {value == null ? '–' : kind === 'pct' ? pctPlain(Math.abs(value), digits ?? 2) : usd(Math.abs(value))}
     </span>
   )
 }
@@ -96,7 +97,27 @@ export function Segmented<T extends string>({ value, onChange, options, label, c
 }
 
 /* ------------------------------------------------------------------ Kennzahl */
+/** Kennzahlen als Liste: eine Zeile je Zahl, Name links, Zahl rechts (ohne Beschreibung). Ohne Gruppe erscheint <Stat> als Kachel. */
+const StatListCtx = createContext(false)
+
+/** Feld mit Kennzahlen in Zeilen; die enthaltenen <Stat> erscheinen als dichte Zeilen. */
+export function StatGroup({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <StatListCtx.Provider value>
+      <section className={clsx('card grid content-start px-4 py-2 sm:px-5', className)}>{children}</section>
+    </StatListCtx.Provider>
+  )
+}
+
 export function Stat({ label, value, sub, right, className }: { label: ReactNode; value: ReactNode; sub?: ReactNode; right?: ReactNode; className?: string }) {
+  if (useContext(StatListCtx)) {
+    return (
+      <div className="flex items-baseline justify-between gap-4 border-b border-line py-[8px] last:border-0">
+        <div className="whitespace-nowrap text-[13px] text-ink-2">{label}</div>
+        <div className="num text-right text-[14.5px] font-semibold">{value}</div>
+      </div>
+    )
+  }
   return (
     <div className={clsx('min-w-0 px-4 py-3 sm:px-5 sm:py-4', className)}>
       <div className="label flex items-center gap-1.5 max-sm:text-[11.5px]">{label}</div>

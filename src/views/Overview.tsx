@@ -9,11 +9,10 @@ import { Card, Chip, Delta, DemoTag, Empty, Segmented, Cur } from '@/components/
 import { alerts, capChecks, divAnnual, eventsSorted, fxOf, watchRows, yearStats } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TITLE, refreshCharts } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { dlong, dshort, hhmm, pct, pctPlain, sign, sUsd, usd, cur, usdRaw, money } from '@/lib/format'
+import { dlong, dshort, hhmm, pct, pctPlain, sign, usd, cur, usdRaw, money } from '@/lib/format'
 import { BENCH, useMedia, useOnline, usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { RangeId } from '@/lib/types'
 
-const PHRASE: Record<RangeId, string> = { '1T': 'heute', '1W': 'in 1 Woche', '1M': 'in 1 Monat', '3M': 'in 3 Monaten', '1J': 'in 1 Jahr', '5J': 'in 5 Jahren', MAX: 'seit Beginn' }
 const pctAxis = (v: number) => (Math.abs(v) < 1e-9 ? '0 %' : (Math.abs(v % 1) > 1e-9 ? v.toFixed(1) : v.toFixed(0)).replace('-', '−') + ' %')
 
 function useCountUp(target: number) {
@@ -32,7 +31,8 @@ function useCountUp(target: number) {
 function Hero() {
   const { db, c } = useDepot()
   const ranges = usePortfolioRanges()
-  const [stored, setRange] = useStored<RangeId>('depot.range', '1M')
+  // Startet immer mit 1T (Tag); die Wahl gilt nur bis zum nächsten Öffnen
+  const [stored, setRange] = useState<RangeId>('1T')
   const range = ranges.includes(stored) ? stored : 'MAX'
   const [mode, setMode] = useStored<'wert' | 'rendite'>('depot.view', 'rendite', ['wert', 'rendite'])
   const [hover, setHover] = useState<number | null>(null)
@@ -98,7 +98,6 @@ function Hero() {
   // Eine Rendite für alles: Ertrag im Verhältnis zum eingesetzten Geld, passend zum Betrag in USD.
   const ret = ps ? ps.mwr[hi ?? n - 1] : null
   const chartH = wide ? (tall ? 300 : 232) : 220
-  const dayText = c.live ? 'heute' : 'letzter Handelstag'
 
   return (
     <section className="card col-span-12 overflow-hidden xl:col-span-1">
@@ -141,10 +140,9 @@ function Hero() {
               </span>
               {ps && hi == null && (
                 <span className="text-muted">
-                  <Delta value={ps.gain} kind="usd" icon={false} className="font-medium" /> {cur()} {range === '1T' ? dayText : PHRASE[range]}
+                  <Delta value={ps.gain} kind="usd" icon={false} className="font-medium" />
                 </span>
               )}
-              {ps && hi != null && <span className="text-muted">bis hier, {range === '1T' ? 'seit Vortagesschluss' : PHRASE[range].replace(/^in /, 'über ')}</span>}
             </>
           )}
         </div>
@@ -184,7 +182,7 @@ function Hero() {
             tooltipExtra={(i) => (
               <>
                 {mode === 'rendite' && <div className="tip-row"><span>{valueLabel}</span><b>{money(ps.value[i])}</b></div>}
-                {mode === 'wert' && <div className="tip-row"><span>Ertrag im Zeitraum</span><b className={ps.pl[i] >= 0 ? '!text-up' : '!text-down'}>{sUsd(ps.pl[i])} {cur()} · {pct(ps.mwr[i], 2)}</b></div>}
+                {mode === 'wert' && <div className="tip-row"><span>Ertrag im Zeitraum</span><b className={ps.pl[i] >= 0 ? '!text-up' : '!text-down'}>{usd(Math.abs(ps.pl[i]))} {cur()} · {pctPlain(Math.abs(ps.mwr[i]), 2)}</b></div>}
                 {mode === 'wert' && !showInv && <div className="tip-row"><span>{investedLabel}</span><b>{money(ps.invested[i])}</b></div>}
               </>
             )}
@@ -260,7 +258,7 @@ function PeriodTile({ range, active, onSelect }: { range: RangeId; active: boole
         <span className={clsx('num mt-1 block text-[17px] font-semibold leading-6 tracking-[-0.02em] sm:text-[19px]', !ps && pending && 'animate-pulse')}>
           <Delta value={c.valuationComplete ? ret : null} digits={2} icon={false} />
         </span>
-        <span className="mt-0.5 block truncate text-[12px] text-muted"><Delta value={c.valuationComplete ? gain : null} kind="usd" icon={false} className="!text-muted" /> {cur()}</span>
+        <span className="mt-0.5 block truncate text-[12px] text-muted"><Delta value={c.valuationComplete ? gain : null} kind="usd" icon={false} /> {cur()}</span>
       </button>
       {/* Mini-Verlauf über die ganze Breite zum Ablesen */}
       <div className={clsx('px-4 pb-3 pt-1.5 sm:px-5', pending && 'opacity-40')}>
@@ -423,7 +421,7 @@ export function Overview() {
       {/* Leeres Depot: nur die ersten Schritte, keine leeren Charts. */}
       {!fresh && (<>
       {list.length > 0 && (
-        <div className="col-span-12 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <div className="col-span-12 grid gap-2">
           {list.map((a) => <AlertItem key={a.title} a={a} onClick={a.goto ? () => nav.goto(a.goto!) : undefined} />)}
         </div>
       )}
