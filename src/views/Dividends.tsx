@@ -71,7 +71,7 @@ export function Dividends() {
       <div className="contents xl:col-span-4 xl:grid xl:grid-cols-1 xl:content-start xl:gap-2">
         {/* Kennzahlen als Liste wie im Journal: Name links, Zahl rechts, ohne Beschreibung und Währung */}
         <StatGroup className="col-span-12 xl:col-span-1">
-          <Stat label="Prognose pro Jahr" value={a.per.length ? usd(a.net) : '–'} />
+          <Stat label="Prognose pro Jahr, netto" value={a.per.length ? usd(a.net) : '–'} />
           <Stat label="Rendite" value={pctPlain(c.valuationComplete && a.per.length && c.sec ? a.gross / c.sec : null, 2)} />
           <Stat label={<>Erhalten {year} {hasDemo && <DemoTag />}</>} value={usd(recYear)} />
           <Stat label="Nächste 6 Monate" value={expected.length || projected.length ? usd(expSum) : '–'} />
