@@ -335,6 +335,14 @@ describe('Wertverlauf', () => {
     db.transactions.e = { type: 'einzahlung', date: '2025-07-01', cashDelta: 500 }
     expect(timeline(db).external).toEqual([{ date: '2025-07-01', amount: 500 }])
   })
+  it('beginnt «Max» bei der allerersten Buchung, auch mit Bestand ohne Kaufbuchung', () => {
+    const db = empty()
+    db.positions.VTI = { ticker: 'VTI', name: 'VTI', shares: 2, bucket: 'etf', cost: 200 }
+    db.transactions.e = { type: 'einzahlung', date: '2025-03-10', cashDelta: 500 }
+    db.transactions.k = { type: 'kauf', date: '2025-04-01', ticker: 'QQQM', shares: 1, price: 100, cashDelta: -100 }
+    db.positions.QQQM = { ticker: 'QQQM', name: 'QQQM', shares: 1, bucket: 'etf', cost: 100 }
+    expect(timeline(db).first).toBe('2025-03-10')
+  })
 })
 
 describe('Wertverlauf gegen echte Zahlen', () => {

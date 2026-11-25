@@ -114,8 +114,14 @@ export function timeline(db: DB): Timeline {
     if (have > 0 && p.shares > 0) for (const s of steps[t]) s.shares *= p.shares / have
     else steps[t] = p.shares > 0 ? [{ date: BEGIN, shares: p.shares }] : []
   }
-  const firsts = Object.values(steps).map((s) => s[0]?.date).filter(Boolean) as string[]
-  const first = firsts.length && !firsts.includes(BEGIN) ? firsts.reduce((a, b) => (a < b ? a : b)) : null
+  // Beginn des Depots = die allererste Buchung (Kauf, Verkauf, Ein-/Auszahlung, Cash-Stand oder erhaltene Dividende).
+  // Auch wenn ein Bestand ohne Kaufbuchung da ist: «Max» zeigt dann ab der ersten Buchung, nicht pauschal 5 Jahre zurück.
+  const firsts = [
+    ...(Object.values(steps).map((s) => s[0]?.date).filter((d) => d && d !== BEGIN) as string[]),
+    ...Object.values(db.transactions).map((x) => x.date),
+    ...payouts.map((p) => p.date),
+  ].filter((d): d is string => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d))
+  const first = firsts.length ? firsts.reduce((a, b) => (a < b ? a : b)) : null
   // Vor dem ersten Cash-Stand war Cash nicht erfasst: Ein- und Auszahlungen davor zählen nicht als Zufluss,
   // dafür jeder Kauf und Verkauf (das Geld kam von aussen, der Cash-Stand davor bleibt gleich).
   const ext = cashStart
