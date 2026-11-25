@@ -15,13 +15,14 @@ const MAX_AGE: Record<RangeId, number> = { '1T': MIN, '1W': 5 * MIN, '1M': 15 * 
 
 /* ------------------------------------------------------------------ Darstellung: Linie oder Kerzen */
 export type ChartStyle = 'linie' | 'kerzen'
-const STYLE_KEY = 'depot.chart.art'
+// Standard sind Kerzen; nur eine bewusst gewählte Linie bleibt gespeichert.
+const STYLE_KEY = 'depot.chart.stil'
 const styleSubs = new Set<() => void>()
 const readStyle = (): ChartStyle => {
   try {
-    return localStorage.getItem(STYLE_KEY) === 'kerzen' ? 'kerzen' : 'linie'
+    return localStorage.getItem(STYLE_KEY) === 'linie' ? 'linie' : 'kerzen'
   } catch {
-    return 'linie'
+    return 'kerzen'
   }
 }
 let style: ChartStyle = readStyle()

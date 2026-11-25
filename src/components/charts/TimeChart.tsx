@@ -3,7 +3,6 @@ import { area as d3area, curveMonotoneX, curveStepAfter, line as d3line } from '
 import { motion, useReducedMotion } from 'motion/react'
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import { axisFormatter, dfmt, dlong, dshort, hhmm, MONTHS, usd, weekday, curRate, usdRaw, cur, qty } from '@/lib/format'
-const MINUS_SIGN = '−'
 import { useMeasure } from '@/lib/useMeasure'
 import { Empty } from '../ui'
 
@@ -40,14 +39,24 @@ export interface Marker {
 }
 
 const TRADE_COLOR = { kauf: 'var(--color-up)', verkauf: 'var(--color-down)' } as const
-/** Etikett der Buchungen: Höhe und Abstand vom Kurs */
-const TAG_H = 11.5, TAG_OFF = 12.5
+/**
+ * Buchungen im Terminal-Stil (wie thinkorswim/Bloomberg): Kauf = grüner Pfeil unter der Kerze, Verkauf = roter Pfeil
+ * darüber, beide zeigen auf die Kerze. Ein kurzer Strich markiert den bezahlten Preis, ein farbiges Etikett nennt
+ * Stück und Preis («K 2 @ 343.51»).
+ */
+const TAG_H = 13, ARROW_W = 9, ARROW_H = 6, GAP = 3
+
+/** Pfeil nach oben (Kauf) oder unten (Verkauf); (x, y) ist die Spitze */
+const arrow = (x: number, y: number, up: boolean) =>
+  up
+    ? `M${x},${y}L${x + ARROW_W / 2},${y + ARROW_H}L${x - ARROW_W / 2},${y + ARROW_H}Z`
+    : `M${x},${y}L${x + ARROW_W / 2},${y - ARROW_H}L${x - ARROW_W / 2},${y - ARROW_H}Z`
 
 /** Symbol für Kauf/Verkauf in Legende und Tooltip, gleich wie im Chart */
 export function TradeGlyph({ type, size = 10 }: { type: Marker['type']; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 10 10" className="inline-block shrink-0" aria-hidden>
-      <circle cx="5" cy="5" r="3.5" fill={TRADE_COLOR[type]} stroke="var(--color-card)" strokeWidth="1.25" />
+      <path d={type === 'kauf' ? 'M5,1.5L9.5,8.5L0.5,8.5Z' : 'M5,8.5L9.5,1.5L0.5,1.5Z'} fill={TRADE_COLOR[type]} />
     </svg>
   )
 }
@@ -288,31 +297,34 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, candles: can
     refTags.push({ r, ty, text, w: text.length * 5.9 + 9 })
   }
   const tickHidden = (v: number) => refTags.some((g) => Math.abs(g.ty - y(v)) < 11)
-  // Etiketten für Käufe/Verkäufe; überlappende rücken weiter vom Kurs weg.
-  const tradeTags: { m: Marker; c: string; cx: number; cy: number; px: number; by: number; w: number; below: boolean; sign: string; rest: string }[] = []
+  // Kerzen: Feldbreite je Punkt, Körper gut zwei Drittel davon (mind. 1 px), Docht 1 px
+  const slot = iw / Math.max(1, n)
+  const bw = Math.max(1, Math.min(14, slot >= 4 ? slot * 0.68 : slot - 1))
+  // Buchungen: Pfeil an der Kerze (Kauf unter dem Tief, Verkauf über dem Hoch), Etikett dahinter; überlappende rücken weiter weg.
+  const tradeTags: { m: Marker; c: string; cx: number; py: number | null; ay: number; up: boolean; px: number; by: number; w: number; text: string }[] = []
   for (const m of [...markers].sort((a, b) => a.i - b.i)) {
-    // Punkt auf dem bezahlten Preis (nicht dem Schlusskurs des Tages): so liegt ein einzelner Kauf genau auf seiner Einstandslinie
-    const cx = x(m.i), cy = y(m.price != null && m.price > 0 ? m.price * k : main.values[m.i])
+    const cx = x(m.i)
+    const paid = m.price != null && m.price > 0 ? m.price * k : null
+    const lo = Math.min(cdl ? candles!.l[m.i] : main.values[m.i], paid ?? Infinity)
+    const top = Math.max(cdl ? candles!.h[m.i] : main.values[m.i], paid ?? -Infinity)
     const buy = m.type === 'kauf'
-    const sign = (buy ? '+' : MINUS_SIGN) + (m.shares != null ? qty(m.shares) : '')
-    const rest = m.price != null ? ` × ${usdRaw(m.price * k)}` : ''
-    const w = (sign.length + rest.length) * 4.0 + 7
+    const text = [buy ? 'K' : 'V', m.shares != null ? qty(m.shares) : '', paid != null ? '@ ' + usdRaw(paid) : ''].filter(Boolean).join(' ')
+    const w = text.length * 5.5 + 8
+    // Kauf unten, Verkauf oben; reicht der Platz nicht, auf die andere Seite (der Pfeil zeigt weiter auf die Kerze)
     let below = buy
-    if (below && cy + TAG_OFF + TAG_H > T + ih + 4) below = false
-    else if (!below && cy - TAG_OFF - TAG_H < T - 2) below = true
-    const px = Math.max(L + w / 2 - 4, Math.min(L + iw - w / 2 + 4, cx))
-    let off = TAG_OFF
+    if (below && y(lo) + GAP + ARROW_H + 2 + TAG_H > T + ih + 6) below = false
+    else if (!below && y(top) - GAP - ARROW_H - 2 - TAG_H < T - 6) below = true
+    const ay = below ? y(lo) + GAP : y(top) - GAP
+    const px = Math.max(L + w / 2, Math.min(L + iw - w / 2, cx))
+    let off = ARROW_H + 2 + TAG_H / 2
     for (let tries = 0; tries < 4; tries++) {
-      const by = below ? cy + off : cy - off
+      const by = below ? ay + off : ay - off
       const hit = tradeTags.some((o) => Math.abs(o.px - px) < (o.w + w) / 2 + 3 && Math.abs(o.by - by) < TAG_H + 2)
       if (!hit) break
       off += TAG_H + 3
     }
-    tradeTags.push({ m, c: TRADE_COLOR[m.type], cx, cy, px, by: below ? cy + off : cy - off, w, below, sign, rest })
+    tradeTags.push({ m, c: TRADE_COLOR[m.type], cx, py: paid != null ? y(paid) : null, ay, up: below, px, by: below ? ay + off : ay - off, w, text })
   }
-  // Kerzen: Feldbreite je Punkt, Körper gut zwei Drittel davon (mind. 1 px), Docht 1 px
-  const slot = iw / Math.max(1, n)
-  const bw = Math.max(1, Math.min(14, slot >= 4 ? slot * 0.68 : slot - 1))
   const title = (i: number) => titleOf ? titleOf(i) : (kind === 'intraday' ?`${weekday(localDate(t[i]))}, ${dfmt(localDate(t[i]))} · ${hhmm(t[i])}` : dlong(d[i]))
 
   return (
@@ -465,18 +477,18 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, candles: can
             </g>
           ))}
 
-          {/* Kauf / Verkauf: Punkt auf dem Kurs, feiner Stiel, kleines Etikett «+2 × 322.56» (Kauf darunter, Verkauf darüber) */}
-          {tradeTags.map((g) => (
-            <g key={g.m.i + g.m.type} pointerEvents="none">
-              <line x1={g.cx} x2={g.cx} y1={g.cy} y2={g.by + (g.below ? -TAG_H / 2 : TAG_H / 2)} stroke={g.c} strokeOpacity={0.5} strokeWidth="1" />
-              <circle cx={g.cx} cy={g.cy} r={hi === g.m.i ? 2.75 : 2} fill={g.c} stroke="var(--color-card)" strokeWidth="1.5" />
-              <rect x={g.px - g.w / 2} y={g.by - TAG_H / 2} width={g.w} height={TAG_H} rx={3} fill="rgb(14 16 20 / 0.92)" stroke={g.c} strokeOpacity={hi === g.m.i ? 1 : 0.6} strokeWidth="1" />
-              <text x={g.px} y={g.by + 2.7} textAnchor="middle" className="num text-[8px]">
-                <tspan fill={g.c} fontWeight={650}>{g.sign}</tspan>
-                <tspan fill="var(--color-ink-2)">{g.rest}</tspan>
-              </text>
-            </g>
-          ))}
+          {/* Kauf / Verkauf im Terminal-Stil: Strich am bezahlten Preis, Pfeil zur Kerze, farbiges Etikett «K 2 @ 343.51» */}
+          {tradeTags.map((g) => {
+            const tw = Math.max(bw, 4) + 8
+            return (
+              <g key={g.m.i + g.m.type} pointerEvents="none" opacity={hi == null || hi === g.m.i ? 1 : 0.75}>
+                {g.py != null && <line x1={g.cx - tw / 2} x2={g.cx + tw / 2} y1={g.py} y2={g.py} stroke={g.c} strokeWidth="2" shapeRendering="crispEdges" />}
+                <path d={arrow(g.cx, g.ay, g.up)} fill={g.c} stroke="var(--color-card)" strokeWidth="1" />
+                <rect x={g.px - g.w / 2} y={g.by - TAG_H / 2} width={g.w} height={TAG_H} fill={g.c} shapeRendering="crispEdges" />
+                <text x={g.px} y={g.by + 3.2} textAnchor="middle" className="num text-[9px]" fontWeight={650} fill="#000">{g.text}</text>
+              </g>
+            )
+          })}
 
           {/* Endpunkt */}
           {hi == null && !cdl && (
