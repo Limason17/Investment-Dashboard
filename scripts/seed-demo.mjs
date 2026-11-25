@@ -292,8 +292,6 @@ const meta = {
     ...s,
     demo: true,
     demoNote: 'Bestand, Grenzen, Töpfe, Termine und Regeln: Stand 22.10.2026. Kursverlauf seit 22.10., Einstandspreise, Buchungen vor dem 21.10. und Dividenden sind Testwerte.',
-    usdchf: 0.795,
-    usdchfDemo: true,
     priceSource: `Testkurse bis ${END.split('-').reverse().join('.')}: Zufallspfad, verankert an den Schlusskursen vom 22.10.2026`,
     refresh: { at: TODAY, by: 'Testdaten' },
     openItems: [

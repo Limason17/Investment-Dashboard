@@ -9,7 +9,7 @@ import { Card, Chip, Delta, DemoTag, Empty, Segmented, Cur } from '@/components/
 import { alerts, capChecks, divAnnual, eventsSorted, fxOf, watchRows, yearStats } from '@/lib/calc'
 import { RANGE_LABEL, RANGE_TITLE, refreshCharts } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { dlong, dshort, hhmm, int, pct, pctPlain, sign, sUsd, usd, cur, usdRaw, money } from '@/lib/format'
+import { dlong, dshort, hhmm, pct, pctPlain, sign, sUsd, usd, cur, usdRaw, money } from '@/lib/format'
 import { BENCH, useMedia, useOnline, usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { RangeId } from '@/lib/types'
 
@@ -95,7 +95,6 @@ function Hero() {
 
   // Kacheln unter dem Chart: Tag, Woche, Monat und das Jahr; ist das Depot jünger, der ganze Zeitraum.
   const periods = useMemo(() => [...(['1T', '1W', '1M'] as RangeId[]).filter((r) => ranges.includes(r)), ranges.includes('1J') ? '1J' : 'MAX'] as RangeId[], [ranges])
-  const chf = db.market.latest?.usdchf ?? c.settings.usdchf
   // Eine Rendite für alles: Ertrag im Verhältnis zum eingesetzten Geld, passend zum Betrag in USD.
   const ret = ps ? ps.mwr[hi ?? n - 1] : null
   const chartH = wide ? (tall ? 300 : 232) : 220
@@ -146,11 +145,6 @@ function Hero() {
                 </span>
               )}
               {ps && hi != null && <span className="text-muted">bis hier, {range === '1T' ? 'seit Vortagesschluss' : PHRASE[range].replace(/^in /, 'über ')}</span>}
-              {chf && !fx && hi == null ? (
-                <span className="inline-flex items-center gap-1.5 text-muted">
-                  <span className="text-faint max-sm:hidden">·</span> ≈ {int(total * chf)} CHF {c.settings.usdchfDemo && !db.market.latest?.usdchf && <DemoTag />}
-                </span>
-              ) : null}
             </>
           )}
         </div>

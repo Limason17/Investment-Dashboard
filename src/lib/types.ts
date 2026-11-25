@@ -163,13 +163,10 @@ export interface Settings {
   rules?: { tag?: string; title: string; detail?: string }[]
   demo?: boolean
   demoNote?: string
-  usdchf?: number
-  usdchfDemo?: boolean
 }
 
 export interface Market {
   quotes?: Record<string, Quote>
-  usdchf?: number
   refreshedAt?: string
   by?: string
   status?: string

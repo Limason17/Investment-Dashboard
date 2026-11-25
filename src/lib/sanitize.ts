@@ -54,7 +54,7 @@ function settings(v: unknown): Obj | undefined {
   if (!isObj(v)) return undefined
   const s: Obj = { ...v }
   s.cash = num(s.cash) ?? 0
-  nums(s, ['withholding', 'baseCapital', 'usdchf'])
+  nums(s, ['withholding', 'baseCapital'])
   strs(s, ['cashNote', 'cashDate', 'termsAccepted', 'broker', 'priceSource', 'demoNote'])
   if ('fx' in s && s.fx !== 'CHF' && s.fx !== 'EUR') delete s.fx
   if ('categories' in s) {
@@ -196,7 +196,6 @@ export function sanitizeDb(raw: unknown): DB {
     else {
       const m: Obj = { ...market.latest }
       m.quotes = coll(m.quotes, (e) => (num(e.close) == null ? null : { ...e, close: num(e.close), prev: num(e.prev) }))
-      nums(m, ['usdchf'])
       if ('failures' in m && !Array.isArray(m.failures)) delete m.failures
       market.latest = m
     }
