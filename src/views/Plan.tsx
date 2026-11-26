@@ -3,11 +3,11 @@ import { useMemo, useState } from 'react'
 import { EventItem, EventStrip } from '@/components/blocks'
 import { Allocation } from '@/components/charts/Allocation'
 import { Meter } from '@/components/charts/Small'
-import { Card, Empty, Cur } from '@/components/ui'
+import { Card, Empty } from '@/components/ui'
 import { EventSheet, PlanSheet, PotSheet } from '@/features/EditSheets'
 import { eventsSorted } from '@/lib/calc'
 import { useDepot } from '@/lib/context'
-import { pctPlain, usd, cur, money } from '@/lib/format'
+import { usd } from '@/lib/format'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
 import type { DepotEvent, WithId } from '@/lib/types'
@@ -40,50 +40,54 @@ export function Plan() {
   return (
     <div className="grid grid-cols-12 gap-3 sm:gap-4">
       <div className="col-span-12 grid content-start gap-3 sm:gap-4 xl:col-span-7">
-      <Card title="Allokation" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(true)}><Pencil /> Ziele</button>} sub={c.settings.cashExcluded ? 'Ist gegen Plan, in % der Wertpapiere' : c.settings.cashPartial ? 'Ist gegen Plan, in % vom Gesamtwert (Cash nur in einem Teil der Portfolios erfasst)' : 'in % vom Gesamtwert'}>
+      <Card title="Allokation" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(true)}><Pencil /> Ziele</button>} sub={c.settings.cashExcluded ? 'in % der Wertpapiere' : c.settings.cashPartial ? 'Cash nur teilweise erfasst' : undefined}>
         <Allocation c={c} />
       </Card>
-      <Card title="Cash-Töpfe" action={<button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button>}>
+      <Card title="Cash-Töpfe" action={<button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button>} bodyClassName="!pt-1">
         {pots.length === 0 ? (
-          <Empty>Keine Töpfe. Ein Topf ist ein Budget für geplante Käufe; Käufe daraus zählen automatisch.</Empty>
+          <Empty>Ein Topf ist ein Budget für geplante Käufe. Käufe daraus zählen automatisch.</Empty>
         ) : (
           <>
-            <div className="rounded-xl border border-line bg-white/[0.02] p-4">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <div className="label">Frei in Töpfen</div>
-                  <div className="mt-1 text-[26px] font-semibold leading-8 tracking-[-0.03em]">{usd(budget - used)} <span className="text-[13px] font-medium text-muted">{cur()}</span></div>
+            {/* Übersicht als Liste wie im Journal: Name links, Zahl rechts; darunter ein Balken für alle Töpfe zusammen */}
+            <div className="grid">
+              {([
+                ['Frei', budget - used, true],
+                ['Eingesetzt', used, false],
+                ['Budget', budget, false],
+                ...(c.settings.cashExcluded ? [] : [['Cash ohne Topf', c.cash - (budget - used), false] as const]),
+              ] as const).map(([label, v, strong]) => (
+                <div key={label} className="flex items-baseline justify-between gap-4 border-b border-line py-[8px]">
+                  <span className="text-[13px] text-ink-2">{label}</span>
+                  <span className={`num text-right ${strong ? 'text-[16px] font-semibold' : 'text-[14px] font-medium'} ${v < -0.005 ? 'text-down' : ''}`}>{usd(Math.abs(v))}</span>
                 </div>
-                <div className="text-right text-[12.5px] text-muted">
-                  <div><span className="num text-ink-2">{usd(used)}</span> eingesetzt von <span className="num text-ink-2">{money(budget)}</span></div>
-                  <div hidden={c.settings.cashExcluded}>Cash laut Konto <span className="num text-ink-2">{money(c.cash)}</span>, davon <span className="num text-ink-2">{money(c.cash - (budget - used))}</span> ohne Topf</div>
-                </div>
-              </div>
-              {/* Ein Abschnitt je Topf, Breite = Budget, gefüllt = eingesetzt */}
-              <div className="mt-3.5 flex h-2 gap-[3px]" role="img" aria-label={`Töpfe nach Budget, gefüllt ist der eingesetzte Teil: ${pctPlain(budget ? used / budget : 0, 0)} eingesetzt`}>
-                {pots.filter((p) => p.budget > 0).map((p) => (
-                  <div key={p.id} title={`${p.label}: ${usd(p.used || 0)} von ${money(p.budget)} eingesetzt`} className="relative min-w-[3px] basis-0 overflow-hidden rounded-full bg-white/[0.08]" style={{ flexGrow: p.budget }}>
-                    <div className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${Math.min((p.used || 0) / p.budget, 1) * 100}%` }} />
-                  </div>
-                ))}
-              </div>
+              ))}
             </div>
-            <ul className="mt-2 divide-y divide-white/[0.045]">
+            <Meter className="mt-3" value={budget ? used / budget : 0} height={4} />
+
+            {/* Je Topf eine Zeile: Name und Notiz links, frei rechts; ist etwas eingesetzt, darunter Balken und «eingesetzt / Budget» */}
+            <div className="mt-5 flex justify-between border-b border-line pb-1.5 text-[11.5px] text-faint">
+              <span>Topf</span>
+              <span>frei</span>
+            </div>
+            <ul>
               {pots.map((p) => {
                 const rest = (p.budget || 0) - (p.used || 0)
                 const u = p.budget ? (p.used || 0) / p.budget : 0
                 return (
-                  <li key={p.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2 py-3.5">
-                    <div className="min-w-0">
-                      <button type="button" title="Topf bearbeiten" className="text-left text-[13.5px] font-medium underline-offset-4 break-words hover:underline" onClick={() => setPot({ id: p.id, n: Date.now() })}>{p.label}</button>
-                      {p.note && <div className="mt-0.5 text-[12.5px] text-muted">{p.note}</div>}
-                    </div>
-                    {/* Unberührter Topf: nur der Betrag. «von …», Anteil und Balken erst, wenn etwas eingesetzt ist. */}
-                    <div className="text-right leading-tight">
-                      <div className="num text-[13.5px] font-medium">{usd(rest)}<Cur /> <span className="font-normal text-muted">frei</span></div>
-                      {u > 0 && <div className="num mt-0.5 text-[12px] text-muted">von {money(p.budget)}<span className="max-[420px]:block"><span className="max-[420px]:hidden"> · </span>{pctPlain(u, 0)} eingesetzt</span></div>}
-                    </div>
-                    {u > 0 && <Meter className="col-span-2" value={u} height={5} />}
+                  <li key={p.id} className="border-b border-white/[0.045] last:border-b-0">
+                    <button type="button" title="Topf bearbeiten" onClick={() => setPot({ id: p.id, n: Date.now() })} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 gap-y-1.5 py-3 text-left transition-colors hover:bg-white/[0.03]">
+                      <span className="min-w-0">
+                        <span className="block break-words text-[13.5px] font-medium">{p.label}</span>
+                        {p.note && <span className="mt-0.5 block text-[12px] text-muted">{p.note}</span>}
+                      </span>
+                      <span className={`num text-[14px] font-semibold ${rest < -0.005 ? 'text-down' : ''}`}>{usd(Math.abs(rest))}</span>
+                      {u > 0 && (
+                        <span className="col-span-2 flex items-center gap-3">
+                          <Meter className="flex-1" value={u} height={3} />
+                          <span className="num whitespace-nowrap text-[11.5px] text-muted">{usd(p.used || 0)} / {usd(p.budget)}</span>
+                        </span>
+                      )}
+                    </button>
                   </li>
                 )
               })}
