@@ -1,12 +1,11 @@
 import { Pencil, Plus } from 'lucide-react'
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useMemo, useState } from 'react'
 import { EventItem, EventStrip } from '@/components/blocks'
 import { Allocation } from '@/components/charts/Allocation'
-import { Card, Empty, Segmented } from '@/components/ui'
+import { Card, Empty } from '@/components/ui'
 import { EventSheet, PlanSheet, PotSheet } from '@/features/EditSheets'
 import { eventsSorted } from '@/lib/calc'
 import { useDepot } from '@/lib/context'
-import { useStored } from '@/lib/hooks'
 import { usd } from '@/lib/format'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -29,8 +28,6 @@ export function Plan() {
   const [planOpen, setPlanOpen] = useState(false)
   const [allOverdue, setAllOverdue] = useState(false)
   const [pot, setPot] = useState<{ id: string | null; n: number } | null>(null)
-  // VORLÄUFIG: Summenzeile der Cash-Töpfe in drei Varianten
-  const [sumView, setSumView] = useStored<'a' | 'b' | 'c'>('depot.toepfe.summe', 'a', ['a', 'b', 'c'])
   const [ev, setEv] = useState<{ id: string | null; n: number } | null>(null)
   const editEvent = (e: WithId<DepotEvent>) => setEv({ id: e.id, n: Date.now() })
 
@@ -45,7 +42,7 @@ export function Plan() {
       <Card title="Allokation" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(true)}><Pencil /> Ziele</button>} sub={c.settings.cashExcluded ? 'in % der Wertpapiere' : c.settings.cashPartial ? 'Cash nur teilweise erfasst' : undefined}>
         <Allocation c={c} />
       </Card>
-      <Card title="Cash-Töpfe" flush action={<span className="flex items-center gap-2">{pots.length > 0 && <Segmented label="Variante Summe" value={sumView} onChange={setSumView} options={[{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }, { value: 'c', label: 'C' }]} />}<button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button></span>}>
+      <Card title="Cash-Töpfe" flush action={<button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button>}>
         {pots.length === 0 ? (
           <Empty>Ein Topf ist ein Budget für geplante Käufe. Käufe daraus zählen automatisch.</Empty>
         ) : (
@@ -70,21 +67,13 @@ export function Plan() {
                     </tr>
                   )
                 })}
-                {/* VORLÄUFIG: drei Varianten der Summenzeile (a feine Linie, b deutlichere Linie und fett, c Abstand und Linie) */}
-                {sumView === 'c' && <tr aria-hidden><td colSpan={4} className="!h-3 !border-0 !p-0" /></tr>}
-                {(() => {
-                  const st: CSSProperties = sumView === 'b'
-                    ? { borderTop: '1px solid var(--color-line-2)', fontWeight: 650 }
-                    : { borderTop: '1px solid var(--color-line)', fontWeight: 550 }
-                  return (
-                    <tr>
-                      <td style={st}>Summe</td>
-                      <td className="r num" style={st}>{usd(budget)}</td>
-                      <td className="r num" style={st}>{usd(used)}</td>
-                      <td className="r num" style={st}>{usd(budget - used)}</td>
-                    </tr>
-                  )
-                })()}
+                {/* Summe: feine Linie darüber, gleich gross wie die Topfnamen */}
+                <tr className="[&>td]:border-t [&>td]:border-t-line [&>td]:font-[550]">
+                  <td>Summe</td>
+                  <td className="r num">{usd(budget)}</td>
+                  <td className="r num">{usd(used)}</td>
+                  <td className="r num">{usd(budget - used)}</td>
+                </tr>
               </tbody>
             </table>
           </div>
