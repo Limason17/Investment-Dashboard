@@ -1,5 +1,5 @@
 import { Pencil, Plus } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { EventItem, EventStrip } from '@/components/blocks'
 import { Allocation } from '@/components/charts/Allocation'
 import { Card, Empty, Segmented } from '@/components/ui'
@@ -29,8 +29,8 @@ export function Plan() {
   const [planOpen, setPlanOpen] = useState(false)
   const [allOverdue, setAllOverdue] = useState(false)
   const [pot, setPot] = useState<{ id: string | null; n: number } | null>(null)
-  // VORLÄUFIG: zwei Darstellungen der Cash-Töpfe zum Vergleichen (a Tabelle, b Balken je Topf)
-  const [potView, setPotView] = useStored<'a' | 'b'>('depot.toepfe.ansicht', 'a', ['a', 'b'])
+  // VORLÄUFIG: Summenzeile der Cash-Töpfe in drei Varianten
+  const [sumView, setSumView] = useStored<'a' | 'b' | 'c'>('depot.toepfe.summe', 'a', ['a', 'b', 'c'])
   const [ev, setEv] = useState<{ id: string | null; n: number } | null>(null)
   const editEvent = (e: WithId<DepotEvent>) => setEv({ id: e.id, n: Date.now() })
 
@@ -45,13 +45,13 @@ export function Plan() {
       <Card title="Allokation" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(true)}><Pencil /> Ziele</button>} sub={c.settings.cashExcluded ? 'in % der Wertpapiere' : c.settings.cashPartial ? 'Cash nur teilweise erfasst' : undefined}>
         <Allocation c={c} />
       </Card>
-      <Card title="Cash-Töpfe" flush={potView === 'a'} action={<span className="flex items-center gap-2"><Segmented label="Variante" value={potView} onChange={setPotView} options={[{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }]} /><button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button></span>}>
+      <Card title="Cash-Töpfe" flush action={<span className="flex items-center gap-2">{pots.length > 0 && <Segmented label="Variante Summe" value={sumView} onChange={setSumView} options={[{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }, { value: 'c', label: 'C' }]} />}<button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button></span>}>
         {pots.length === 0 ? (
           <Empty>Ein Topf ist ein Budget für geplante Käufe. Käufe daraus zählen automatisch.</Empty>
-        ) : potView === 'a' ? (
-          // A: Tabelle wie bei den Positionen. Je Topf Budget, eingesetzt, frei; unten die Summe.
+        ) : (
+          // Tabelle wie bei den Positionen: je Topf Budget, eingesetzt, frei; unten die Summe in gleicher Schriftgrösse wie die Namen
           <div className="overflow-x-auto">
-            <table className="tbl">
+            <table className="tbl text-[13.5px]">
               <thead>
                 <tr><th>Topf</th><th className="r">Budget</th><th className="r">Eingesetzt</th><th className="r">Frei</th></tr>
               </thead>
@@ -70,41 +70,23 @@ export function Plan() {
                     </tr>
                   )
                 })}
-                <tr className="row-group">
-                  <td>Summe{!c.settings.cashExcluded && <span className="ml-2 font-normal text-muted">Cash ohne Topf {usd(c.cash - (budget - used))}</span>}</td>
-                  <td className="r num">{usd(budget)}</td>
-                  <td className="r num">{usd(used)}</td>
-                  <td className="r num">{usd(budget - used)}</td>
-                </tr>
+                {/* VORLÄUFIG: drei Varianten der Summenzeile (a feine Linie, b deutlichere Linie und fett, c Abstand und Linie) */}
+                {sumView === 'c' && <tr aria-hidden><td colSpan={4} className="!h-3 !border-0 !p-0" /></tr>}
+                {(() => {
+                  const st: CSSProperties = sumView === 'b'
+                    ? { borderTop: '1px solid var(--color-line-2)', fontWeight: 650 }
+                    : { borderTop: '1px solid var(--color-line)', fontWeight: 550 }
+                  return (
+                    <tr>
+                      <td style={st}>Summe</td>
+                      <td className="r num" style={st}>{usd(budget)}</td>
+                      <td className="r num" style={st}>{usd(used)}</td>
+                      <td className="r num" style={st}>{usd(budget - used)}</td>
+                    </tr>
+                  )
+                })()}
               </tbody>
             </table>
-          </div>
-        ) : (
-          // B: Ein Balken je Topf, Länge nach Budget (grösster Topf = volle Breite), violett der eingesetzte Teil.
-          <div>
-            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-[12.5px] text-muted">
-              <span><span className="num text-[18px] font-semibold text-ink">{usd(budget - used)}</span> frei</span>
-              <span className="num">{usd(used)} von {usd(budget)} eingesetzt{!c.settings.cashExcluded && <> · Cash ohne Topf {usd(c.cash - (budget - used))}</>}</span>
-            </div>
-            <ul className="grid gap-2.5">
-              {pots.map((p) => {
-                const rest = (p.budget || 0) - (p.used || 0)
-                const maxB = Math.max(...pots.map((x) => x.budget || 0), 1)
-                return (
-                  <li key={p.id}>
-                    <button type="button" title="Topf bearbeiten" onClick={() => setPot({ id: p.id, n: Date.now() })} className="block w-full text-left">
-                      <span className="flex items-baseline justify-between gap-3 text-[12.5px]">
-                        <span className="min-w-0 truncate font-medium text-ink">{p.label}</span>
-                        <span className="num whitespace-nowrap text-ink">{usd(Math.abs(rest))}<span className="ml-1 text-muted">frei</span></span>
-                      </span>
-                      <span className="mt-1 block h-2 bg-white/[0.06]" style={{ width: `${Math.max(4, ((p.budget || 0) / maxB) * 100)}%` }}>
-                        <span className="block h-full bg-accent" style={{ width: `${Math.min(1, p.budget ? (p.used || 0) / p.budget : 0) * 100}%` }} />
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
           </div>
         )}
       </Card>

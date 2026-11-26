@@ -430,6 +430,8 @@
   .field {
     display: grid;
     gap: 6px;
+    /* Felder nebeneinander: Eingabe immer direkt unter dem Namen, auch wenn das Nachbarfeld einen Hinweis hat */
+    align-content: start;
   }
   .field > label {
     font-size: 12px;
