@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui'
 import { catOf, categoriesOf, MAX_CATEGORIES, newCategoryId, PALETTE } from '@/lib/buckets'
 import { isCap, targetOf } from '@/lib/calc'
 import { useDepot } from '@/lib/context'
-import { parseNum, pctPlain, r2, today, uid, usdRaw } from '@/lib/format'
+import { parseNum, pctPlain, r2, today, uid, pxRaw } from '@/lib/format'
 import { normTicker } from '@/lib/ticker'
 import { lookupTicker, mutate, type Op } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -333,7 +333,7 @@ export function WatchAddSheet({ open, onClose }: { open: boolean; onClose: () =>
       {tk && db.watchlist[tk] && <p className="text-[12.5px] font-medium text-warn">{tk} ist schon auf der Watchlist.</p>}
       {found?.found && (
         <p className="text-[12.5px] leading-[1.55] text-ink-2">
-          Gefunden: <b className="font-medium text-ink">{found.name || tk}</b>{found.price != null && found.price > 0 && <>, Kurs <span className="num">{usdRaw(found.price)}</span> USD</>}.
+          Gefunden: <b className="font-medium text-ink">{found.name || tk}</b>{found.price != null && found.price > 0 && <>, Kurs <span className="num">{pxRaw(found.price)}</span> USD</>}.
           {found.price != null && found.price > 0 && lim != null && lim > 0 && <> Die Grenze liegt <span className="num">{pctPlain(Math.abs(lim / found.price - 1), 1)}</span> {lim <= found.price ? 'unter' : 'über'} dem Kurs{lim > found.price ? ' (sofort erreicht)' : ''}.</>}
         </p>
       )}

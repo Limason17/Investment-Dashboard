@@ -3,13 +3,13 @@ import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { ChartStyleToggle, LimitTrack } from '@/components/charts/Small'
 import { TimeChart, TradeGlyph, type Marker, type RefLine, type VLine } from '@/components/charts/TimeChart'
 import { Sheet } from '@/components/Sheet'
-import { Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Switch, Cur } from '@/components/ui'
+import { Chip, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Stat, StatGroup, Switch, Cur } from '@/components/ui'
 import { bucketOf, catOf, HOLDING_BUCKETS } from '@/lib/buckets'
 import { quote, quoteLabel, withIds, wlState, wht } from '@/lib/calc'
 import { sliceChart, toCandles, UNIT_TEXT, weekOf } from '@/lib/candles'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE, refreshCharts, useChart, useChartStyle } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { dfmt, dlong, hhmm, MONTHS, parseNum, pct, pctPlain, qty, usd, cur, money } from '@/lib/format'
+import { dfmt, dlong, hhmm, MONTHS, parseNum, pct, pctPlain, qty, usd, cur, money, pxMoney, px as fmtPx } from '@/lib/format'
 import { withNow } from '@/lib/history'
 import { useStored } from '@/lib/hooks'
 import { useMeasure } from '@/lib/useMeasure'
@@ -161,7 +161,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg, hideChange }: { t: s
                       <span className="inline-flex items-center gap-1.5 font-medium text-ink"><TradeGlyph type={x.type as Marker['type']} />{txLabel(x)}</span>
                       <span className="num text-muted">{dfmt(x.date)}</span>
                     </div>
-                    <div className="num mt-0.5 text-ink-2">{qty(x.shares)} Stk. × {money(x.price)}</div>
+                    <div className="num mt-0.5 text-ink-2">{qty(x.shares)} Stk. × {pxMoney(x.price)}</div>
                     {view.offTx.has(x.id) && <div className="mt-1 max-w-[220px] whitespace-normal text-warn">Preis lag nicht in der Kursspanne (Tief bis Hoch). Buchung prüfen.</div>}
                   </div>
                 ))}
@@ -197,12 +197,8 @@ const NO_REFS: RefLine[] = []
 const NO_TXS: WithId<Tx>[] = []
 const NO_MARKERS: Marker[] = []
 
-const Fact = ({ label, children }: { label: ReactNode; children: ReactNode }) => (
-  <div className="min-w-0 rounded-xl border border-line bg-white/[0.02] px-3 py-2 sm:px-3.5 sm:py-3">
-    <div className="label flex items-center gap-1.5 max-sm:text-[11.5px]">{label}</div>
-    <div className="num mt-0.5 truncate text-[14px] font-medium tracking-[-0.01em] sm:mt-1 sm:text-[15px]">{children}</div>
-  </div>
-)
+/** Kennzahl als Zeile wie im Journal: Name links, Zahl rechts (innerhalb von <StatGroup>) */
+const Fact = ({ label, children }: { label: ReactNode; children: ReactNode }) => <Stat label={<span className="inline-flex items-center gap-1.5">{label}</span>} value={children} />
 const Block = ({ title, children }: { title: string; children: ReactNode }) => (
   <div>
     <div className="label mb-1.5">{title}</div>
@@ -257,7 +253,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
     return `${ticker} gespeichert.`
   }, () => setEdit(false))
 
-  const refs: RefLine[] = r?.avg != null ? [{ y: r.avg, name: 'Ø Einstand', label: `Ø Einstand ${money(r.avg)}`, color: 'var(--color-ref)' }] : []
+  const refs: RefLine[] = r?.avg != null ? [{ y: r.avg, name: 'Ø Einstand', label: `Ø Einstand ${pxMoney(r.avg)}`, color: 'var(--color-ref)' }] : []
   const yearly = p && q?.divAnnual ? p.shares * q.divAnnual * (1 - wht(db)) : null
   const sales = txs.filter((x) => x.type === 'verkauf' && x.realized != null)
   const realized = sales.length ? sales.reduce((s, x) => s + (x.realized ?? 0), 0) : null
@@ -289,7 +285,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
             <div>
               <div className="label">{quoteLabel(q)}</div>
               <div className="mt-0.5 flex items-baseline gap-2.5">
-                <span className="text-[30px] font-semibold leading-9 tracking-[-0.03em]">{usd(q?.close)}<Cur /></span>
+                <span className="text-[30px] font-semibold leading-9 tracking-[-0.03em]">{fmtPx(q?.close)}<Cur /></span>
                 <Delta value={r?.chg} digits={2} className="text-[13.5px] font-medium" />
               </div>
             </div>
@@ -307,15 +303,15 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
 
           <PriceChart t={ticker!} refs={refs} txs={txs} avg={r?.avg} hideChange />
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
+          <StatGroup>
             <Fact label="Stück">{qty(p.shares)}</Fact>
             <Fact label="Depotanteil">{pctPlain(r?.w)}</Fact>
-            <Fact label={<>Ø Einstand {p.costDemo && <DemoTag />}</>}>{money(r?.avg)}</Fact>
-            <Fact label="Gewinn/Verlust">{r?.pl != null ? <><Delta value={r.pl} kind="usd" icon={false} /><Cur />{r.plPct != null && <> <span className="text-faint">·</span> <Delta value={r.plPct} digits={1} icon={false} /></>}</> : <span className="text-muted">offen</span>}</Fact>
+            <Fact label={<>Ø Einstand {p.costDemo && <DemoTag />}</>}>{pxMoney(r?.avg)}</Fact>
+            <Fact label="Gewinn/Verlust">{r?.pl != null ? <><Delta value={r.pl} kind="usd" icon={false} /><Cur />{r.plPct != null && <> <span className="text-faint">·</span> <Delta value={r.plPct} digits={1} icon={false} /></>}</> : '–'}</Fact>
             {/* Bereits realisiert: Gewinn oder Verlust aller Verkäufe dieses Titels */}
-            <Fact label="Realisiert">{realized != null ? <><Delta value={realized} kind="usd" icon={false} /><Cur /></> : <span className="text-muted">keine Verkäufe</span>}</Fact>
-            <Fact label="Dividende netto pro Jahr">{yearly != null ? money(yearly) : <span className="text-muted">keine</span>}</Fact>
-          </div>
+            <Fact label="Realisiert">{realized != null ? <><Delta value={realized} kind="usd" icon={false} /><Cur /></> : '–'}</Fact>
+            <Fact label="Dividende netto pro Jahr">{yearly != null ? money(yearly) : '–'}</Fact>
+          </StatGroup>
 
           {p.status && <Block title="Regel">{p.status}</Block>}
           {p.note && <Block title="These & Notizen"><span className="whitespace-pre-wrap">{p.note}</span></Block>}
@@ -327,11 +323,14 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
             ) : (
               <ul className="divide-y divide-white/[0.045] rounded-xl border border-line">
                 {txs.map((x) => (
-                  <li key={x.id} className="grid grid-cols-[74px_70px_minmax(0,1fr)_auto] items-center gap-2 px-3.5 py-2.5 text-[12.5px]">
-                    <span className="num text-muted">{dfmt(x.date)}</span>
-                    <span className="font-medium">{txLabel(x)}</span>
-                    <span className="num text-ink-2">{qty(x.shares)} × {money(x.price)} {x.demo && <DemoTag className="ml-1" />}</span>
-                    <span className="num text-ink">{usd(Math.abs(x.cashDelta ?? 0))}<Cur /></span>
+                  // Handy: Datum und Art oben, Stück × Preis darunter, Betrag rechts; ab sm in einer Zeile. So passen auch sehr grosse Beträge.
+                  <li key={x.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-3.5 py-2.5 text-[12.5px] sm:grid-cols-[74px_70px_minmax(0,1fr)_auto] sm:gap-2">
+                    <span className="flex min-w-0 items-baseline gap-2 sm:contents">
+                      <span className="num text-muted">{dfmt(x.date)}</span>
+                      <span className="font-medium">{txLabel(x)}</span>
+                    </span>
+                    <span className="num row-start-2 min-w-0 truncate text-ink-2 sm:row-start-auto">{qty(x.shares)} × {pxMoney(x.price)} {x.demo && <DemoTag className="ml-1" />}</span>
+                    <span className="num col-start-2 row-span-2 row-start-1 whitespace-nowrap text-right text-ink sm:col-start-auto sm:row-span-1 sm:row-start-auto">{usd(Math.abs(x.cashDelta ?? 0))}<Cur /></span>
                   </li>
                 ))}
               </ul>
@@ -390,8 +389,8 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
   }, () => setEdit(false))
 
   const refs: RefLine[] = []
-  if (w?.limit) refs.push({ y: w.limit, name: 'Grenze', label: `Grenze ${money(w.limit)}`, color: 'var(--color-warn)' })
-  if (w?.limitCautious) refs.push({ y: w.limitCautious, name: 'vorsichtig', label: `vorsichtig ${money(w.limitCautious)}`, color: 'var(--color-bench)' })
+  if (w?.limit) refs.push({ y: w.limit, name: 'Grenze', label: `Grenze ${pxMoney(w.limit)}`, color: 'var(--color-warn)' })
+  if (w?.limitCautious) refs.push({ y: w.limitCautious, name: 'vorsichtig', label: `vorsichtig ${pxMoney(w.limitCautious)}`, color: 'var(--color-bench)' })
 
   return (
     <Sheet
@@ -420,7 +419,7 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
             <div>
               <div className="label">{quoteLabel(q, w.priceDate)}</div>
               <div className="mt-0.5 flex items-baseline gap-2.5">
-                <span className="text-[30px] font-semibold leading-9 tracking-[-0.03em]">{usd(px)}<Cur /></span>
+                <span className="text-[30px] font-semibold leading-9 tracking-[-0.03em]">{fmtPx(px)}<Cur /></span>
                 {q?.prev ? <Delta value={q.close / q.prev - 1} digits={2} className="text-[13.5px] font-medium" /> : null}
               </div>
             </div>
@@ -436,12 +435,12 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
 
           <PriceChart t={ticker!} refs={refs} />
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
-            <Fact label="Grenze">{w.limit ? money(w.limit) : '–'}</Fact>
+          <StatGroup>
+            <Fact label="Grenze">{w.limit ? pxMoney(w.limit) : '–'}</Fact>
             {/* Ohne vorsichtige Grenze keine leere Kachel mit «–» */}
-            {w.limitCautious != null && <Fact label="Vorsichtige Grenze">{money(w.limitCautious)}</Fact>}
+            {w.limitCautious != null && <Fact label="Vorsichtige Grenze">{pxMoney(w.limitCautious)}</Fact>}
             <Fact label="Bis zur Grenze">{px != null && w.limit ? (px <= w.limit ? <span className="text-up">erreicht</span> : money(px - w.limit)) : '–'}</Fact>
-          </div>
+          </StatGroup>
 
           {w.condition && (
             <Block title="Bedingung">

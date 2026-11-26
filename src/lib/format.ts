@@ -1,6 +1,10 @@
 const nf2 = new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const nf0 = new Intl.NumberFormat('de-CH', { maximumFractionDigits: 0 })
 const nf4 = new Intl.NumberFormat('de-CH', { maximumFractionDigits: 4 })
+const nf8 = new Intl.NumberFormat('de-CH', { maximumFractionDigits: 8 })
+/** Kurse unter 1 (z. B. Penny-Aktien): bis 4 Stellen, damit 0.0042 nicht zu «0.00» wird */
+const nfSmall = new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
+const price2 = (x: number) => (x !== 0 && Math.abs(x) < 1 ? nfSmall.format(rd(x, 4)) : nf2.format(rd(x, 2)))
 
 const MINUS = '−'
 const bad = (v: number | null | undefined): v is null | undefined => v == null || !Number.isFinite(v)
@@ -27,6 +31,12 @@ export const curRate = () => fxRate
 
 /** Betrag mit zwei Nachkommastellen in der Anzeigewährung, Schweizer Tausendertrennung. */
 export const usd = (v: number | null | undefined) => (bad(v) ? '–' : nf2.format(rd(v * fxRate, 2)).replace('-', MINUS))
+/** Kurs je Stück in der Anzeigewährung: wie usd(), unter 1 aber bis zu vier Stellen (0.0042) */
+export const px = (v: number | null | undefined) => (bad(v) ? '–' : price2(v * fxRate).replace('-', MINUS))
+/** Kurs je Stück in USD ohne Umrechnung, unter 1 bis zu vier Stellen */
+export const pxRaw = (v: number | null | undefined) => (bad(v) ? '–' : price2(v).replace('-', MINUS))
+/** Kurs je Stück mit Währung, z. B. «0.0042 USD» */
+export const pxMoney = (v: number | null | undefined) => (bad(v) ? '–' : px(v) + ' ' + fxCode)
 /** Betrag in USD, ohne Umrechnung (Eingaben) */
 export const usdRaw = (v: number | null | undefined) => (bad(v) ? '–' : nf2.format(rd(v, 2)).replace('-', MINUS))
 /** Betrag mit Währung, z. B. «1'250.50 USD» (für Text und Beschriftungen) */
@@ -34,7 +44,7 @@ export const money = (v: number | null | undefined) => (bad(v) ? '–' : usd(v) 
 /** Ganzzahliger Betrag in der Anzeigewährung */
 export const cur0 = (v: number | null | undefined) => (bad(v) ? '–' : nf0.format(rd(v * fxRate, 0)).replace('-', MINUS))
 export const int = (v: number | null | undefined) => (bad(v) ? '–' : nf0.format(rd(v, 0)).replace('-', MINUS))
-export const qty = (v: number | null | undefined) => (bad(v) ? '–' : nf4.format(v))
+export const qty = (v: number | null | undefined) => (bad(v) ? '–' : v !== 0 && Math.abs(v) < 0.01 ? nf8.format(v) : nf4.format(v))
 
 /** Betrag mit Vorzeichen, in der Anzeigewährung. */
 export const sUsd = (v: number | null | undefined) => (bad(v) ? '–' : signed(rd(v * fxRate, 2), nf2))
@@ -112,7 +122,12 @@ export const uid = () => Date.now().toString(36) + Math.random().toString(36).sl
 /** Achsenbeschriftung: unter 10 000 ausgeschrieben, darüber kompakt, ein Stil je Achse. */
 export const axisFormatter = (ticks: number[]) => {
   const max = Math.max(...ticks.map(Math.abs))
+  // Abstand der Striche bestimmt die Nachkommastellen: 0.0042 / 0.0044 bleiben unterscheidbar
+  const step = ticks.length > 1 ? Math.min(...ticks.slice(1).map((t, i) => Math.abs(t - ticks[i])).filter((x) => x > 0)) : max || 1
+  const decFor = (s: number) => Math.max(0, Math.min(6, Math.ceil(-Math.log10(s) - 1e-9)))
+  if (max >= 1e9) return (v: number) => (v / 1e9).toFixed(decFor(step / 1e9)) + 'B'
+  if (max >= 1e6) return (v: number) => (v / 1e6).toFixed(decFor(step / 1e6)) + 'M'
   if (max >= 10000) return (v: number) => (v / 1000).toFixed(ticks.some((t) => t % 1000 !== 0) ? 1 : 0) + 'K'
-  const dec = ticks.some((t) => Math.abs(t % 1) > 1e-9) ? (max < 10 ? 2 : 1) : 0
+  const dec = ticks.some((t) => Math.abs(t % 1) > 1e-9) ? Math.max(max < 10 ? 2 : 1, decFor(step)) : 0
   return (v: number) => (dec ? v.toFixed(dec) : nf0.format(v))
 }

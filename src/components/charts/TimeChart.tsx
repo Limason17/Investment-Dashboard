@@ -2,7 +2,7 @@ import { scaleLinear } from 'd3-scale'
 import { area as d3area, curveMonotoneX, curveStepAfter, line as d3line } from 'd3-shape'
 import { motion, useReducedMotion } from 'motion/react'
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
-import { axisFormatter, dfmt, dlong, dshort, hhmm, MONTHS, usd, weekday, curRate, usdRaw, cur, qty } from '@/lib/format'
+import { axisFormatter, dfmt, dlong, dshort, hhmm, MONTHS, usd, weekday, curRate, usdRaw, pxRaw, cur, qty } from '@/lib/format'
 import { useMeasure } from '@/lib/useMeasure'
 import { Empty } from '../ui'
 
@@ -47,7 +47,7 @@ export interface Marker {
 const TAG_H = 13, ARROW_W = 7
 /** Text einer Buchung: Stück × Preis (in Anzeigewährung), «!» wenn der Preis ausserhalb der Kursspanne lag */
 const tradeText = (m: Marker, k: number) =>
-  [m.shares != null ? qty(m.shares) : '', m.price != null && m.price > 0 ? usdRaw(m.price * k) : ''].filter(Boolean).join(' × ') + (m.off ? ' !' : '')
+  [m.shares != null ? qty(m.shares) : '', m.price != null && m.price > 0 ? pxRaw(m.price * k) : ''].filter(Boolean).join(' × ') + (m.off ? ' !' : '')
 
 /** Symbol für Kauf (grüner Pfeil nach rechts) und Verkauf (roter Pfeil nach links) in Legende und Tooltip */
 export function TradeGlyph({ type, size = 10 }: { type: Marker['type']; size?: number }) {
@@ -181,7 +181,7 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, candles: can
   const candles = useMemo(() => (!candlesIn || k === 1 ? candlesIn : { o: candlesIn.o.map((v) => v * k), h: candlesIn.h.map((v) => v * k), l: candlesIn.l.map((v) => v * k) }), [candlesIn, k])
   const baseline = baselineIn != null ? baselineIn * k : undefined
   const split = typeof splitIn === 'number' ? splitIn * k : splitIn
-  const format = formatIn === usd ? (v: number) => `${usdRaw(v)} ${cur()}` : formatIn
+  const format = formatIn === usd ? (v: number) => `${pxRaw(v)} ${cur()}` : formatIn
   const [ref, W] = useMeasure<HTMLDivElement>()
   const [hi, setHi] = useState<number | null>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -287,7 +287,8 @@ export function TimeChart({ t, d, kind = 'daily', series: seriesIn, candles: can
   // Schwellen beschriften wir nicht im Chart, sondern mit einer kleinen Marke auf der Werteachse.
   const refTags: { r: RefLine; ty: number; text: string; w: number }[] = []
   for (const r of sortedRefs) {
-    const text = r.y >= 1000 ? usdRaw(r.y).replace(/\.\d+$/, '') : usdRaw(r.y)
+    // Kurz genug für die Achse: ab 100'000 in K bzw. M, ab 1000 ohne Rappen, darunter genau (auch 0.0042)
+    const text = r.y >= 1e6 ? (r.y / 1e6).toFixed(2) + 'M' : r.y >= 1e5 ? Math.round(r.y / 1000) + 'K' : r.y >= 1000 ? usdRaw(r.y).replace(/\.\d+$/, '') : pxRaw(r.y)
     let ty = y(r.y)
     const prev = refTags[refTags.length - 1]
     if (prev && ty - prev.ty < 16) ty = prev.ty + 16

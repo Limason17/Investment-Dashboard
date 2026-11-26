@@ -5,7 +5,7 @@ import { MonthBars, type PeriodPair } from '@/components/charts/MonthBars'
 import { Card, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Stat, StatGroup } from '@/components/ui'
 import { withIds, yearStats } from '@/lib/calc'
 import { useDepot, useNav, type EntryType } from '@/lib/context'
-import { dfmt, qty, usd, weekday, cur, cur0, money } from '@/lib/format'
+import { dfmt, qty, usd, weekday, cur, cur0, px, pxMoney } from '@/lib/format'
 import { periodsSince, UNIT_PLURAL } from '@/lib/periods'
 import { txLabel } from '@/lib/labels'
 import { mutate } from '@/lib/store'
@@ -110,7 +110,7 @@ export function Journal() {
                   {/* Datum und Stück × Preis brechen als Ganzes um statt abgeschnitten zu werden; nur die Notiz wird gekürzt */}
                   <div className="num mt-1 text-[12px] text-muted">
                     <span className="whitespace-nowrap">{dfmt(x.date)}</span>
-                    {x.shares != null && x.price != null && <> · <span className="whitespace-nowrap">{qty(x.shares)} × {money(x.price)}</span></>}
+                    {x.shares != null && x.price != null && <> · <span className="whitespace-nowrap">{qty(x.shares)} × {pxMoney(x.price)}</span></>}
                   </div>
                   {x.note && !x.demo && <div className="truncate text-[12px] text-muted">{x.note}</div>}
                 </div>
@@ -135,7 +135,7 @@ export function Journal() {
                     <td><span className="text-ink-2">{txLabel(x)}</span></td>
                     <td>{x.ticker ? <button type="button" className="tk hover:underline" onClick={() => db.positions[x.ticker!] && nav.openPosition(x.ticker!)}>{x.ticker}</button> : null}</td>
                     <td className="r num text-ink-2">{x.shares != null ? qty(x.shares) : ''}</td>
-                    <td className="r num text-ink-2">{x.price != null ? usd(x.price) : ''}</td>
+                    <td className="r num text-ink-2">{x.price != null ? px(x.price) : ''}</td>
                     <td className="r leading-tight">
                       <span className={clsx('num font-medium', signTone(x.cashDelta))}>{usd(Math.abs(x.cashDelta ?? 0))}</span>
                     </td>

@@ -97,7 +97,7 @@ export function DividendBars({ months, current, height = 236 }: { months: DivMon
               <span className="num">{d.estimate ? '≈ ' : ''}{money(d.net)}</span>
             </div>
           ))}
-          {!h.items.length && <div className="mt-1.5 text-faint">keine Zahlung</div>}
+          {!h.items.length && <div className="mt-1.5 text-faint">–</div>}
         </div>
       )}
     </div>

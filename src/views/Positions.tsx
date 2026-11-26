@@ -8,7 +8,7 @@ import { toCandles } from '@/lib/candles'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE, useChartStyle } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
 import { exportCsv } from '@/lib/export'
-import { pct, pctPlain, qty, sign, usd, dshort, hhmm, cur, money } from '@/lib/format'
+import { pct, pctPlain, qty, sign, usd, dshort, hhmm, cur, money, px } from '@/lib/format'
 import { rangeChange } from '@/lib/history'
 import { usePortfolio, usePortfolioRanges, useStored } from '@/lib/hooks'
 import type { HoldingBucket, RangeId } from '@/lib/types'
@@ -201,7 +201,7 @@ export function Positions() {
       <Card
         className="col-span-12"
         title="Alle Positionen"
-        sub={<span className="max-sm:hidden">{`${c.rows.length} Titel · ${c.valuationComplete ? usd(c.sec) + ' ' + cur() : 'Marktwert offen'}`}</span>}
+        sub={<span className="max-sm:hidden">{`${c.rows.length} Titel · ${c.valuationComplete ? usd(c.sec) + ' ' + cur() : '–'}`}</span>}
         flush
         action={<div className="flex items-center gap-1 max-sm:-mr-2"><ChartStyleToggle value={style} onChange={setStyle} className="mr-1" /><button type="button" className="btn btn-ghost btn-sm max-sm:!px-2.5" onClick={() => nav.openEntry('import', { kind: 'trades' })} aria-label="Positionen hochladen" title="Positionen hochladen"><Upload /><span className="max-sm:hidden">Hochladen</span></button><button type="button" className="btn btn-ghost btn-sm max-sm:!px-2.5" onClick={() => exportCsv(c)} aria-label="Als CSV herunterladen" title="Als CSV herunterladen"><Download /><span className="max-sm:hidden">CSV</span></button></div>}
       >
@@ -264,17 +264,17 @@ export function Positions() {
                         <tr key={r.t} className="row-click" tabIndex={0} onClick={() => nav.openPosition(r.t)} onKeyDown={(e) => e.key === 'Enter' && nav.openPosition(r.t)}>
                           <td className="w-[150px] max-w-[150px] @max-[900px]:w-auto @max-[900px]:max-w-none">
                             <Ticker t={r.t} name={r.p.name} className="[&>div:last-child]:max-w-[140px] @max-[900px]:[&>div:last-child]:hidden" />
-                            <div className="num hidden whitespace-nowrap text-[12px] leading-4 text-muted @max-[900px]:block">{qty(r.p.shares)} · Ø {usd(r.avg)}</div>
+                            <div className="num hidden whitespace-nowrap text-[12px] leading-4 text-muted @max-[900px]:block">{qty(r.p.shares)} · Ø {px(r.avg)}</div>
                           </td>
                           <td className={`transition-opacity ${pending ? 'opacity-40' : ''}`}>
                             <Sparkline values={d?.values ?? []} candles={candlesOf(r.t, 88)} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} label={`${r.t}: ${pct(d?.move.pct, 1)} ${glTitle}`} />
                           </td>
-                          <td className="r num">{usd(r.px)}</td>
+                          <td className="r num">{px(r.px)}</td>
                           <td className="r">{d?.move.abs != null ? <Delta value={d.move.abs} kind="usd" icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
                           <td className="r" title={d?.move.sinceBuy ? 'seit Kauf' : undefined}>{d?.move.pct != null ? <Delta value={d.move.pct} digits={2} icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
                           {/* genau wie die Überschrift: Stück · Ø Einstand auf einer Zeile */}
                           <td className="r num whitespace-nowrap text-ink-2 @max-[900px]:hidden">
-                            {qty(r.p.shares)} <span className="text-muted">·</span> Ø {usd(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}
+                            {qty(r.p.shares)} <span className="text-muted">·</span> Ø {px(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}
                           </td>
                           <td className="r num font-medium">{usd(r.val)}</td>
                           <td className="r num text-ink-2">{share(r.val)}</td>
@@ -324,7 +324,7 @@ export function Positions() {
                           <span className="min-w-0">
                             {/* Nur der Ticker (der Name steht in der Detailansicht), darunter Stück · Ø Einstand */}
                             <span className="tk block">{r.t}</span>
-                            <span className="num block truncate text-[12px] leading-4 text-muted">{qty(r.p.shares)} · Ø {usd(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}</span>
+                            <span className="num block truncate text-[12px] leading-4 text-muted">{qty(r.p.shares)} · Ø {px(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}</span>
                           </span>
                           <span className={pending ? 'opacity-40' : ''}><Sparkline width={80} height={26} values={d?.values ?? []} candles={candlesOf(r.t, 80)} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} /></span>
                           <span className="min-w-[96px] text-right leading-tight">

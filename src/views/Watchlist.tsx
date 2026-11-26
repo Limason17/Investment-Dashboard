@@ -8,7 +8,7 @@ import { watchRows, type WatchRow } from '@/lib/calc'
 import { toCandles } from '@/lib/candles'
 import { useChart, useChartStyle } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { pct, pctPlain, sign, usd, money, cur } from '@/lib/format'
+import { pct, pctPlain, sign, cur, px, pxMoney } from '@/lib/format'
 import { rangeChange, withNow } from '@/lib/history'
 
 /** Handy: so viele Titel «Darüber» stehen zuerst da. */
@@ -77,7 +77,7 @@ export function Watchlist() {
                       <span className="mt-0.5 block text-[11.5px] text-muted">{Math.abs(r.s.d ?? 1) < 0.0005 ? 'an der Grenze' : below ? 'unter der Grenze' : 'bis zur Grenze'}</span>
                     </span>
                   </span>
-                  <FluidSparkline className="mt-3" height={candle ? 84 : 56} values={chart?.series[r.w.ticker] ?? []} candlesFor={(w) => candlesOf(r.w.ticker, w)} baseline={r.w.limit} baselineColor="rgb(255 255 255 / 0.82)" baselineLabel={`Kaufgrenze ${money(r.w.limit)}`} endLabel={usd(r.px)} split={false} tone={trendOf(chart?.series[r.w.ticker])} label={`${r.w.ticker}: ${candle ? 'Kerzen' : 'Kurs'} der letzten 3 Monate gegen die Kaufgrenze ${usd(r.w.limit)}`} />
+                  <FluidSparkline className="mt-3" height={candle ? 84 : 56} values={chart?.series[r.w.ticker] ?? []} candlesFor={(w) => candlesOf(r.w.ticker, w)} baseline={r.w.limit} baselineColor="rgb(255 255 255 / 0.82)" baselineLabel={`Kaufgrenze ${pxMoney(r.w.limit)}`} endLabel={px(r.px)} split={false} tone={trendOf(chart?.series[r.w.ticker])} label={`${r.w.ticker}: ${candle ? 'Kerzen' : 'Kurs'} der letzten 3 Monate gegen die Kaufgrenze ${px(r.w.limit)}`} />
                 </button>
               )
             })}
@@ -120,12 +120,12 @@ export function Watchlist() {
                           </span>
                         </td>
                         <td className="r leading-tight">
-                          <div className="num font-medium">{usd(r.px)}</div>
+                          <div className="num font-medium">{px(r.px)}</div>
                           <Delta value={r.chg} digits={2} icon={false} className="text-[11.5px]" />
                         </td>
                         <td className="r leading-tight">
-                          <div className="num">{r.w.limit ? usd(r.w.limit) : '–'}</div>
-                          {r.w.limitCautious != null && <div className="num text-[11.5px] text-muted">vorsichtig {usd(r.w.limitCautious)}</div>}
+                          <div className="num">{r.w.limit ? px(r.w.limit) : '–'}</div>
+                          {r.w.limitCautious != null && <div className="num text-[11.5px] text-muted">vorsichtig {px(r.w.limitCautious)}</div>}
                           {r.w.limitNote && <div className="max-w-[150px] text-[11.5px] text-muted">{r.w.limitNote}</div>}
                         </td>
                         <td className="@max-[1000px]:hidden"><LimitTrack d={r.s.d} tone={r.s.tone} width={120} /></td>

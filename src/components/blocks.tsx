@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { CalendarClock, ChartNoAxesColumn, Check, ChevronRight, Eye, Flag, Layers, type LucideIcon } from 'lucide-react'
 import type { Attention, WatchRow } from '@/lib/calc'
-import { daysBetween, dshort, pctPlain, weekday, money } from '@/lib/format'
+import { daysBetween, dshort, pctPlain, weekday, pxMoney } from '@/lib/format'
 import type { DepotEvent, WithId } from '@/lib/types'
 import { LimitTrack } from './charts/Small'
 import { Chip, DemoTag } from './ui'
@@ -25,7 +25,7 @@ export function EventItem({ e, now, onToggle, onEdit, compact }: { e: WithId<Dep
   const Icon = KIND_ICON[e.kind ?? 'termin']
   const rel = relDay(e.date, now)
   return (
-    <li className={clsx('grid grid-cols-[50px_minmax(0,1fr)_auto] items-start gap-3 border-b border-white/[0.045] py-3 last:border-b-0', e.done && 'opacity-55')}>
+    <li className={clsx('grid grid-cols-[56px_minmax(0,1fr)_auto] items-start gap-3 border-b border-white/[0.045] py-3 last:border-b-0', e.done && 'opacity-55')}>
       <div className="text-center leading-tight">
         <div className="num text-[15px] font-semibold tracking-[-0.02em]">{d}.{m}.</div>
         <div className="text-[11px] text-muted">{weekday(e.date)} {y.slice(2)}</div>
@@ -133,7 +133,7 @@ export function LimitRow({ r, onClick }: { r: WatchRow; onClick: () => void }) {
         </span>
       </span>
       <span className="mt-2 block"><LimitTrack d={r.s.d} tone={r.s.tone} width="100%" /></span>
-      <span className="mt-1.5 flex justify-between gap-3 text-[11.5px] text-muted"><span>Kurs <b className="num font-medium text-ink-2">{money(r.px)}</b></span><span>Kaufgrenze <b className="num font-medium text-ink-2">{money(r.w.limit)}</b></span></span>
+      <span className="mt-1.5 flex justify-between gap-3 text-[11.5px] text-muted"><span>Kurs <b className="num font-medium text-ink-2">{pxMoney(r.px)}</b></span><span>Kaufgrenze <b className="num font-medium text-ink-2">{pxMoney(r.w.limit)}</b></span></span>
     </button>
   )
 }
