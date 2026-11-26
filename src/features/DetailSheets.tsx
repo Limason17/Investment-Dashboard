@@ -331,7 +331,7 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
                     <span className="num text-muted">{dfmt(x.date)}</span>
                     <span className="font-medium">{txLabel(x)}</span>
                     <span className="num text-ink-2">{qty(x.shares)} × {money(x.price)} {x.demo && <DemoTag className="ml-1" />}</span>
-                    <span><Delta value={x.cashDelta} kind="usd" icon={false} /><Cur /></span>
+                    <span className="num text-ink">{usd(Math.abs(x.cashDelta ?? 0))}<Cur /></span>
                   </li>
                 ))}
               </ul>
