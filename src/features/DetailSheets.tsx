@@ -9,7 +9,7 @@ import { quote, quoteLabel, withIds, wlState, wht } from '@/lib/calc'
 import { sliceChart, toCandles, UNIT_TEXT, weekOf } from '@/lib/candles'
 import { RANGE_LABEL, RANGE_TEXT, RANGE_TITLE, refreshCharts, useChart, useChartStyle } from '@/lib/charts'
 import { useDepot, useNav } from '@/lib/context'
-import { dfmt, dlong, hhmm, MONTHS, parseNum, pct, pctPlain, qty, usd, cur, money, pxMoney, px as fmtPx } from '@/lib/format'
+import { dfmt, dlong, hhmm, MONTHS, parseNum, pct, pctPlain, qty, usd, cur, pxMoney, px as fmtPx } from '@/lib/format'
 import { withNow } from '@/lib/history'
 import { useStored } from '@/lib/hooks'
 import { useMeasure } from '@/lib/useMeasure'
@@ -306,12 +306,12 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
           <StatGroup>
             <Fact label="Stück">{qty(p.shares)}</Fact>
             <Fact label="Depotanteil">{pctPlain(r?.w)}</Fact>
-            <Fact label={<>Ø Einstand {p.costDemo && <DemoTag />}</>}>{pxMoney(r?.avg)}</Fact>
-            <Fact label="Gewinn/Verlust">{r?.pl != null ? <><Delta value={r.pl} kind="usd" icon={false} /><Cur /></> : '–'}</Fact>
-            <Fact label="Gewinn/Verlust in %">{r?.plPct != null ? <Delta value={r.plPct} digits={1} icon={false} /> : '–'}</Fact>
+            <Fact label={<>Ø Einstand {p.costDemo && <DemoTag />}</>}>{fmtPx(r?.avg)}</Fact>
+            <Fact label="Unrealisiert">{r?.pl != null ? <Delta value={r.pl} kind="usd" icon={false} /> : '–'}</Fact>
+            <Fact label="Rendite">{r?.plPct != null ? <Delta value={r.plPct} digits={1} icon={false} /> : '–'}</Fact>
             {/* Bereits realisiert: Gewinn oder Verlust aller Verkäufe dieses Titels */}
-            <Fact label="Realisiert">{realized != null ? <><Delta value={realized} kind="usd" icon={false} /><Cur /></> : '–'}</Fact>
-            <Fact label="Dividende netto pro Jahr">{yearly != null ? money(yearly) : '–'}</Fact>
+            <Fact label="Realisiert">{realized != null ? <Delta value={realized} kind="usd" icon={false} /> : '–'}</Fact>
+            <Fact label="Dividende netto pro Jahr">{yearly != null ? usd(yearly) : '–'}</Fact>
           </StatGroup>
 
           {p.status && <Block title="Regel">{p.status}</Block>}
@@ -437,10 +437,10 @@ export function WatchSheet({ ticker, onClose }: { ticker: string | null; onClose
           <PriceChart t={ticker!} refs={refs} />
 
           <StatGroup>
-            <Fact label="Grenze">{w.limit ? pxMoney(w.limit) : '–'}</Fact>
+            <Fact label="Grenze">{w.limit ? fmtPx(w.limit) : '–'}</Fact>
             {/* Ohne vorsichtige Grenze keine leere Kachel mit «–» */}
-            {w.limitCautious != null && <Fact label="Vorsichtige Grenze">{pxMoney(w.limitCautious)}</Fact>}
-            <Fact label="Bis zur Grenze">{px != null && w.limit ? (px <= w.limit ? <span className="text-up">erreicht</span> : money(px - w.limit)) : '–'}</Fact>
+            {w.limitCautious != null && <Fact label="Vorsichtige Grenze">{fmtPx(w.limitCautious)}</Fact>}
+            <Fact label="Bis zur Grenze">{px != null && w.limit ? (px <= w.limit ? <span className="text-up">erreicht</span> : usd(px - w.limit)) : '–'}</Fact>
           </StatGroup>
 
           {w.condition && (
