@@ -307,7 +307,8 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
             <Fact label="Stück">{qty(p.shares)}</Fact>
             <Fact label="Depotanteil">{pctPlain(r?.w)}</Fact>
             <Fact label={<>Ø Einstand {p.costDemo && <DemoTag />}</>}>{pxMoney(r?.avg)}</Fact>
-            <Fact label="Gewinn/Verlust">{r?.pl != null ? <><Delta value={r.pl} kind="usd" icon={false} /><Cur />{r.plPct != null && <> <span className="text-faint">·</span> <Delta value={r.plPct} digits={1} icon={false} /></>}</> : '–'}</Fact>
+            <Fact label="Gewinn/Verlust">{r?.pl != null ? <><Delta value={r.pl} kind="usd" icon={false} /><Cur /></> : '–'}</Fact>
+            <Fact label="Gewinn/Verlust in %">{r?.plPct != null ? <Delta value={r.plPct} digits={1} icon={false} /> : '–'}</Fact>
             {/* Bereits realisiert: Gewinn oder Verlust aller Verkäufe dieses Titels */}
             <Fact label="Realisiert">{realized != null ? <><Delta value={realized} kind="usd" icon={false} /><Cur /></> : '–'}</Fact>
             <Fact label="Dividende netto pro Jahr">{yearly != null ? money(yearly) : '–'}</Fact>
