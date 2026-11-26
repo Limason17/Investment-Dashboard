@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Download, Search, Upload, X } from 'lucide-react'
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useMemo, useState, type CSSProperties } from 'react'
 import { ChartStyleToggle, FluidSparkline, Meter, Sparkline } from '@/components/charts/Small'
-import { Card, Chip, Delta, DemoTag, Empty, Segmented, Ticker, Switch, Cur } from '@/components/ui'
+import { Card, Chip, Delta, DemoTag, Empty, Segmented, Switch, Cur } from '@/components/ui'
 import { HOLDING_BUCKETS, catOf } from '@/lib/buckets'
 import { isCap, targetOf, type Row } from '@/lib/calc'
 import { toCandles } from '@/lib/candles'
@@ -229,8 +229,7 @@ export function Positions() {
           <table className="tbl">
             <thead>
               <tr>
-                {/* Schmale Karte (Tablet): nur der Ticker, darunter Stück · Ø Einstand statt einer eigenen Spalte */}
-                {th('t', <>Titel<span className="hidden @max-[900px]:inline"> · Stück · Ø Einstand</span></>)}
+                {th('t', 'Titel')}
                 {th(null, `Verlauf ${RANGE_LABEL[range]}`, false, `Kursverlauf, ${rangeText}`)}
                 {th('px', `Kurs ${cur()}`, true)}
                 {th('gl', `G/V ${RANGE_LABEL[range]} ${cur()}`, true, `Gewinn oder Verlust in ${cur()}, ${glTitle}. Erst im Zeitraum gekaufte Titel: seit Kauf.`)}
@@ -241,40 +240,41 @@ export function Positions() {
               </tr>
             </thead>
             <tbody>
-              {groups.map(({ b, rs }) => {
+              {groups.map(({ b, rs }, gi) => {
                 const sum = rs.every((r) => r.val != null) ? rs.reduce((s, r) => s + r.val!, 0) : null
                 const gAbs = rs.every((r) => data[r.t]?.move.abs != null) ? rs.reduce((t, r) => t + data[r.t].move.abs!, 0) : null
+                // Jede Kategorie mit gleich feiner Linie oben und unten und Abstand davor. Die erste hat oben schon die Linie
+                // unter den Spaltenköpfen, darum keine zweite (sonst wirkt sie doppelt so dick).
+                const head: CSSProperties | undefined = gi > 0 ? { borderTop: '1px solid var(--color-line)' } : undefined
                 return (
                   <Fragment key={b?.id ?? 'alle'}>
+                    {b && gi > 0 && <tr aria-hidden><td colSpan={8} className="!h-6 !border-0 !p-0" /></tr>}
                     {b && (
                       <tr className="row-group">
-                        <td colSpan={3}>
+                        <td colSpan={3} style={head}>
                           <span className="inline-flex items-center gap-2.5"><i className="swatch" style={{ background: b.color }} />{b.name}<span className="font-normal text-muted">{rs.length} Titel</span></span>
                         </td>
-                        <td className="r"><Delta value={gAbs} kind="usd" icon={false} className="font-medium" /></td>
-                        <td className="r"><Delta value={gAbs != null && sum != null && sum - gAbs > 0 ? gAbs / (sum - gAbs) : null} digits={2} icon={false} className="font-medium" /></td>
-                        <td className="@max-[900px]:hidden" />
-                        <td className="r num">{usd(sum)}</td>
-                        <td className="r num">{share(sum)}</td>
+                        <td className="r" style={head}><Delta value={gAbs} kind="usd" icon={false} className="font-medium" /></td>
+                        <td className="r" style={head}><Delta value={gAbs != null && sum != null && sum - gAbs > 0 ? gAbs / (sum - gAbs) : null} digits={2} icon={false} className="font-medium" /></td>
+                        <td className="@max-[900px]:hidden" style={head} />
+                        <td className="r num" style={head}>{usd(sum)}</td>
+                        <td className="r num" style={head}>{share(sum)}</td>
                       </tr>
                     )}
                     {rs.map((r) => {
                       const d = data[r.t]
                       return (
                         <tr key={r.t} className="row-click" tabIndex={0} onClick={() => nav.openPosition(r.t)} onKeyDown={(e) => e.key === 'Enter' && nav.openPosition(r.t)}>
-                          <td className="w-[150px] max-w-[150px] @max-[900px]:w-auto @max-[900px]:max-w-none">
-                            <Ticker t={r.t} name={r.p.name} className="[&>div:last-child]:max-w-[140px] @max-[900px]:[&>div:last-child]:hidden" />
-                            <div className="num hidden whitespace-nowrap text-[12px] leading-4 text-muted @max-[900px]:block">{qty(r.p.shares)} · Ø {px(r.avg)}</div>
-                          </td>
+                          {/* Nur der Ticker; Name, Stück und Einstand stehen im Titelblatt */}
+                          <td><span className="tk">{r.t}</span>{r.p.costDemo && <DemoTag className="ml-1.5" />}</td>
                           <td className={`transition-opacity ${pending ? 'opacity-40' : ''}`}>
                             <Sparkline values={d?.values ?? []} candles={candlesOf(r.t, 88)} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} label={`${r.t}: ${pct(d?.move.pct, 1)} ${glTitle}`} />
                           </td>
                           <td className="r num">{px(r.px)}</td>
                           <td className="r">{d?.move.abs != null ? <Delta value={d.move.abs} kind="usd" icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
                           <td className="r" title={d?.move.sinceBuy ? 'seit Kauf' : undefined}>{d?.move.pct != null ? <Delta value={d.move.pct} digits={2} icon={false} className={`font-medium ${pending && !d.move.sinceBuy ? 'opacity-40' : ''}`} /> : <span className="text-faint">–</span>}</td>
-                          {/* genau wie die Überschrift: Stück · Ø Einstand auf einer Zeile */}
                           <td className="r num whitespace-nowrap text-ink-2 @max-[900px]:hidden">
-                            {qty(r.p.shares)} <span className="text-muted">·</span> Ø {px(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}
+                            {qty(r.p.shares)} <span className="text-muted">·</span> Ø {px(r.avg)}
                           </td>
                           <td className="r num font-medium">{usd(r.val)}</td>
                           <td className="r num text-ink-2">{share(r.val)}</td>
@@ -302,16 +302,16 @@ export function Positions() {
         {/* Handy: Liste zum Antippen */}
         <div className="md:hidden">
           <div className="flex justify-between gap-3 whitespace-nowrap border-b border-line px-3 pb-2 text-[11.5px] text-faint">
-            <span>Titel · Stück · Ø Einstand</span>
+            <span>Titel</span>
             <span>Wert · G/V {RANGE_LABEL[range]} in {cur()}</span>
           </div>
-          {groups.map(({ b, rs }) => {
+          {groups.map(({ b, rs }, gi) => {
             const sum = rs.every((r) => r.val != null) ? rs.reduce((s, r) => s + r.val!, 0) : null
             return (
               <Fragment key={b?.id ?? 'alle'}>
                 {b && (
-                  <div className="flex items-center justify-between gap-3 border-b border-line px-3 pb-2 pt-4 text-[12px] font-medium text-ink-2">
-                    <span className="inline-flex items-center gap-2"><i className="swatch" style={{ background: b.color }} />{b.name}</span>
+                  <div className={`flex items-center justify-between gap-3 border-b border-line px-3 pb-2 pt-3 text-[12px] font-medium text-ink-2 ${gi > 0 ? 'mt-6 border-t' : ''}`}>
+                    <span className="inline-flex min-w-0 items-center gap-2"><i className="swatch" style={{ background: b.color }} />{b.name}</span>
                     <span className="num">{usd(sum)}<Cur /> <span className="font-normal text-muted">· {share(sum)}</span></span>
                   </div>
                 )}
@@ -320,12 +320,9 @@ export function Positions() {
                     const d = data[r.t]
                     return (
                       <li key={r.t} className="border-b border-white/[0.04] last:border-b-0">
-                        <button type="button" onClick={() => nav.openPosition(r.t)} className="grid min-h-[58px] w-full grid-cols-[minmax(0,1fr)_80px_auto] items-center gap-3 px-3 py-2 text-left active:bg-white/[0.04]">
-                          <span className="min-w-0">
-                            {/* Nur der Ticker (der Name steht in der Detailansicht), darunter Stück · Ø Einstand */}
-                            <span className="tk block">{r.t}</span>
-                            <span className="num block truncate text-[12px] leading-4 text-muted">{qty(r.p.shares)} · Ø {px(r.avg)}{r.p.costDemo && <DemoTag className="ml-1.5" />}</span>
-                          </span>
+                        <button type="button" onClick={() => nav.openPosition(r.t)} className="grid min-h-[52px] w-full grid-cols-[minmax(0,1fr)_80px_auto] items-center gap-3 px-3 py-2 text-left active:bg-white/[0.04]">
+                          {/* Nur der Ticker; Name, Stück und Einstand stehen im Titelblatt */}
+                          <span className="tk block min-w-0 truncate">{r.t}{r.p.costDemo && <DemoTag className="ml-1.5" />}</span>
                           <span className={pending ? 'opacity-40' : ''}><Sparkline width={80} height={26} values={d?.values ?? []} candles={candlesOf(r.t, 80)} baseline={d?.ref ?? undefined} tone={sign(d?.move.pct)} /></span>
                           <span className="min-w-[96px] text-right leading-tight">
                             <span className="num block text-[13.5px] font-medium">{usd(r.val)}<Cur /></span>
