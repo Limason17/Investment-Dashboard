@@ -1,11 +1,12 @@
 import { NotebookPen, Pencil } from 'lucide-react'
 import clsx from 'clsx'
 import { useMemo, useState } from 'react'
-import { MonthBars, type MonthPair } from '@/components/charts/MonthBars'
+import { MonthBars, type PeriodPair } from '@/components/charts/MonthBars'
 import { Card, ConfirmDelete, Delta, DemoTag, Empty, Segmented, Stat, StatGroup } from '@/components/ui'
 import { withIds, yearStats } from '@/lib/calc'
 import { useDepot, useNav, type EntryType } from '@/lib/context'
-import { addMonths, dfmt, qty, usd, weekday, cur, cur0, money } from '@/lib/format'
+import { dfmt, qty, usd, weekday, cur, cur0, money } from '@/lib/format'
+import { periodsSince, UNIT_PLURAL } from '@/lib/periods'
 import { txLabel } from '@/lib/labels'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -39,23 +40,26 @@ export function Journal() {
       .then(() => toast('Notiz gelöscht.'))
       .catch((e) => toast('Nicht gelöscht: ' + e.message))
 
-  // Handel der letzten zwölf Monate; die Kennzahlen zählen alle Buchungen seit der ersten.
+  // Käufe und Verkäufe seit der ersten Buchung: bis 1 Jahr je Monat, länger je Quartal, Halbjahr oder Jahr.
+  // Die Kennzahlen zählen alle Buchungen seit der ersten.
   const stats = useMemo(() => {
-    const months: MonthPair[] = Array.from({ length: 12 }, (_, i) => ({ key: addMonths(now.slice(0, 8) + '01', i - 11).slice(0, 7), a: 0, b: 0 }))
-    const at = new Map(months.map((m) => [m.key, m]))
+    const trades = tx.filter((x) => (x.type === 'kauf' || x.type === 'verkauf') && x.date)
+    const first = trades.reduce<string | null>((a, x) => (!a || x.date! < a ? x.date! : a), null)
+    const axis = first ? periodsSince(first, now) : null
+    const periods: PeriodPair[] = axis ? axis.periods.map((p) => ({ ...p, a: 0, b: 0 })) : []
+    const at = new Map(periods.map((m) => [m.key, m]))
     const y = { buys: 0, nBuys: 0, sells: 0, nSells: 0, flow: 0, nFlow: 0 }
     for (const x of tx) {
       const amount = Math.abs(x.cashDelta || 0)
-      const m = at.get((x.date || '').slice(0, 7))
+      const m = axis && x.date ? at.get(axis.keyOf(x.date)) : undefined
       if (m && x.type === 'kauf') m.a += amount
       if (m && x.type === 'verkauf') m.b += amount
       if (x.type === 'kauf') { y.buys += amount; y.nBuys++ }
       else if (x.type === 'verkauf') { y.sells += amount; y.nSells++ }
       else if (x.type === 'einzahlung' || x.type === 'auszahlung') { y.flow += x.cashDelta || 0; y.nFlow++ }
     }
-    // Leere Monate vor der ersten Buchung weglassen (mindestens sechs Monate bleiben stehen).
-    const firstUsed = months.findIndex((m) => m.a || m.b)
-    return { months: months.slice(Math.max(0, Math.min(firstUsed, 6))), y, any: firstUsed >= 0 }
+    const unit = axis?.unit ?? 'monat'
+    return { periods, unit, current: axis ? axis.keyOf(now) : '', y, any: periods.some((m) => m.a || m.b) }
   }, [tx, now])
   const ys = useMemo(() => yearStats(db, ''), [db])
 
@@ -77,8 +81,8 @@ export function Journal() {
       </StatGroup>
 
       {stats.any && (
-        <Card className={"col-span-12 xl:col-span-8"} title="Käufe und Verkäufe" sub={`${stats.months.length} Monate, in ${cur()}`}>
-          <MonthBars months={stats.months} labels={['Käufe', 'Verkäufe']} colors={['var(--color-accent)', 'var(--color-ref)']} format={cur0} current={now.slice(0, 7)} />
+        <Card className={"col-span-12 xl:col-span-8"} title="Käufe und Verkäufe" sub={`${stats.periods.length} ${UNIT_PLURAL[stats.unit][stats.periods.length === 1 ? 0 : 1]}, in ${cur()}`}>
+          <MonthBars months={stats.periods} labels={['Käufe', 'Verkäufe']} colors={['var(--color-accent)', 'var(--color-ref)']} format={cur0} current={stats.current} />
         </Card>
       )}
 
