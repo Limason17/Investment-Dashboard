@@ -16,6 +16,43 @@ import type { DB } from '@/lib/types'
 
 /* ------------------------------------------------------------------ Backup-Datei */
 
+/* ------------------------------------------------------------------ Quellensteuer auf Dividenden */
+
+/**
+ * Abzug auf Dividenden in Prozent (0 = keine Quellensteuer). Gilt überall: Dividenden-Prognose, Netto-Beträge,
+ * Detailblätter und neue Dividendenbuchungen ohne angegebene Steuer. Speichert beim Verlassen des Feldes oder mit Enter.
+ */
+function WithholdingSetting({ value }: { value: number }) {
+  const id = useId()
+  const shown = String(Math.round(value * 1000) / 10)
+  const [text, setText] = useState(shown)
+  useEffect(() => setText(shown), [shown])
+  const save = () => {
+    const n = Number(text.replace(',', '.').trim())
+    if (!text.trim() || !Number.isFinite(n) || n < 0 || n > 60) {
+      toast('Quellensteuer: eine Zahl zwischen 0 und 60 eingeben.')
+      setText(shown)
+      return
+    }
+    if (Math.abs(n / 100 - value) < 1e-9) return
+    void mutate([{ op: 'merge', coll: 'meta', id: 'settings', data: { withholding: Math.round(n * 10) / 1000 } }])
+      .then(() => toast(n === 0 ? 'Dividenden ohne Quellensteuer.' : `Quellensteuer ${n} % gespeichert.`))
+      .catch((e) => toast('Nicht gespeichert: ' + e.message))
+  }
+  return (
+    <section className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
+      <div className="min-w-0">
+        <label htmlFor={id} className="block text-[13px] font-semibold">Quellensteuer auf Dividenden</label>
+        <div className="truncate text-[12px] text-muted">Abzug in Prozent, 0 = keine</div>
+      </div>
+      <span className="flex flex-none items-center gap-1.5">
+        <input id={id} className="input input-sm num !w-[64px] text-right" inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()} />
+        <span className="text-[13px] text-muted">%</span>
+      </span>
+    </section>
+  )
+}
+
 const BACKUP_MAX_BYTES = 5_000_000
 const MAX_ENTRIES = 20_000
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
@@ -318,6 +355,7 @@ export function AccountSheet({ open, onClose, onPortfolios, onTour }: { open: bo
             <Segmented label="Anzeigewährung" value={db?.meta.settings?.fx ?? 'USD'} onChange={(v) => void mutate([{ op: 'merge', coll: 'meta', id: 'settings', data: { fx: v === 'USD' ? null : v } }]).then(() => toast('Beträge in ' + v + '.')).catch((e) => toast('Nicht gespeichert: ' + e.message))} options={(['USD', 'CHF', 'EUR'] as const).map((x) => ({ value: x, label: x }))} />
           </section>
         )}
+        {!allView && db && <WithholdingSetting value={Number.isFinite(Number(db.meta.settings?.withholding)) ? Number(db.meta.settings!.withholding) : 0.15} />}
 
         {allView ? (
           <p className="rounded-xl border border-line px-3.5 py-3 text-[12.5px] text-muted">Du siehst die Gesamtansicht. Zum Hochladen oder Sichern wähle zuerst ein Portfolio.</p>

@@ -23,7 +23,7 @@ const RANGES_HELD: RangeId[] = ['1T', '1W', '1M', '3M', '1J', 'MAX']
 const RANGES_NEW: RangeId[] = ['1T', '1W', '1M', '3M', '1J', '5J']
 
 /* ------------------------------------------------------------------ Kursverlauf eines Titels */
-function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?: RefLine[]; txs?: WithId<Tx>[]; /** Ø Einstand: Bezugslinie der Ansicht «Max» */ avg?: number | null }) {
+function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg, hideChange }: { t: string; refs?: RefLine[]; txs?: WithId<Tx>[]; /** Ø Einstand: Bezugslinie der Ansicht «Max» */ avg?: number | null; /** ohne Zeile «x % im Zeitraum» über dem Chart (Position: steht beim Wert) */ hideChange?: boolean }) {
   const { db, c } = useDepot()
   // Erster Kauf dieses Titels (auch ein später ganz verkaufter zählt): Beginn der Ansicht «Max»
   // Dazu der Preis dieses Kaufs (mehrere Käufe am ersten Tag: gewichtet) und die Zahl der Käufe.
@@ -35,7 +35,14 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
     return { firstBuy: m, firstPx: n > 0 ? day.reduce((a, x) => a + x.shares! * x.price!, 0) / n : null, buys: list.length }
   }, [db.transactions, t])
   const RANGES = firstBuy ? RANGES_HELD : RANGES_NEW
-  const [stored, setRange] = useStored<RangeId>('depot.range.titel', '3M', [...RANGES_NEW, 'MAX'])
+  const [storedPref, setStored] = useStored<RangeId>('depot.range.titel', '3M', [...RANGES_NEW, 'MAX'])
+  // Gekaufte Titel öffnen immer mit «Max» (ab dem ersten Kauf); Watchlist-Titel mit dem zuletzt gewählten Zeitraum
+  const [picked, setPicked] = useState<RangeId | null>(null)
+  const stored = picked ?? (firstBuy ? 'MAX' : storedPref)
+  const setRange = (r: RangeId) => {
+    setPicked(r)
+    if (!firstBuy) setStored(r)
+  }
   // Früher gewähltes «5J» wird bei gekauften Titeln zu «Max» und umgekehrt
   const range: RangeId = stored === '5J' && firstBuy ? 'MAX' : stored === 'MAX' && !firstBuy ? '5J' : stored
   // Käufe und Verkäufe im Chart ein- oder ausblenden (gilt für alle Titel, bleibt gespeichert)
@@ -98,7 +105,8 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
     }
     markers.sort((a, b) => a.i - b.i).forEach((m, k) => (m.seq = k + 1))
     // «Max»: Startlinie = Preis des ersten Kaufs. Gab es nur einen Kauf, ist das der Ø Einstand (gleiche Linie).
-    const buyBase = chart.range === 'MAX' && firstBuy ? (buys === 1 && avg != null && avg > 0 ? avg : firstPx) : null
+    // «Max» bei gekauften Titeln: Bezug ist der Ø Einstand (fehlt er, der Preis des ersten Kaufs)
+    const buyBase = chart.range === 'MAX' && firstBuy ? (avg != null && avg > 0 ? avg : firstPx) : null
     const base = buyBase ?? chart.prev[t] ?? values[0]
     // Schwellen nur zeigen, wenn sie den Kursverlauf nicht zur flachen Linie drücken.
     const lo = Math.min(...values), hi = Math.max(...values)
@@ -119,7 +127,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
     <div>
       <div ref={boxRef} className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-[12.5px] text-muted">
-          {view && chart ? <><Delta value={view.chg} digits={1} className="font-medium" /> {chart.range === '1T' && !c.live ? 'letzter Handelstag' : chart.range === 'MAX' && firstBuy ? `seit erstem Kauf (${dfmt(firstBuy)})` : RANGE_TEXT[chart.range]}</> : <span>Kursverlauf</span>}
+          {hideChange ? null : view && chart ? <><Delta value={view.chg} digits={1} className="font-medium" /> {chart.range === '1T' && !c.live ? 'letzter Handelstag' : chart.range === 'MAX' && firstBuy ? `seit erstem Kauf (${dfmt(firstBuy)})` : RANGE_TEXT[chart.range]}</> : <span>Kursverlauf</span>}
         </div>
         <div className="flex items-center gap-2 max-sm:w-full">
           <ChartStyleToggle value={style} onChange={setStyle} className="flex-none" />
@@ -146,7 +154,7 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
             ariaLabel={`Kursverlauf ${t}`}
             tooltipExtra={(i) => (
               <>
-                {view.base > 0 && <div className="tip-row"><span>{chart.range === 'MAX' && firstBuy ? 'seit erstem Kauf' : 'im Zeitraum'}</span><b className={view.values[i] >= view.base ? '!text-up' : '!text-down'}>{pct(view.values[i] / view.base - 1, 1)}</b></div>}
+                {view.base > 0 && <div className="tip-row"><span>{chart.range === 'MAX' && firstBuy ? (avg != null && avg > 0 ? 'gegen Ø Einstand' : 'seit erstem Kauf') : 'im Zeitraum'}</span><b className={view.values[i] >= view.base ? '!text-up' : '!text-down'}>{pct(view.values[i] / view.base - 1, 1)}</b></div>}
                 {showTrades && view.byIndex.get(i)?.map((x) => (
                   <div key={x.id} className="mt-2 border-t border-line pt-2 text-[11.5px]">
                     <div className="flex items-center justify-between gap-3">
@@ -175,12 +183,8 @@ function PriceChart({ t, refs = NO_REFS, txs = NO_TXS, avg }: { t: string; refs?
           )}
         </div>
       )}
-      {view && (view.markers.length > 0 || view.refs.length > 0 || view.away.length > 0 || chart?.range === 'MAX') && (
+      {view && (view.markers.length > 0 || view.refs.length > 0 || view.away.length > 0) && (
         <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11.5px] text-muted">
-          {showTrades && view.markers.some((m) => m.type === 'kauf') && <span className="inline-flex items-center gap-1.5"><TradeGlyph type="kauf" />Kauf</span>}
-          {showTrades && view.markers.some((m) => m.type === 'verkauf') && <span className="inline-flex items-center gap-1.5"><TradeGlyph type="verkauf" />Verkauf</span>}
-          {/* «Max» mit mehreren Käufen: die graue Startlinie ist der Preis des ersten Kaufs */}
-          {chart?.range === 'MAX' && firstBuy && !view.refs.some((r) => Math.abs(r.y - view.base) < 1e-6) && <span className="num inline-flex items-center gap-1.5"><i className="inline-block w-4 border-t border-dashed border-[#4f5668]" />1. Kauf {money(view.base)}</span>}
           {view.refs.map((r) => <span key={r.label} className="num inline-flex items-center gap-1.5"><i className="inline-block w-4 border-t border-dashed" style={{ borderColor: r.color }} />{r.name === 'Ø Einstand' ? r.label.replace('Ø Einstand ', 'Ø ') : r.label}</span>)}
           {view.away.length > 0 && <span>{view.away.map((r) => r.label).join(' · ')}: ausserhalb des Ausschnitts</span>}
           {view.markers.length > 0 && <Switch className="ml-auto !text-[11.5px] !text-muted" checked={showTrades} onChange={(v) => setTradesPref(v ? 'an' : 'aus')} label="Käufe/Verkäufe" title="Käufe und Verkäufe im Chart zeigen" />}
@@ -255,6 +259,8 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
 
   const refs: RefLine[] = r?.avg != null ? [{ y: r.avg, name: 'Ø Einstand', label: `Ø Einstand ${money(r.avg)}`, color: 'var(--color-ref)' }] : []
   const yearly = p && q?.divAnnual ? p.shares * q.divAnnual * (1 - wht(db)) : null
+  const sales = txs.filter((x) => x.type === 'verkauf' && x.realized != null)
+  const realized = sales.length ? sales.reduce((s, x) => s + (x.realized ?? 0), 0) : null
 
   return (
     <Sheet
@@ -290,17 +296,24 @@ export function PositionSheet({ ticker, onClose }: { ticker: string | null; onCl
             <div className="text-right">
               <div className="label">Wert</div>
               <div className="num mt-0.5 text-[20px] font-semibold leading-9 tracking-[-0.02em]">{usd(r?.val)} <span className="text-[12px] font-medium text-muted">{cur()}</span></div>
+              {/* Unrealisiert gegen den Ø Einstand: Prozent und Betrag, Farbe zeigt die Richtung */}
+              {r?.pl != null && r.plPct != null && (
+                <div className="num -mt-0.5 text-[12px] leading-4" title="Unrealisiert gegenüber dem Ø Einstand">
+                  <Delta value={r.plPct} digits={1} icon={false} /> <span className="text-faint">·</span> <Delta value={r.pl} kind="usd" icon={false} /><Cur />
+                </div>
+              )}
             </div>
           </div>
 
-          <PriceChart t={ticker!} refs={refs} txs={txs} avg={r?.avg} />
+          <PriceChart t={ticker!} refs={refs} txs={txs} avg={r?.avg} hideChange />
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5">
             <Fact label="Stück">{qty(p.shares)}</Fact>
-            <Fact label="Anteil am Depot">{pctPlain(r?.w)}</Fact>
+            <Fact label="Depotanteil">{pctPlain(r?.w)}</Fact>
             <Fact label={<>Ø Einstand {p.costDemo && <DemoTag />}</>}>{money(r?.avg)}</Fact>
-            <Fact label="Gewinn/Verlust">{r?.pl != null ? <><Delta value={r.pl} kind="usd" icon={false} /><Cur /></> : <span className="text-muted">offen</span>}</Fact>
-            <Fact label="in Prozent">{r?.plPct != null ? <Delta value={r.plPct} digits={1} icon={false} /> : <span className="text-muted">–</span>}</Fact>
+            <Fact label="Gewinn/Verlust">{r?.pl != null ? <><Delta value={r.pl} kind="usd" icon={false} /><Cur />{r.plPct != null && <> <span className="text-faint">·</span> <Delta value={r.plPct} digits={1} icon={false} /></>}</> : <span className="text-muted">offen</span>}</Fact>
+            {/* Bereits realisiert: Gewinn oder Verlust aller Verkäufe dieses Titels */}
+            <Fact label="Realisiert">{realized != null ? <><Delta value={realized} kind="usd" icon={false} /><Cur /></> : <span className="text-muted">keine Verkäufe</span>}</Fact>
             <Fact label="Dividende netto pro Jahr">{yearly != null ? money(yearly) : <span className="text-muted">keine</span>}</Fact>
           </div>
 

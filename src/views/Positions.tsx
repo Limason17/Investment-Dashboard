@@ -26,7 +26,8 @@ export function Positions() {
   const { db, c } = useDepot()
   const nav = useNav()
   const ranges = usePortfolioRanges()
-  const [stored, setRange] = useStored<RangeId>('depot.range.pos', '1M')
+  // Startet immer mit «Max» (seit der ersten Buchung); die Wahl gilt, bis man die Seite verlässt
+  const [stored, setRange] = useState<RangeId>('MAX')
   const range = ranges.includes(stored) ? stored : 'MAX'
   // Kursverlauf je Titel als Kerzen (Standard) oder Linie; die Kategorien darüber bleiben Linien (Rendite, kein Kurs)
   const [style, setStyle] = useChartStyle()
@@ -156,10 +157,14 @@ export function Positions() {
             const w = c.total ? v / c.total : 0
             const tgt = targetOf(c.settings, b.id)
             const s = ps?.buckets[b.id as HoldingBucket]
+            // «Max»: Verlauf der Kategorie beginnt beim ersten Kauf in dieser Kategorie (davor kein Kapital, keine Linie)
+            const off = range === 'MAX' && s ? Math.max(0, s.value.findIndex((x) => x > 0)) : 0
+            const series = s ? s.mwr.slice(off) : []
             // Rendite auf das eingesetzte Geld, gleich gerechnet wie in der Übersicht
-            const ret = s && s.mwr.length ? s.mwr[s.mwr.length - 1] : null
+            const ret = series.length ? series[series.length - 1] : null
             const n = c.rows.filter((r) => catOf(r.p.bucket) === b.id).length
-            const at = hov?.id === b.id && s && hov.i < s.mwr.length ? hov.i : null
+            const at = hov?.id === b.id && hov.i < series.length ? hov.i : null
+            const ai = at != null ? at + off : null
             const over = isCap(c.settings, b.id) && !cashOff && !c.settings.cashPartial && tgt != null && w > tgt
             return (
               <div key={b.id} className={`min-w-0 transition-opacity ${bucket !== 'alle' && bucket !== b.id ? 'opacity-45' : ''}`}>
@@ -180,11 +185,11 @@ export function Positions() {
               </button>
                 <div className={`mt-3 flex items-center gap-3 transition-opacity ${pending ? 'opacity-40' : ''}`}>
                   <span className="w-[74px] flex-none leading-tight">
-                    <Delta value={at != null ? s!.mwr[at] : ret} digits={1} className="text-[12.5px] font-medium" />
+                    <Delta value={at != null ? series[at] : ret} digits={1} className="text-[12.5px] font-medium" />
                     {/* Beim Zeigen: im Tages-Chart die Uhrzeit, sonst immer das Datum (bei Stundenwerten mit Uhrzeit) */}
-                    <span className="block whitespace-nowrap text-[10.5px] text-muted">{at != null && ps ? (ps.kind === 'intraday' ? (range === '1T' ? hhmm(ps.t[at]) : `${dshort(new Date(ps.t[at]).toLocaleDateString('en-CA'))} ${hhmm(ps.t[at])}`) : dshort(ps.d[at])) : RANGE_LABEL[range]}</span>
+                    <span className="block whitespace-nowrap text-[10.5px] text-muted">{ai != null && ps ? (ps.kind === 'intraday' ? (range === '1T' ? hhmm(ps.t[ai]) : `${dshort(new Date(ps.t[ai]).toLocaleDateString('en-CA'))} ${hhmm(ps.t[ai])}`) : dshort(ps.d[ai])) : RANGE_LABEL[range]}</span>
                   </span>
-                  <FluidSparkline className="min-w-0 flex-1" values={s?.mwr ?? []} tone={sign(ret)} baseline={0} height={34} hi={at} onHover={(i) => setHov(i == null ? null : { id: b.id, i })} label={`${b.name}: ${pct(ret, 1)} ${rangeText}`} />
+                  <FluidSparkline className="min-w-0 flex-1" values={series} tone={sign(ret)} baseline={0} height={34} hi={at} onHover={(i) => setHov(i == null ? null : { id: b.id, i })} label={`${b.name}: ${pct(ret, 1)} ${rangeText}`} />
                 </div>
               </div>
             )
