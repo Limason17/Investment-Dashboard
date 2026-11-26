@@ -2,11 +2,11 @@ import { Pencil, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { EventItem, EventStrip } from '@/components/blocks'
 import { Allocation } from '@/components/charts/Allocation'
-import { Meter } from '@/components/charts/Small'
-import { Card, Empty } from '@/components/ui'
+import { Card, Empty, Segmented } from '@/components/ui'
 import { EventSheet, PlanSheet, PotSheet } from '@/features/EditSheets'
 import { eventsSorted } from '@/lib/calc'
 import { useDepot } from '@/lib/context'
+import { useStored } from '@/lib/hooks'
 import { usd } from '@/lib/format'
 import { mutate } from '@/lib/store'
 import { toast } from '@/lib/toast'
@@ -29,6 +29,8 @@ export function Plan() {
   const [planOpen, setPlanOpen] = useState(false)
   const [allOverdue, setAllOverdue] = useState(false)
   const [pot, setPot] = useState<{ id: string | null; n: number } | null>(null)
+  // VORLÄUFIG: zwei Darstellungen der Cash-Töpfe zum Vergleichen (a Tabelle, b Balken je Topf)
+  const [potView, setPotView] = useStored<'a' | 'b'>('depot.toepfe.ansicht', 'a', ['a', 'b'])
   const [ev, setEv] = useState<{ id: string | null; n: number } | null>(null)
   const editEvent = (e: WithId<DepotEvent>) => setEv({ id: e.id, n: Date.now() })
 
@@ -43,61 +45,72 @@ export function Plan() {
       <Card title="Allokation" action={<button type="button" className="btn btn-ghost btn-sm" onClick={() => setPlanOpen(true)}><Pencil /> Ziele</button>} sub={c.settings.cashExcluded ? 'in % der Wertpapiere' : c.settings.cashPartial ? 'Cash nur teilweise erfasst' : undefined}>
         <Allocation c={c} />
       </Card>
-      <Card title="Cash-Töpfe" action={<button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button>} bodyClassName="!pt-1">
+      <Card title="Cash-Töpfe" flush={potView === 'a'} action={<span className="flex items-center gap-2"><Segmented label="Variante" value={potView} onChange={setPotView} options={[{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }]} /><button type="button" className="btn btn-sm" onClick={() => setPot({ id: null, n: Date.now() })}><Plus /> Topf</button></span>}>
         {pots.length === 0 ? (
           <Empty>Ein Topf ist ein Budget für geplante Käufe. Käufe daraus zählen automatisch.</Empty>
+        ) : potView === 'a' ? (
+          // A: Tabelle wie bei den Positionen. Je Topf Budget, eingesetzt, frei; unten die Summe.
+          <div className="overflow-x-auto">
+            <table className="tbl">
+              <thead>
+                <tr><th>Topf</th><th className="r">Budget</th><th className="r">Eingesetzt</th><th className="r">Frei</th></tr>
+              </thead>
+              <tbody>
+                {pots.map((p) => {
+                  const rest = (p.budget || 0) - (p.used || 0)
+                  return (
+                    <tr key={p.id} className="row-click" tabIndex={0} onClick={() => setPot({ id: p.id, n: Date.now() })} onKeyDown={(e) => e.key === 'Enter' && setPot({ id: p.id, n: Date.now() })}>
+                      <td>
+                        <div className="font-medium">{p.label}</div>
+                        {p.note && <div className="max-w-[340px] truncate text-[12px] text-muted" title={p.note}>{p.note}</div>}
+                      </td>
+                      <td className="r num text-ink-2">{usd(p.budget || 0)}</td>
+                      <td className="r num text-ink-2">{p.used ? usd(p.used) : '–'}</td>
+                      <td className={`r num font-medium ${rest < -0.005 ? 'text-down' : ''}`}>{usd(Math.abs(rest))}</td>
+                    </tr>
+                  )
+                })}
+                <tr className="row-group">
+                  <td>Summe{!c.settings.cashExcluded && <span className="ml-2 font-normal text-muted">Cash ohne Topf {usd(c.cash - (budget - used))}</span>}</td>
+                  <td className="r num">{usd(budget)}</td>
+                  <td className="r num">{usd(used)}</td>
+                  <td className="r num">{usd(budget - used)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         ) : (
-          <>
-            {/* Übersicht als Liste wie im Journal: Name links, Zahl rechts; darunter ein Balken für alle Töpfe zusammen */}
-            <div className="grid">
-              {([
-                ['Frei', budget - used, true],
-                ['Eingesetzt', used, false],
-                ['Budget', budget, false],
-                ...(c.settings.cashExcluded ? [] : [['Cash ohne Topf', c.cash - (budget - used), false] as const]),
-              ] as const).map(([label, v, strong]) => (
-                <div key={label} className="flex items-baseline justify-between gap-4 border-b border-line py-[8px]">
-                  <span className="text-[13px] text-ink-2">{label}</span>
-                  <span className={`num text-right ${strong ? 'text-[16px] font-semibold' : 'text-[14px] font-medium'} ${v < -0.005 ? 'text-down' : ''}`}>{usd(Math.abs(v))}</span>
-                </div>
-              ))}
+          // B: Ein Balken je Topf, Länge nach Budget (grösster Topf = volle Breite), violett der eingesetzte Teil.
+          <div>
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-[12.5px] text-muted">
+              <span><span className="num text-[18px] font-semibold text-ink">{usd(budget - used)}</span> frei</span>
+              <span className="num">{usd(used)} von {usd(budget)} eingesetzt{!c.settings.cashExcluded && <> · Cash ohne Topf {usd(c.cash - (budget - used))}</>}</span>
             </div>
-            <Meter className="mt-3" value={budget ? used / budget : 0} height={4} />
-
-            {/* Je Topf eine Zeile: Name und Notiz links, frei rechts; ist etwas eingesetzt, darunter Balken und «eingesetzt / Budget» */}
-            <div className="mt-5 flex justify-between border-b border-line pb-1.5 text-[11.5px] text-faint">
-              <span>Topf</span>
-              <span>frei</span>
-            </div>
-            <ul>
+            <ul className="grid gap-2.5">
               {pots.map((p) => {
                 const rest = (p.budget || 0) - (p.used || 0)
-                const u = p.budget ? (p.used || 0) / p.budget : 0
+                const maxB = Math.max(...pots.map((x) => x.budget || 0), 1)
                 return (
-                  <li key={p.id} className="border-b border-white/[0.045] last:border-b-0">
-                    <button type="button" title="Topf bearbeiten" onClick={() => setPot({ id: p.id, n: Date.now() })} className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 gap-y-1.5 py-3 text-left transition-colors hover:bg-white/[0.03]">
-                      <span className="min-w-0">
-                        <span className="block break-words text-[13.5px] font-medium">{p.label}</span>
-                        {p.note && <span className="mt-0.5 block text-[12px] text-muted">{p.note}</span>}
+                  <li key={p.id}>
+                    <button type="button" title="Topf bearbeiten" onClick={() => setPot({ id: p.id, n: Date.now() })} className="block w-full text-left">
+                      <span className="flex items-baseline justify-between gap-3 text-[12.5px]">
+                        <span className="min-w-0 truncate font-medium text-ink">{p.label}</span>
+                        <span className="num whitespace-nowrap text-ink">{usd(Math.abs(rest))}<span className="ml-1 text-muted">frei</span></span>
                       </span>
-                      <span className={`num text-[14px] font-semibold ${rest < -0.005 ? 'text-down' : ''}`}>{usd(Math.abs(rest))}</span>
-                      {u > 0 && (
-                        <span className="col-span-2 flex items-center gap-3">
-                          <Meter className="flex-1" value={u} height={3} />
-                          <span className="num whitespace-nowrap text-[11.5px] text-muted">{usd(p.used || 0)} / {usd(p.budget)}</span>
-                        </span>
-                      )}
+                      <span className="mt-1 block h-2 bg-white/[0.06]" style={{ width: `${Math.max(4, ((p.budget || 0) / maxB) * 100)}%` }}>
+                        <span className="block h-full bg-accent" style={{ width: `${Math.min(1, p.budget ? (p.used || 0) / p.budget : 0) * 100}%` }} />
+                      </span>
                     </button>
                   </li>
                 )
               })}
             </ul>
-          </>
+          </div>
         )}
       </Card>
       </div>
 
-      <Card className="col-span-12 xl:col-span-5" title="Termine" bodyClassName="!pt-1" action={<button type="button" className="btn btn-sm" onClick={() => setEv({ id: null, n: Date.now() })}><Plus /> Termin</button>}>
+      <Card className="col-span-12 self-start xl:col-span-5" title="Termine" bodyClassName="!pt-1" action={<button type="button" className="btn btn-sm" onClick={() => setEv({ id: null, n: Date.now() })}><Plus /> Termin</button>}>
         {events.length === 0 && <Empty>Keine Termine. Mit «Termin» erfasst du z. B. Quartalszahlen oder geplante Käufe.</Empty>}
         <EventStrip events={upcoming} now={now} className="mt-4" />
         {upcoming.length > 0 && (
